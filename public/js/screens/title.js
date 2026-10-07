@@ -8,13 +8,14 @@
 // entry/loading illustration names) it is layered under the CSS art; otherwise the screen is
 // pure CSS/SVG (radar, ridgelines, glow), so it never issues a request that can 404.
 
-import { useMemo, useState } from '../../vendor/hooks.module.js';
+import { useEffect, useMemo, useState } from '../../vendor/hooks.module.js';
 import { NAME_MAX_LEN, APP_VERSION } from '../../../shared/constants.js';
 import { html, Button, Icon, MicroLabel, TextField, PingPill } from '../ui/components.js';
 import { GuideButton } from '../ui/guide.js';
 import { toast } from '../ui/toasts.js';
 import { net, identity } from '../net.js';
 import { store, useStore, shallowEqual } from '../store.js';
+import { presenceLabel, fetchPresence, PRESENCE_POLL_MS } from '../ui/presence.js';
 import { data, useData } from '../data.js';
 import { FullscreenButton, detectFeatures } from '../ui/device.js';
 import { GIcon } from '../ui/gameComponents.js';
@@ -183,6 +184,19 @@ const STATUS_TEXT = {
 /** Title screen component. */
 export function TitleScreen() {
   const conn = useStore((s) => s.connection, shallowEqual);
+  const presence = useStore((s) => s.presence, shallowEqual);
+  // The title screen owns a socket but no session yet (`hello` goes out on entering), so the pushed `presence` frame
+  // cannot reach it: it reads the same counters from /healthz, once on mount and then while the screen is up.
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      const p = await fetchPresence();
+      if (alive && p) store.set({ presence: p });
+    };
+    void tick();
+    const id = setInterval(() => { void tick(); }, PRESENCE_POLL_MS);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
   const pendingJoin = useStore((s) => s.ui.pendingJoin);
   const [name, setName] = useState(() => store.get().me.name || identity.loadName() || '');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -272,6 +286,7 @@ export function TitleScreen() {
 
     <footer class="title-foot">
       <span>非官方同人复刻 · 游戏素材版权归 上海鹰角网络 / Yostar 所有</span>
+      <span class="presence num" data-testid="title-presence" title="本服务器当前的在线人数">${presenceLabel(presence)}</span>
       <${MicroLabel}>v${APP_VERSION} · WEB SIMULATION<//>
     </footer>
   </div>`;

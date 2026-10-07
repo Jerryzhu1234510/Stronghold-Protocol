@@ -24,7 +24,7 @@ import { RichText, UnitThumb, BondGlyph, GIcon } from './gameComponents.js';
 import { sortBonds, bondMembers, nextThreshold, bondTier, harmonyMembers, HARMONY_BOND, memberHeadCount, briefingBondTip } from './gameLogic.js';
 import { formatBondEffect } from './richText.js';
 import { bondIconUrl } from './assetUrls.js';
-import { data } from '../data.js';
+import { data, chessOverlayRecords } from '../data.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
@@ -100,7 +100,9 @@ export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember,
   const tier = off ? 0 : entry?.tier ?? bondTier(count, th, b.maxCount);
   const active = !off && (entry ? !!entry.active : tier > 0);
   const getChess = (id) => data.lookup('chess', id);
-  const members = bondMembers(b, priv, banned, getChess, (id) => data.lookup('items', id));
+  // the owner's own 甄选 picks travel in as extra members: bonds.json's `visibleMembers` is built from the static chess
+  // table, so a 外援 carrying this bond would otherwise be missing from the list while already counting towards 在场
+  const members = bondMembers(b, priv, banned, getChess, (id) => data.lookup('items', id), chessOverlayRecords());
   const countsHand = entry?.countsHand ?? b.countsHand;
   const next = nextThreshold(count, th);
   const hasNow = !off && !!(b.effectDescRaw || b.effectDesc);

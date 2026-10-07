@@ -1545,8 +1545,14 @@ describe('match result replay', () => {
     return { host, guest, st, hostResult };
   }
 
-  /** Frames of a resumed socket in arrival order (types + phase), after welcome. */
-  const order = (c) => c.log.filter((m) => m.t !== 'welcome' && m.t !== 'pong').map((m) => m.t + (m.t === 'm.public' ? `:${m.phase}` : ''));
+  /**
+   * Frames of a resumed socket in arrival order (types + phase), after welcome. `presence` (the online / in-room
+   * counters pushed right after every welcome, a remake addition) is not part of the replay contract asserted below,
+   * exactly like welcome and pong.
+   */
+  const order = (c) => c.log
+    .filter((m) => m.t !== 'welcome' && m.t !== 'pong' && m.t !== 'presence')
+    .map((m) => m.t + (m.t === 'm.public' ? `:${m.phase}` : ''));
 
   for (const unicast of [true, false]) {
     test(`a human disconnected when the match ends gets room.state, the final m.public and m.result on resume (${unicast ? 'per-player' : 'broadcast'} result)`, async () => {
@@ -1614,11 +1620,11 @@ describe('match result replay', () => {
     assert.equal((await back.waitFor('room.closed')).reason, 'timeout');
     assert.equal((await back.waitFor('m.result')).playerId, guest.id);
     assert.deepEqual(order(back), ['room.closed', `m.public:${PHASE.RESULT}`, 'm.result']);
-    // delivered once
+    // delivered once (the presence counters answer every welcome and are not part of the replay)
     await back.terminate();
     const again = await pool.connect();
     await again.hello('Guest', guest.token);
-    await again.expectNone(null, (m) => m.t !== 'welcome', 300);
+    await again.expectNone(null, (m) => m.t !== 'welcome' && m.t !== 'presence', 300);
   });
 
   test('real Match: a human who is away when the match finishes gets its m.result on resume', async () => {

@@ -168,7 +168,9 @@ export function collectViolations(m, { limit = 25 } = {}) {
     const h = held.get(base) || 0;
     if (e.left + h !== e.cap) fail(`pool ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
   }
-  for (const [base, n] of held) if (!m.pool.has(base) && n !== 0) fail(`non-pool chess ${base} holds ${n} copies`);
+  // `hasEntry`, not `has`: a 甄选 (DIY) entry belongs to ONE player, so `pool.has(base)` (the shared pool) is false for it
+  // while the piece legitimately holds its copies — asking the shared pool here reported every bought 外援 as a violation.
+  for (const [base, n] of held) if (!m.pool.hasEntry(base) && n !== 0) fail(`non-pool chess ${base} holds ${n} copies`);
 
   // combat fields
   if (m.phase === PHASE.COMBAT) {

@@ -215,7 +215,9 @@ function legacyInvariants(m) {
     assert.ok(e.left >= 0 && e.left <= e.cap, `pool ${base} left ${e.left} cap ${e.cap}`);
     assert.equal(e.left + (held.get(base) || 0), e.cap, `pool accounting ${base}: left ${e.left} + held ${held.get(base) || 0} != cap ${e.cap}`);
   }
-  for (const [base, n] of held) if (!pool.has(base)) assert.equal(n, 0, `non-pool chess ${base} holds copies`);
+  // `hasEntry`, not `has`: a 外援 / 甄选 entry belongs to one player, so the SHARED pool (`pool.has(base)`) does not list
+  // it while the owner's piece legitimately holds its copies (server/match/invariants.js does the same).
+  for (const [base, n] of held) if (!pool.hasEntry(base)) assert.equal(n, 0, `non-pool chess ${base} holds copies`);
   return true;
 }
 

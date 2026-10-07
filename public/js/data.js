@@ -33,6 +33,9 @@ export const DATA_FILES = Object.freeze({
   choices: 'choices.json',
   config: 'config.json',
   assets: 'assets.json',
+  // 外援 / 甄选 (DIY) roster (DESIGN §21.2): the 6★ operators outside the shop pool, at both DIY tiers. Loaded on demand
+  // (the 甄选 picker and the 干员调配 screen), or with the rest of the match files once the player is in a room.
+  waiguan: 'waiguan.json',
   // Optional art extracted from a local game client (DESIGN §13): { groups: { '<subdir>': { name: { path, w, h } } } }.
   // The emotes and the 玩法说明 pages are in data/assets.json too (downloaded from the mirror): artUrls().
   local: 'local-assets.json',
@@ -121,6 +124,8 @@ export function createDataStore(opts = {}) {
   /** @type {Map<string, { status: 'loading'|'ready'|'missing', promise: Promise<any>, value: any, index: Map<string, any>|null }>} */
   const entries = new Map();
   const listeners = new Set();
+  /** Extra chess records of this store — a player's own 甄选 picks (see setChessOverlay below). */
+  const chessOverlay = new Map();
   const warned = new Set();
 
   const notify = (name) => {
@@ -238,7 +243,10 @@ export function createDataStore(opts = {}) {
     /** Record by id from a loaded file (null when unknown / not loaded). */
     lookup(name, id) {
       if (id == null) return null;
-      return index(name)?.get(String(id)) ?? null;
+      const hit = index(name)?.get(String(id));
+      if (hit != null) return hit;
+      // chess also answers from the 甄选 overlay (see setChessOverlay): a match's own 外援 records are not in chess.json
+      return name === 'chess' ? chessOverlay.get(String(id)) ?? null : null;
     },
     /** All records of a loaded file as an array (empty when not loaded). */
     list: (name) => [...(index(name)?.values() ?? [])],
@@ -256,6 +264,30 @@ export function createDataStore(opts = {}) {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
+    /**
+     * Replace the extra chess records `lookup('chess', …)` answers with — a player's own 外援 / 甄选 (DIY) operators,
+     * whose records live in data/waiguan.json and exist only for whoever picked them (the server merges exactly these
+     * into that match's chess table, see server/lobby.js waiguanChessOf). The in-match UI resolves every chess id
+     * through `lookup('chess', …)` — shop cards, unit thumbs, the detail panel, the render layer — so without this
+     * overlay a drawn 外援 card rendered as its raw id with no avatar (`shopBar.js` `c?.name || slot.id`).
+     *
+     * `list('chess')` deliberately stays the static file: the roster screens add the picked records themselves
+     * (public/js/screens/loadout.js), and a pool enumeration must not grow by a pick.
+     * @param {Record<string, any>|null} records `{ [chessId]: record }` (empty / null clears the overlay)
+     */
+    setChessOverlay(records) {
+      chessOverlay.clear();
+      for (const rec of Object.values(records || {})) {
+        if (rec && typeof rec.chessId === 'string') chessOverlay.set(rec.chessId, rec);
+      }
+    },
+    /**
+     * The overlay records currently installed (empty without picks). The browser's battle simulation needs them too: it
+     * injects its own frozen copies of `/data/*.json` (battle/runner.js loadBrowserSim), and `chess.json` has no 甄选
+     * records — without them the sim drops a 外援 unit from the spec and it never appears on the field.
+     * @returns {any[]}
+     */
+    chessOverlayRecords() { return [...chessOverlay.values()]; },
   };
 }
 
@@ -267,6 +299,19 @@ export const loadData = (...names) => data.loadAll(...names);
 
 /** @param {string} id chess id (normal or elite) */
 export const getChess = (id) => data.lookup('chess', id);
+/**
+ * Install the player's own 甄选 (DIY) chess records into the app's chess lookup (data.js `setChessOverlay`): the sync calls
+ * this whenever the picks change, so the in-match UI can render a drawn 外援 card like any other operator.
+ * @param {Record<string, any>|null} records waiguanPickChess(roster, picks)
+ */
+export const setChessOverlay = (records) => data.setChessOverlay(records);
+
+/**
+ * The installed 甄选 (DIY) records (empty without picks) — {@link setChessOverlay}. Used by the browser battle simulation,
+ * whose own frozen copies of `/data/*.json` do not carry them (public/js/battle/runner.js).
+ * @returns {any[]}
+ */
+export const chessOverlayRecords = () => data.chessOverlayRecords();
 /** @param {string} id bond id, e.g. 'yanShip' */
 export const getBond = (id) => data.lookup('bonds', id);
 /** @param {string} id item (trap) id */

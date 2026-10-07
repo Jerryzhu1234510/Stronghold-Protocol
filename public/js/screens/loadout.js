@@ -25,9 +25,11 @@ import { useStore } from '../store.js';
 import { PHASE } from '../../../shared/constants.js';
 import {
   MODULE_NONE, PROF_ORDER, PROF_NAME, rosterOf, filterRoster, recordsOf, chessOptions, effectiveChoice, setChoice, resetChoice,
+  waiguanPickChess, waiguanPickedChess, withWaiguan,
   changedCount, skillLabel, moduleBadge, attrRows, skillTags, serializeExport, parseImport, LOADOUT_IMPORT_MAX_BYTES,
+  PICK_SLOTS,
 } from '../ui/loadoutModel.js';
-import { loadoutStore, openLoadout, closeLoadout, setEntries, applyLoadoutEntries } from '../ui/loadoutSync.js';
+import { loadoutStore, openLoadout, closeLoadout, setEntries, setPicks, applyLoadoutEntries } from '../ui/loadoutSync.js';
 import { copyText } from '../ui/clipboard.js';
 import { toast } from '../ui/toasts.js';
 
@@ -158,6 +160,146 @@ function RosterCard({ m, chess, golden, entries, selected, onPick }) {
       </span>` : null}
     </span>
   </button>`;
+}
+
+// ---- 外援 / 甄选 (DIY) slots (DESIGN §21.2) --------------------------------------------------------------------------
+
+/** The four slots of the official mode, with the label each one shows. */
+const PICK_SLOT_META = Object.freeze({
+  diy5a: { tier: 5, label: '五阶 · 一' },
+  diy5b: { tier: 5, label: '五阶 · 二' },
+  diy6a: { tier: 6, label: '六阶 · 一' },
+  diy6b: { tier: 6, label: '六阶 · 二' },
+});
+
+/**
+ * One candidate of data/waiguan.json as a synthetic chess record, so the roster card and the avatar URL helpers work on it
+ * unchanged (`chess.charId` is what assets.js resolves art by; the record itself lives in the server's match data).
+ * @param {any} cand `data/waiguan.json .candidates[i]`
+ * @param {number} tier the slot's tier (the card's tier chip)
+ */
+const pickAsChess = (cand, tier) => ({
+  chessId: cand.chessIds[tier], baseId: cand.chessIds[tier], goldenId: null, isGolden: false,
+  tier, isDiy: true, visible: false, charId: cand.charId, name: cand.name,
+  rarity: cand.rarity, profession: cand.profession, subProfessionName: cand.subProfessionId,
+  position: cand.position, bonds: cand.bonds || [],
+});
+
+/** The four 甄选 slots: what each one holds, or an empty placeholder that opens the picker. */
+function WaiguanSlots({ m, picks, roster, locked, onOpen, onClear }) {
+  const byChar = useMemo(() => new Map((roster || []).map((c) => [c.charId, c])), [roster]);
+  const filled = PICK_SLOTS.filter((s) => picks[s] && byChar.has(picks[s])).length;
+  return html`<section class="lo-wg" aria-label="外援干员（甄选）">
+    <div class="lo-wg__head">
+      <${MicroLabel} tone="mint">外援 · 甄选</${MicroLabel}>
+      <span class="lo-wg__count"><b class="num">${filled}</b><span class="num t-dim">/4</span></span>
+    </div>
+    <div class="lo-wg__row">
+      ${PICK_SLOTS.map((slot) => {
+        const meta = PICK_SLOT_META[slot];
+        const cand = picks[slot] ? byChar.get(picks[slot]) : null;
+        const chess = cand ? pickAsChess(cand, meta.tier) : null;
+        return html`<div class=${cx('lo-wg__slot', cand && 'is-filled', `lo-wg__slot--t${meta.tier}`)} key=${slot}>
+          <button type="button" class="lo-wg__btn tapx" data-testid=${`waiguan-slot-${slot}`} disabled=${locked}
+            onClick=${() => onOpen(slot)} title=${cand ? `${cand.name}（点击更换）` : '点击选择外援干员'}>
+            ${cand
+              ? html`<span class="lo-wg__art"><${Img} src=${chessAvatarUrl(m, chess)} fallback=${html`<span class="lo-card__glyph">${[...(cand.name || '?')][0]}</span>`} /></span>
+                  <span class="lo-wg__name">${cand.name}</span>`
+              : html`<span class="lo-wg__art is-empty"><${Icon} name="plus" /></span>
+                  <span class="lo-wg__name t-dim">未选择</span>`}
+          </button>
+          <span class="lo-wg__label">${meta.label}</span>
+          ${cand && !locked
+            ? html`<button type="button" class="lo-wg__clear tapx" data-testid=${`waiguan-clear-${slot}`}
+                onClick=${() => onClear(slot)} aria-label="清空该外援位" title="清空">✕</button>`
+            : null}
+        </div>`;
+      })}
+    </div>
+    <p class="lo-wg__hint t-dim">外援干员来自本局调度中心之外：五阶 / 六阶各 2 个名额，每人自己的卡池，队友看不到也买不到。</p>
+  </section>`;
+}
+
+/** The picker dialog: every candidate of data/waiguan.json, searchable, with the two slots of the tier marked. */
+function WaiguanPicker({ m, slot, picks, roster, locked, onPick, onClose }) {
+  const meta = PICK_SLOT_META[slot] || { tier: 5, label: '' };
+  const [query, setQuery] = useState('');
+  const [prof, setProf] = useState(null);
+  // The operators already sitting in the OTHER slots: they may not be chosen here (one operator, one slot — the same
+  // rule the server enforces in shared/protocol.js checkWaiguanPicks, whatever the tier).
+  const takenElsewhere = useMemo(() => {
+    const m = new Map();
+    for (const s of PICK_SLOTS) if (s !== slot && picks[s]) m.set(picks[s], s);
+    return m;
+  }, [picks, slot]);
+  const nameOf = useMemo(() => new Map((roster || []).map((c) => [c.charId, c.name])), [roster]);
+  const q = query.trim().toLowerCase();
+  const list = useMemo(() => (roster || []).filter((c) => {
+    if (prof && c.profession !== prof) return false;
+    if (!q) return true;
+    return [c.name, c.appellation, PROF_NAME[c.profession], ...(c.bonds || []).map((b) => data.lookup('bonds', b)?.name)]
+      .filter(Boolean).join(' ').toLowerCase().includes(q);
+  }), [roster, q, prof]);
+  // Nothing found is usually a 调度中心 operator: they are not 外援 (the roster is the 6★ OUTSIDE the shop pool).
+  // Naming the one the query matched turns “搜不到” into an explanation.
+  const poolHit = useMemo(() => {
+    if (!q) return null;
+    const hit = (data.list('chess') || []).find((c) => c && !c.isDiy && c.visible !== false
+      && [c.name, c.appellation].filter(Boolean).join(' ').toLowerCase().includes(q));
+    return hit ? hit.name : null;
+  }, [q]);
+  const profs = useMemo(() => {
+    const seen = new Set((roster || []).map((c) => c.profession));
+    return PROF_ORDER.filter((p) => seen.has(p));
+  }, [roster]);
+  return html`<${Modal} open=${true} onClose=${onClose} width="min(11.5rem, 96vw)" class="lo-wgmodal"
+      title=${`选择外援干员 · ${meta.label}`} micro="外援 · 甄选"
+      actions=${html`<${Button} variant="ghost" onClick=${onClose}>关闭<//>`}>
+    <div class="lo-wgpick">
+      <div class="lo-frow">
+        <${TextField} value=${query} onInput=${(v) => setQuery(String(v).slice(0, 24))} placeholder="搜索干员 / 职业 / 盟约" aria-label="搜索外援干员" />
+        <div class="lo-chips">
+          <button type="button" class=${cx('lo-chip tapx', !prof && 'is-on')} onClick=${() => setProf(null)}>全部</button>
+          ${profs.map((p) => html`<button type="button" key=${p} class=${cx('lo-chip tapx', prof === p && 'is-on')} onClick=${() => setProf(p)}>${PROF_NAME[p]}</button>`)}
+        </div>
+        <span class="lo-wgpick__n t-dim"><b class="num">${list.length}</b> 名可选</span>
+      </div>
+      <div class="lo-grid lo-wgpick__grid" role="listbox" aria-label="外援干员列表">
+        ${list.length ? list.map((c) => {
+          const chess = pickAsChess(c, meta.tier);
+          const taken = picks[slot] === c.charId;
+          const clashSlot = takenElsewhere.get(c.charId) || null;
+          return html`<button type="button" role="option" key=${c.charId} data-char=${c.charId}
+              aria-selected=${taken ? 'true' : 'false'} disabled=${locked || !!clashSlot}
+              class=${cx('lo-card', `lo-card--t${meta.tier}`, taken && 'is-sel', clashSlot && 'is-locked')}
+              onClick=${() => onPick(c.charId)} title=${clashSlot ? `${c.name}：已在${PICK_SLOT_META[clashSlot].label}位` : c.name}>
+            <span class="lo-card__art">
+              <${Img} src=${chessAvatarUrl(m, chess)} fallback=${html`<span class="lo-card__glyph">${[...(c.name || '?')][0]}</span>`} />
+            </span>
+            <${TierChip} tier=${meta.tier} size="sm" class="lo-card__tier" />
+            <span class="lo-card__name">${c.name}</span>
+            <span class="lo-card__kit">
+              <span class="lo-card__sk">${PROF_NAME[c.profession] || c.profession}</span>
+              <span class="lo-card__mod">${bondShort(c.bonds, m)}</span>
+            </span>
+          </button>`;
+        }) : html`<p class="lo-empty t-dim" data-testid="waiguan-empty">${
+          poolHit
+            ? html`「${poolHit}」在调度中心的固定名单里，不是外援 —— 外援是六星里<b>不在</b>本局卡池的那 87 名。`
+            : '没有符合条件的干员'}</p>`}
+      </div>
+      ${takenElsewhere.size ? html`<p class="lo-wgpick__note t-dim" data-testid="waiguan-taken-note">同一个干员只能占一个外援位；已在别处的：${
+        [...takenElsewhere.keys()].map((charId) => html`<b>${nameOf.get(charId) || charId}</b>`)}（列表里已变暗）</p>` : null}
+    </div>
+  <//>`;
+}
+
+/** Short bond label of a candidate: the first bond's name (「协防干员」 for the fallback bond). */
+function bondShort(bonds, m) {
+  const first = Array.isArray(bonds) && bonds.length ? bonds[0] : null;
+  if (!first) return '—';
+  const b = data.lookup('bonds', first);
+  return b?.name || first;
 }
 
 // ---- detail --------------------------------------------------------------------------------------------------------------
@@ -376,16 +518,19 @@ const SYNC_TEXT = {
 
 /** The overlay screen. */
 function LoadoutScreen({ st }) {
-  const ready = useData('chess', 'bonds', 'assets', 'local');
+  const ready = useData('chess', 'bonds', 'assets', 'local', 'waiguan');
   const phase = useStore((s) => s.match?.public?.phase || null);
   const inMatch = useStore((s) => !!s.room?.inMatch);
   // co-op briefing (INFO_CHECK, 25 s): the overlay covers the briefing's own countdown, so it shows the time left — the
   // match locks the loadout when it runs out (review fix: edits were silently only for the next match)
   const infoDeadline = useStore((s) => (s.match?.public?.phase === PHASE.INFO_CHECK ? s.match.public.deadline : 0));
   const m = data.get('assets');
-  const getChess = (id) => data.lookup('chess', id);
+  // The player's own 甄选 (DIY) operators are loadout targets: they are not in data/chess.json, so the lookup, the roster
+  // and the change count all go through the picked records (DESIGN §21.2; the server does the same, see waiguanPickChess).
+  const diy = useMemo(() => waiguanPickedChess(data.get('waiguan'), st.picks), [ready, st.picks]);
+  const getChess = useMemo(() => withWaiguan((id) => data.lookup('chess', id), diy), [diy]);
   const getBond = (id) => data.lookup('bonds', id);
-  const roster = useMemo(() => rosterOf(data.list('chess')), [ready]);
+  const roster = useMemo(() => rosterOf([...data.list('chess'), ...Object.values(diy)]), [ready, diy]);
   const bonds = useMemo(() => {
     const used = new Set(roster.flatMap((c) => c.bonds || []));
     return (data.list('bonds') || []).filter((b) => b && used.has(b.bondId))
@@ -400,6 +545,25 @@ function LoadoutScreen({ st }) {
   const fileRef = useRef(null);                            // hidden <input type=file> of the 导入 dialog
   const [narrowDetail, setNarrowDetail] = useState(false); // phones: the detail slides over the roster
   const [io, setIo] = useState(null);                      // 导出 / 导入 dialog: { mode, text } | null
+  const [pickSlot, setPickSlot] = useState(null);          // 外援 picker: the slot being edited, or null
+  const picks = st.picks || {};
+  const waiguanRoster = data.get('waiguan')?.candidates || null;
+  // This roster holds the shop chess plus the 外援 you already picked — an UNPICKED candidate is not in it, so a search
+  // for one finds nothing. Naming it (and where to pick it) turns that into an instruction instead of a dead end.
+  const unpickedCandidate = useMemo(() => {
+    const query = String(st.filters?.query || '').trim().toLowerCase();
+    if (!query) return null;
+    const taken = new Set(Object.values(picks));
+    const hit = (waiguanRoster || []).find((c) => !taken.has(c.charId)
+      && [c.name, c.appellation].filter(Boolean).join(' ').toLowerCase().includes(query));
+    return hit ? hit.name : null;
+  }, [waiguanRoster, st.filters, picks]);
+  const setPick = (slot, charId) => {
+    const next = { ...picks };
+    if (charId) next[slot] = charId;
+    else delete next[slot];
+    setPicks(next);
+  };
 
   const pick = (id) => { loadoutStore.set({ sel: id }); setNarrowDetail(true); };
   const change = (patch) => { if (base) setEntries(setChoice(loadoutStore.get().entries, base, golden, patch)); };
@@ -497,10 +661,17 @@ function LoadoutScreen({ st }) {
     <p class=${cx('lo-note', locked && 'is-locked')}><${Icon} name="info" />${locked ? '本局的调配已锁定（确认本局信息后无法修改），修改将在下一局生效' : fromText}</p>
     ${!ready ? html`<div class="lo-loading"><${Spinner} size="sm" />正在载入干员数据（打开页面后仅载入一次）…</div>` : html`<main class=${cx('lo-body', narrowDetail && 'is-detail')}>
       <section class="lo-roster">
+        ${waiguanRoster
+          ? html`<${WaiguanSlots} m=${m} picks=${picks} roster=${waiguanRoster} locked=${locked}
+              onOpen=${(slot) => setPickSlot(slot)} onClear=${(slot) => setPick(slot, null)} />`
+          : null}
         <${Filters} m=${m} filters=${st.filters} bonds=${bonds} onFilters=${(filters) => loadoutStore.set({ filters })} />
         <div class="lo-grid" role="listbox" aria-label="干员列表" ref=${gridRef}>
           ${list.length ? list.map((c) => html`<${RosterCard} key=${c.chessId} m=${m} chess=${c} golden=${c.goldenId ? getChess(c.goldenId) : null}
-            entries=${st.entries} selected=${c.chessId === selId} onPick=${pick} />`) : html`<p class="lo-empty t-dim">没有符合条件的干员</p>`}
+            entries=${st.entries} selected=${c.chessId === selId} onPick=${pick} />`) : html`<p class="lo-empty t-dim" data-testid="roster-empty">${
+            unpickedCandidate
+              ? html`「${unpickedCandidate}」是外援候选：点最上面「外援 · 甄选」的空位选入之后，才会出现在这个列表里。`
+              : '没有符合条件的干员'}</p>`}
         </div>
       </section>
       <div class="lo-detail-wrap">
@@ -526,6 +697,8 @@ function LoadoutScreen({ st }) {
         onInput=${(e) => setIo({ mode: io.mode, text: e.currentTarget.value })}></textarea>
       <input type="file" accept=".json,application/json,text/plain" class="lo-io__file" ref=${fileRef} onChange=${ioFile} />
     <//>` : null}
+  ${pickSlot && waiguanRoster ? html`<${WaiguanPicker} m=${m} slot=${pickSlot} picks=${picks} roster=${waiguanRoster} locked=${locked}
+    onPick=${(charId) => { setPick(pickSlot, charId); setPickSlot(null); }} onClose=${() => setPickSlot(null)} />` : null}
 <//>`;
 }
 

@@ -64,6 +64,7 @@
 
 import { net as appNet } from '../net.js';
 import { store as appStore } from '../store.js';
+import { chessOverlayRecords } from '../data.js';
 import { unitStatsEntry, fxForm } from '../../../shared/protocol.js';
 import { spectateEffects } from './observe.js';
 
@@ -145,6 +146,17 @@ export async function loadBrowserSim({ base = '/sim/', dataBase = '/data/', fetc
   if (missing.length) throw new Error(`simulation data unavailable: ${missing.join(', ')}`);
   const raw = {};
   SIM_DATA_FILES.forEach((n, i) => { raw[n] = deepFreeze(files[i]); });
+  // 外援 / 甄选 (DIY) chess records are NOT in /data/chess.json (they live in data/waiguan.json and exist only for the
+  // player who picked them): merge the ones the store resolved, or this sim cannot build that unit from the spec and
+  // silently drops it — the picked operator then never appears on the battlefield, while the server's own copy of the
+  // same battle has it (owner's report 2026-10-06). The store's records are frozen by the caller's data files, so the
+  // overlay copies are frozen here like every other file.
+  const overlay = typeof chessOverlayRecords === 'function' ? chessOverlayRecords() : [];
+  if (overlay.length && raw.chess && typeof raw.chess === 'object') {
+    const chess = { ...raw.chess };
+    for (const rec of overlay) if (rec && typeof rec.chessId === 'string') chess[rec.chessId] = rec;
+    raw.chess = deepFreeze(chess);
+  }
   simdata.setSimData(raw);
   if (typeof support.setGameData === 'function') support.setGameData(null); // re-read through the injected data
   return { spec, ds: new simdata.DataSource(raw, null) };

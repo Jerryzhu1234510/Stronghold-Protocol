@@ -11,9 +11,10 @@
 
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR } from '../../../shared/constants.js';
-import { html, Button, Icon, MicroLabel, Panel, TextField, PingPill, AvatarFrame, Tooltip, Spinner, DifficultyIcon, doctorNo } from '../ui/components.js';
+import { html, Button, Icon, MicroLabel, Panel, TextField, PingPill, AvatarFrame, Tooltip, Spinner, DifficultyIcon, doctorNo, Fragment } from '../ui/components.js';
 import { toast, toastError } from '../ui/toasts.js';
 import { GuideButton } from '../ui/guide.js';
+import { presenceLabel } from '../ui/presence.js';
 import { LoadoutButton } from './loadout.js';
 import { net, identity } from '../net.js';
 import { store, useStore, shallowEqual, loadPref, savePref } from '../store.js';
@@ -167,6 +168,28 @@ const FALLBACK_TIPS = [
 ];
 const TIP_ROTATE_MS = 5000; // matchingTipRotateInterval
 
+/**
+ * 匹配 (matchmaking) panel: shown in place of the 快速匹配 button while the player waits. The server groups the waiting
+ * players of one difficulty into a fresh 同盟 room and answers queue.matched; the missed seats become AI teammates once
+ * the room opens (screens/room.js).
+ */
+function QueuePanel({ q, difficulty, onCancel, busy }) {
+  const secs = Math.max(0, Math.round((q.waitedMs || 0) / 1000));
+  const need = Math.max(1, (q.minSeats || 2) - (q.count || 1));
+  return html`<div class="queue-panel brackets" role="status" aria-live="polite">
+    <div class="queue-panel__head">
+      <${Spinner} size="sm" />
+      <span class="queue-panel__title">正在匹配 · ${DIFFICULTY_NAMES[difficulty] || difficulty}</span>
+      <span class="queue-panel__time num">${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}</span>
+    </div>
+    <div class="queue-panel__body">
+      <span><b class="num">${q.count || 1}</b> 人在等待</span>
+      <span class="t-dim">${need > 0 ? `再等 ${need} 人即可开始` : '即将开始'}</span>
+    </div>
+    <${Button} variant="ghost" size="sm" data-testid="queue-cancel" onClick=${onCancel} loading=${busy === 'unqueue'}>取消匹配<//>
+  </div>`;
+}
+
 /** Rotating tactical tips (config.json `tips`, weighted list of { tip, weight }). */
 function TipsPanel() {
   const cfg = getConfig();
@@ -231,6 +254,8 @@ function DifficultyCard({ roomMode, difficulty, selected, onSelect }) {
 export function LobbyScreen() {
   const me = useStore((s) => s.me, shallowEqual);
   const conn = useStore((s) => s.connection, shallowEqual);
+  const queue = useStore((s) => s.queue, shallowEqual);
+  const presence = useStore((s) => s.presence, shallowEqual);
   useData('config');
   const [roomMode, setRoomMode] = useState(() => (loadPref('lobby.mode', 'coop') === 'solo' ? 'solo' : 'coop'));
   const [difficulty, setDifficulty] = useState(() => {
@@ -261,6 +286,10 @@ export function LobbyScreen() {
     }
   };
   const create = () => run('create', () => net.request('room.create', { mode: roomMode, difficulty }));
+  // 匹配 (matchmaking queue): wait for other players of the same difficulty instead of hand-sharing a key. The ticker the
+  // panel shows is driven by the server's queue.status frames (store.queue), so it survives a reconnect.
+  const queueJoin = () => run('queue', () => net.request('queue.join', { difficulty }));
+  const queueLeave = () => run('unqueue', () => net.request('queue.leave', {}));
   const join = (c = code) => {
     // `onClick=${join}` hands the click EVENT as the first argument, and a default parameter only applies to
     // `undefined` — codeArg keeps an event target out of the key and falls back to the input field
@@ -297,6 +326,7 @@ export function LobbyScreen() {
       <div class="topbar__left">
         <${Button} variant="ghost" size="sm" icon="chevronLeft" onClick=${backToTitle} title="返回标题">返回<//>
         <${PingPill} ms=${conn.ping} online=${online} />
+        <span class="presence num" data-testid="lobby-presence" title="本服务器当前的在线人数">${presenceLabel(presence)}</span>
       </div>
       <div class="topbar__center">
         <${MicroLabel} tone="mint">SIMULATION PROTOCOL SELECT<//>
@@ -348,15 +378,28 @@ export function LobbyScreen() {
           ${DIFFICULTIES.map((d) => html`<${DifficultyCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${pickDifficulty} />`)}
         </div>
         <div class="create-box">
-          <${Tooltip} block=${true} text=${online ? null : '正在连接服务器…'}>
-            <${Button} variant="primary" size="xl" block=${true} iconRight="chevrons" loading=${busy === 'create'} disabled=${!online} onClick=${create}>
-              ${roomMode === 'solo' ? '开始独立模拟' : '创建同盟'}
-            <//>
-          <//>
+          ${queue.waiting
+            ? html`<${QueuePanel} q=${queue} difficulty=${queue.difficulty || difficulty} busy=${busy} onCancel=${queueLeave} />`
+            : html`<${Fragment}>
+                <${Tooltip} block=${true} text=${online ? null : '正在连接服务器…'}>
+                  <${Button} variant="primary" size="xl" block=${true} iconRight="chevrons" loading=${busy === 'create'} disabled=${!online} onClick=${create}>
+                    ${roomMode === 'solo' ? '开始独立模拟' : '创建同盟'}
+                  <//>
+                <//>
+                ${roomMode === 'coop'
+                  ? html`<${Tooltip} block=${true} text=${online ? '自动寻找同一难度的博士，凑齐后自动进入同盟房间；缺人的席位会用 AI 队友补齐' : '正在连接服务器…'}>
+                      <${Button} variant="secondary" size="lg" block=${true} icon="users" data-testid="queue-join" loading=${busy === 'queue'} disabled=${!online} onClick=${queueJoin}>
+                        快速匹配（${DIFFICULTY_NAMES[difficulty]}）
+                      <//>
+                    <//>`
+                  : null}
+              <//>`}
           <div class="create-box__hint">
-            ${online
-              ? html`<span>${roomMode === 'solo' ? '创建后即可开始模拟' : '创建后可邀请好友或添加 AI 队友'}</span>`
-              : html`<${Spinner} size="sm" label="CONNECTING" />`}
+            ${!queue.waiting && !online
+              ? html`<${Spinner} size="sm" label="CONNECTING" />`
+              : html`<span>${queue.waiting
+                    ? '匹配期间可以点「取消匹配」退出队列'
+                    : roomMode === 'solo' ? '创建后即可开始模拟' : '创建后可邀请好友或添加 AI 队友'}</span>`}
           </div>
         </div>
       </section>

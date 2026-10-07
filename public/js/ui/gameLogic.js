@@ -530,10 +530,19 @@ export function harmonyMembers(priv, getChess = () => null) {
  * @param {Set<string>|string[]} [banned] banned base chess ids
  * @param {(id:string)=>any} [getChess]
  * @param {(id:string)=>any} [getItem] items.json lookup (the 变形同构体 pairings)
+ * @param {any[]|null} [extraMembers] extra chess records to offer as members: the owner's own 甄选 (DIY) records, whose
+ *        derived bonds exist only at runtime and are therefore absent from bonds.json `visibleMembers` (ui/bondStrip.js
+ *        passes the store's overlay; a teammate's popup must NOT — a 外援 is private to whoever picked it)
  */
-export function bondMembers(bond, priv, banned = [], getChess = () => null, getItem = () => null) {
+export function bondMembers(bond, priv, banned = [], getChess = () => null, getItem = () => null, extraMembers = null) {
   const bannedSet = banned instanceof Set ? banned : new Set(Array.isArray(banned) ? banned : []);
-  const members = Array.isArray(bond?.visibleMembers) && bond.visibleMembers.length ? bond.visibleMembers : (Array.isArray(bond?.members) ? bond.members : []);
+  const staticMembers = Array.isArray(bond?.visibleMembers) && bond.visibleMembers.length ? bond.visibleMembers : (Array.isArray(bond?.members) ? bond.members : []);
+  const members = staticMembers.slice();
+  // the picks carrying this bond, base records only (the overlay holds the elite form as well), deduplicated
+  for (const rec of Array.isArray(extraMembers) ? extraMembers : []) {
+    if (!rec || rec.isGolden || typeof rec.chessId !== 'string' || members.includes(rec.chessId)) continue;
+    if (Array.isArray(rec.bonds) && rec.bonds.includes(bond?.bondId)) members.push(rec.chessId);
+  }
   const baseOf = (id) => getChess(id)?.baseId || (typeof id === 'string' ? id.replace(/_b$/, '_a') : id);
   const onBoard = new Set();
   const owned = new Set();

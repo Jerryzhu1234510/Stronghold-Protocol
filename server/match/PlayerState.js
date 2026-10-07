@@ -83,6 +83,17 @@ const HAND_SIZE = GEO.HAND_SIZE;
 const TEMP_SIZE = GEO.TEMP_SIZE;
 /** g.reward accepts idx 0..5 (shared/protocol.js) */
 const MAX_OFFER_SLOTS = 6;
+/**
+ * How much a 甄选 (DIY) pick weighs in the SHOP's chess roll, on top of its own copies (`SharedPool.roll` `ownedWeight`).
+ *
+ * The official copy caps (8 at tier V, 5 at tier VI) are tiny next to the ~1100 copies a level-6 shop draws from, so
+ * plain copy weighting made a pick show up about once in nine refreshes — and never below shop level 5, where its tier
+ * is out of reach anyway (measured: 0/200 000 draws at levels 3–4, 1.6% per slot at 5, 2.3% at 6). At 4 the same shop
+ * offers one of the pick's operators in roughly one refresh out of three when all four slots are filled (owner's
+ * decision 2026-10-06; docs/DESIGN.md §21.2, docs/PLAYING.md §11). The knob affects the SHOP only — reward offers and
+ * effect rolls keep plain copy weighting.
+ */
+const WAIGUAN_SHOP_WEIGHT = 4;
 const OK = Object.freeze({ ok: true });
 const fail = (error, detail) => (detail ? { error, detail } : { error });
 
@@ -660,7 +671,7 @@ export class PlayerState {
       const fresh = (id) => !list.includes(id);
       for (let i = 0; i < ro.count; i++) {
         let id = null;
-        for (let tt = t; tt >= 1 && !id; tt--) id = this.m.pool.roll(this.m.rngShop, { tier: tt, filter: fresh });
+        for (let tt = t; tt >= 1 && !id; tt--) id = this.m.pool.roll(this.m.rngShop, { tier: tt, filter: fresh, playerId: this.playerId });
         if (id) list.push(id);
       }
     }
@@ -836,12 +847,16 @@ export class PlayerState {
   }
 
   _rollChessSlot() {
-    const id = this.m.pool.roll(this.m.rngShop, { maxTier: this.shop.level });
+    // `playerId` is what makes the owner-scoped pool entries reachable: an entry with an owner (a 外援 / 甄选 pick) is
+    // skipped for every other player, so a roll WITHOUT this argument can never draw it — the picked operator would sit
+    // in the pool with full copies and never appear in its owner's shop. `ownedWeight` then decides how often it shows
+    // up (see WAIGUAN_SHOP_WEIGHT).
+    const id = this.m.pool.roll(this.m.rngShop, { maxTier: this.shop.level, playerId: this.playerId, ownedWeight: WAIGUAN_SHOP_WEIGHT });
     return id ? { kind: 'chess', id, basePrice: this.gd.chessPrice(id), frozen: false, sold: false } : null;
   }
 
   _rollItemSlot() {
-    const id = this.m.pool.rollItem(this.m.rngShop, this.shop.level);
+    const id = this.m.pool.rollItem(this.m.rngShop, this.shop.level, this.playerId);
     return id ? { kind: 'item', id, basePrice: this.gd.itemPrice(id), frozen: false, sold: false } : null;
   }
 

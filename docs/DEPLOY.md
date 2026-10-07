@@ -1,7 +1,7 @@
 # 部署指南
 
 目标：在一台家用 Windows 小主机上长期开服，让朋友通过局域网或公网来玩。macOS / Linux / Docker 放在后面。
-所有命令都在项目根目录执行。遇到问题先运行 `node tools/doctor.mjs`（只读诊断）。
+所有命令都在项目根目录执行。遇到问题先运行 `node tools/doctor.mjs`（只读诊断）；不确定端口上跑的是哪一份副本、哪一版，运行 `node tools/whats-running.mjs`（列出每个实例的版本、前端指纹、进程与人数）。
 
 ## 0. 资源需求
 
@@ -257,6 +257,7 @@ services:
 | 现象 | 处理 |
 |---|---|
 | 任何问题 | `node tools/doctor.mjs`：Node 版本、依赖、素材完整性、端口、局域网地址、防火墙、网络类型 |
+| 改了代码 / 换了版本，刷新页面却没变化 | 端口上很可能还跑着**另一个目录里的旧副本**（启动器探到「本游戏的服务器」时只打开浏览器、不重启，它认不出副本）：运行 `node tools/whats-running.mjs` 看每个实例的版本与前端指纹 —— 与本目录不一致的那个就是要停掉的（输出里有 `Stop-Process -Id <PID> -Force`），停掉再启动本目录的服务器。顺带记住：改 `public/` 只需刷新页面（页面会自动重载），改 `server/`、`shared/`、`data/` 必须重启 |
 | `端口已被占用 / EADDRINUSE` | 已经有一个服务器在运行（自启任务？）或其他程序占用 3000：换端口 `scripts\start-windows.bat --port 3001` |
 | 朋友打不开页面 | 防火墙规则 / 网络类型（1.2）；确认用的是 `LAN` 地址而不是 `localhost`；访客 Wi-Fi 常开启「AP 隔离」；不在同一网络请看第 2 节 |
 | 画面是占位图、没有声音 | 素材没下完：重新运行 `node tools/setup.mjs`（会续传）；缺失明细在 `.cache/assets-report.json`。默认仅原始源和 jsDelivr；可用 `--asset-source=mirror` 手动开启前缀镜像（见上文） |

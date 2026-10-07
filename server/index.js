@@ -630,10 +630,18 @@ export async function startServer(opts = {}) {
   if (netOptions.trustProxy == null) netOptions.trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
   const registry = new SessionRegistry({ reconnectWindowMs: netOptions.reconnectWindowMs ?? NET_DEFAULTS.reconnectWindowMs });
   const lobbyOptions = {};
-  for (const k of ['lobbyGraceMs', 'maxRooms', 'maxRoomsPerAddr', 'maxMatchesPerAddr', 'resyncMinGapMs', 'soloReconnectWindowMs']) {
+  for (const k of ['lobbyGraceMs', 'maxRooms', 'maxRoomsPerAddr', 'maxMatchesPerAddr', 'resyncMinGapMs', 'soloReconnectWindowMs',
+    // 匹配 (matchmaking queue): the timings a test (or a tweaked deployment) may override
+    'queueTickMs', 'queueMinSeats', 'queueGraceMs', 'queueTimeoutMs', 'queueSilentMs',
+    // presence counters (title footer / lobby top bar): the push interval
+    'presenceTickMs']) {
     if (opts[k] != null) lobbyOptions[k] = opts[k];
   }
-  const lobby = new Lobby({ registry, log, MatchClass: opts.MatchClass, getData: () => data, seedFn: opts.seedFn, options: lobbyOptions });
+  const lobby = new Lobby({
+    registry, log, MatchClass: opts.MatchClass, getData: () => data, seedFn: opts.seedFn, options: lobbyOptions,
+    // presence counters: read lazily, the network below does not exist yet (and takes the lobby as its handler)
+    sockets: () => network.connectionCount,
+  });
   const network = new Network({ registry, handler: lobby, log, options: netOptions });
   const serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, log });
   const startedAt = Date.now();
@@ -667,6 +675,9 @@ export async function startServer(opts = {}) {
         // older than this reloads itself, so a deploy reaches clients that never reload
         build: buildTag(),
         sockets: network.connectionCount, sessions: registry.size, ...lobby.stats(),
+        // the same counters the client shows next to the version (title footer / lobby top bar, `presence` frame): a
+        // page that has not entered yet has no session and reads them from here
+        ...lobby.presence(),
       });
       return;
     }

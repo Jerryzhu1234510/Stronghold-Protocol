@@ -33,6 +33,7 @@ import { ConnectionBanner } from './ui/connBanner.js';
 import { ToastHost, toast, toastError, describeError } from './ui/toasts.js';
 import { net, identity, NetError } from './net.js';
 import { store, useStore, emptyMatch, selectRoute, sessionResetNotice, isSpectating } from './store.js';
+import { waiguanDoctor } from './ui/waiguanDoctor.js';
 import { data } from './data.js';
 import { GAME_FILES } from './ui/gameComponents.js';
 import { TitleScreen, sanitizeName } from './screens/title.js';
@@ -46,6 +47,7 @@ import { installDeviceSupport } from './ui/device.js';
 import { LoadoutHost } from './screens/loadout.js';
 import { installLoadoutSync } from './ui/loadoutSync.js';
 import { startBuildGuard } from './ui/buildGuard.js';
+import { presenceFacts } from './ui/presence.js';
 
 const RESTORE_GRACE_MS = 1500;
 const JOIN_DELAY_MS = 350;
@@ -204,6 +206,14 @@ function wireNet() {
   net.on('replaced', () => toast('该身份已在其他页面登录，本页已断开', 'warn', { ttl: 6000 }));
   net.on('unhandledError', (err) => toastError(err));
   net.on('room.state', onRoomState);
+  // 匹配 (matchmaking queue): the queue the player waits in, and the room the server put it in
+  net.on('queue.status', (msg) => store.set({ queue: { ...payload(msg), matched: null } }));
+  net.on('queue.matched', (msg) => {
+    store.patch('queue', { matched: { code: msg.code, difficulty: msg.difficulty, seated: !!msg.seated } });
+  });
+  // presence: the live counters next to the version (title footer / lobby top bar). The server pushes them once after
+  // `welcome` and again whenever they change, so the numbers survive a reconnect without any polling.
+  net.on('presence', (msg) => store.set({ presence: presenceFacts(msg) }));
   net.on('room.closed', (msg) => {
     backToLobby();
     toast(CLOSE_REASON[msg.reason] || (typeof msg.reason === 'string' && msg.reason.length < 60 ? `同盟已关闭：${msg.reason}` : '同盟已关闭'), 'warn');
@@ -235,6 +245,14 @@ function wireNet() {
     if (s.session.entered && !prev.session.entered) schedulePendingJoin();
     // in a room (co-op or solo, also a resumed one) a match is near: its data starts downloading
     if (s.room && !prev.room) warmGameData();
+    // 匹配: the queue put this player in a room — join it like a deep link would (once, while not already inside)
+    if (s.queue.matched && s.queue.matched !== (prev.queue && prev.queue.matched) && s.queue.matched.seated) {
+      const code = s.queue.matched.code;
+      if (!s.room) {
+        store.patch('ui', { pendingJoin: code });
+        schedulePendingJoin();
+      }
+    }
   });
 }
 
@@ -351,7 +369,44 @@ async function boot() {
     splash.classList.add('is-done');
     setTimeout(() => splash.remove(), 300);
   }
-  globalThis.__SP__ = { store, net, data, version: 1 };
+  globalThis.__SP__ = {
+    store, net, data, version: 1,
+    /**
+     * 外援自检：控制台敲 `__SP__.waiguanDoctor()` 打印「选人 → 对应棋表记录 → 技能/模组条目 → 局内真正生效的值」，
+     * 并把「技能装在另一阶的记录上」这类不会生效的情况标成 ⚠（技能按记录分开存，这个坑此前只能靠截图对比发现）。
+     */
+    waiguanDoctor: () => {
+      const read = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
+      const lo = read('sp.pref.loadout');
+      const wg = read('sp.pref.waiguan');
+      const m = store.get().match || null;
+      const out = waiguanDoctor({
+        waiguan: data.get('waiguan'),
+        picks: wg.picks || wg,
+        entries: lo.entries || lo,
+        priv: m?.priv || m?.private || null,
+      });
+      console.log([...out.lines, ...out.warnings.map((w) => `⚠ ${w}`)].join('\n'));
+      // …and what the SERVER's session holds. Read from the pushed room.state (the lobby broadcasts seats[].loadout and
+      // room.picks): there is no C2S frame to ask for it — `g.state` is not a valid type, which is exactly why an earlier
+      // self-check of mine silently asserted nothing.
+      const s = store.get();
+      const seat = (Array.isArray(s.room?.seats) ? s.room.seats : []).find((x) => x && x.playerId === s.me?.playerId) || null;
+      console.log(`[外援自检] 服务端 session：picks=${JSON.stringify(s.room?.picks ?? null)}　seat.loadout=${JSON.stringify(seat?.loadout ?? null)}`
+        + `　【注意：这一行是房间状态的快照，大厅对调配变更不广播，null 不代表服务端没有】`);
+      try {
+        const m = s.match || null;
+        const pub = m?.pub || m?.public || null;
+        if (pub) console.log(`[外援自检] 本局：matchNo=${pub.matchNo ?? '?'} phase=${pub.phase ?? '?'} round=${pub.round ?? '?'}`
+          + `（对局编号变了才是新的一局；本局 loadout 键=${JSON.stringify(Object.keys(m?.priv?.loadout || {}))}）`);
+      } catch { /* ignore */ }
+      try {
+        const d = globalThis.__SP_LOADOUT_SYNC__?.debug?.();
+        if (d) console.log(`[外援自检] 调配同步层：sync=${d.sync} why=${d.why} 本地条目=${d.entries} 选人=${d.picks} 上次发送=${d.lastSent || '(从未发送)'}`);
+      } catch { /* ignore */ }
+      return out;
+    },
+  };
   // A page keeps the modules it imported at load time for its whole lifetime, so a deploy cannot reach an open tab
   // (ui/buildGuard.js): watch `/healthz.build`. Outside a match the page reloads itself; during a match the guard says
   // so instead (the connection banner offers 刷新页面) and reloads once the match — settlement screen included — is over,
