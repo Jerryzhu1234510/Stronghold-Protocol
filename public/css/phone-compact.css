@@ -1,5 +1,6 @@
-/* Compact landscape controls; the existing invisible touch targets stay in place. */
-@media (orientation: landscape) and (any-pointer: coarse) and (hover: none) and (max-height: 900px),
+/* Compact controls for short landscape screens. Tablets retain the responsive
+   root scale, keeping their shop cards and labels readable. */
+@media (orientation: landscape) and (any-pointer: coarse) and (hover: none) and (max-height: 600px),
        (orientation: landscape) and (max-height: 600px) {
   html.sp-touch { font-size: 40px; }
   .room-screen .topbar { display: grid; grid-template-columns: 124px minmax(0, 1fr) auto; min-height: 64px; height: auto; padding: 4px 12px; gap: 10px; }

@@ -13,6 +13,8 @@
 
 代理连接回收修复：断线后取消尚未执行的呼叫，阻止已释放席位被迟到消息重新激活，避免内部连接和在线人数残留。此项只更新服务端代理，现有PC、安卓及资源包继续可用。
 
+iPad 横屏布局修复：平板恢复正常界面比例与整备棋盘视角，完整显示整备格，商店卡片和文字不再套用短屏手机缩放。普通与 Boss 左右半场同步处理，短屏手机和 PC 原布局保留。浏览器模拟覆盖 1024×768、1194×834、1366×1024，尚需真机确认 Safari 的实际显示。
+
 ## 从源码运行
 
 需要Node.js 22及以上，推荐24。
@@ -49,4 +51,4 @@ node tools/test-local-mods.mjs
 
 上游：[sganggs/Stronghold-Protocol](https://github.com/sganggs/Stronghold-Protocol)、[ICU custom-v026](https://gitee.com/last-wolf/Stronghold-Protocol/tree/custom-v026)。本仓库保留原有Git历史和[GPL-3.0许可证](LICENSE)，同时保留[原作者声明](NOTICE.md)与[第三方说明](THIRD-PARTY-NOTICES.md)。游戏美术、名称和音频归各权利人所有，不因代码开源而获得再分发授权。仅供非商业学习交流。
 
-8443服交流群：**455814975 / 1127927007**。
+8443服交流群：**455814975（已满）／1127927007（请加入此群）**。

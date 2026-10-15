@@ -84,8 +84,10 @@ export const HUD_REM = Object.freeze({
  * @returns {{ top: number, bottom: number }|null}
  */
 export function isMobileCamera(size, root = globalThis.document?.documentElement) {
+  // Tablet landscape viewports have room for the normal framing. Applying the
+  // phone camera's 1.5x enlargement there crops the bench and far field.
   return size.width <= 1024 && size.height <= 600
-    || size.height <= 900 && !!root?.classList?.contains('sp-coarse') && !root?.classList?.contains('sp-hover');
+    || size.height <= 600 && !!root?.classList?.contains('sp-coarse') && !root?.classList?.contains('sp-hover');
 }
 
 export function hudBands(kind, size, opts) {

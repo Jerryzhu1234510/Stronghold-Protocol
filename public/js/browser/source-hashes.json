@@ -116,7 +116,7 @@
   "public/js/ui/facing.js": "85583b18b5017ce0d08b174fa27d3e1584b0d43826811958e0c67c2f49525c78",
   "public/js/ui/facingWheel.js": "12b0e48e8719aec7e3448d55ac402891b5e7baf1c6be4f464e31ece5c9cf4a3f",
   "public/js/ui/fallbackField.js": "5c2f7b6afd60d0ccfe62279df930e6d15e46fee479b9fbef6882ce7835ce7701",
-  "public/js/ui/fieldHost.js": "6afcbe5fcc7db1e580d1b3a82b2c15269f92721b90ae980a25ad9a037ad8dbaf",
+  "public/js/ui/fieldHost.js": "cb6c5d3a246cb7f5c006096e03110cafee9bf5803492171ade6d4bdba8f6223a",
   "public/js/ui/gameActions.js": "634f3987a170bcdb7db393f291696e31d645c3a76d0d0cd6c7e0a33e67f7a048",
   "public/js/ui/gameComponents.js": "0d45a62f4c6cb329f1d51fa5365ade3317419802683b2110be7e342c0acc247f",
   "public/js/ui/gameLogic.js": "0e219a64d1a97efd286e1881eb5cdc631fbbbd8e7af293e0d9a050829711e033",
