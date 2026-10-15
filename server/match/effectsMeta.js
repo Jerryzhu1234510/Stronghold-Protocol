@@ -590,7 +590,7 @@ export function makeCtx(m, ps, source, hook, ev = null) {
         return typeof opts.filter === 'function' ? !!opts.filter(id) : true;
       };
       const extra = typeof ps.diyStockEntries === 'function' ? ps.diyStockEntries() : null;
-      return m.pool.roll(m.rngMeta, { maxTier: Number.isInteger(opts.maxTier) ? opts.maxTier : 6, tier: Number.isInteger(opts.tier) ? opts.tier : null, filter: f, extra });
+      return ps.cardPool.roll(m.rngMeta, { maxTier: Number.isInteger(opts.maxTier) ? opts.maxTier : 6, tier: Number.isInteger(opts.tier) ? opts.tier : null, filter: f, extra });
     },
     rollItem: (opts = {}) => m.rollItemId(opts),
     /**
@@ -602,6 +602,7 @@ export function makeCtx(m, ps, source, hook, ev = null) {
       // a shared-pool draw also takes the player's 自选 stock, its bonds read through the player's view (rollChess)
       extra: typeof ps.diyStockEntries === 'function' ? ps.diyStockEntries() : null, chessOf: (id) => gd.chess(id),
       ...opts,
+      cardPool: ps.cardPool,
       filter: (id) => giftEligible(id) && (typeof opts.filter !== 'function' || opts.filter(id)),
     }),
     /**

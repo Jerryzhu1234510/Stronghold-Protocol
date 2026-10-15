@@ -226,7 +226,7 @@ export class PlayerAcquire {
       const fresh = (id) => !list.includes(id);
       for (let i = 0; i < ro.count; i++) {
         let id = null;
-        for (let tt = t; tt >= 1 && !id; tt--) id = this.m.pool.roll(this.m.rngShop, { tier: tt, filter: fresh, extra: this.diyStockEntries?.() || [] });
+        for (let tt = t; tt >= 1 && !id; tt--) id = this.cardPool.roll(this.m.rngShop, { tier: tt, filter: fresh, extra: this.diyStockEntries?.() || [] });
         if (id) list.push(id);
       }
     }

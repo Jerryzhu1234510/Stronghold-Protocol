@@ -118,7 +118,7 @@
 /* Keep the existing landscape game canvas; the phone layout never becomes a portrait card stack. */
 @media (max-height: 600px), (max-width: 1024px) {
   .lobby-screen .topbar { display: grid; grid-template-columns: auto minmax(0,1fr); padding: 8px 16px; min-height: 60px; height: auto; gap: 10px; }
-  .lobby-screen .topbar__center, .lobby-screen .me-chip { display: none; }
+  .lobby-screen .topbar__center { display: none; }
   .lobby-screen .topbar__left { gap: 6px; flex-wrap: nowrap; }
   .lobby-screen .population-strip { padding: 2px 6px; gap: 6px; }
   .lobby-screen .population-strip small { font-size: 10px; }

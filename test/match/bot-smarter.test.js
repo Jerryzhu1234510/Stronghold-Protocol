@@ -260,9 +260,9 @@ test('坎诺特 (利滚利: leftover funds are kept, +1 at ≥ 5): with a full b
 test('bond plan: a teammate\'s main core bond (its bond strip — a human\'s too) counts against the bot\'s focus (the shop pool is shared)', () => {
   const SARGON = ['chess_char_1_12_a', 'chess_char_2_06_a', 'chess_char_2_08_a'];
   const KAZIMIERZ = ['chess_char_1_19_a', 'chess_char_2_12_a', 'chess_char_2_18_a'];
-  const focusWhenMateBuilds = (mateIds) => {
+  const focusWhenMateBuilds = (mateIds, personalPool = false) => {
     const seats = [{ seat: 0, playerId: 'p_0', name: 'P', isBot: false, connected: true }, { seat: 1, playerId: 'ai_0', name: 'AI', isBot: true, connected: true }];
-    const h = makeMatch({ mode: 'coop', difficulty: 'NORMAL', seats, seed: 3 }).start();
+    const h = makeMatch({ mode: 'coop', difficulty: 'NORMAL', seats, seed: 3, extensions: { personalPool } }).start();
     const m = h.m;
     const [human, ai] = m.order;
     h.run(() => m.phase === PHASE.PREP && m.round === 2);
@@ -285,6 +285,7 @@ test('bond plan: a teammate\'s main core bond (its bond strip — a human\'s too
   };
   assert.equal(focusWhenMateBuilds(SARGON), 'kazimierzShip', 'the human builds 萨尔贡: the bot takes 卡西米尔');
   assert.equal(focusWhenMateBuilds(KAZIMIERZ), 'sargonShip', 'the human builds 卡西米尔: the bot takes 萨尔贡');
+  assert.equal(focusWhenMateBuilds(SARGON, true), focusWhenMateBuilds(KAZIMIERZ, true), 'personal pools remove teammate stock competition from the bot plan');
 });
 
 test('merged rules (0.1.1): an attack on every enemy in range counts double (阵法术师 / 轰击术师 rangeAoe); a unit is planned with the range it is deployed with', () => {

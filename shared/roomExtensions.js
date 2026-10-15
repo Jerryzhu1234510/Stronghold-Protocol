@@ -35,6 +35,8 @@ export function createExtensionRegistry(definitions = []) {
 }
 
 export const roomExtensions = createExtensionRegistry([
+  { id: 'personalPool', type: 'boolean', default: false, label: '个人卡池',
+    description: '每位玩家（含AI）独立使用一份完整干员卡池，购买、奖励、出售和淘汰回收均只影响本人。保留卡池数量、禁用盟约、抽取权重与自选库存规则，并非无限卡池。开启后按自定义局计杯。' },
   { id: 'bossHp', type: 'number', default: 1, min: 1, max: 96, affectsTrophies: false, label: 'Boss 血量倍率',
     description: '额外乘在原版难度、人数和克隆倍率上。包括鸭爵召出的领袖；共享血池只乘一次。正常模式仅提高血量不降低杯数。' },
   { id: 'enemyHp', type: 'number', default: 1, min: 1, max: 96, affectsTrophies: false, label: '其他敌人血量倍率',

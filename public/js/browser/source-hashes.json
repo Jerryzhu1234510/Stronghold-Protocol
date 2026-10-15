@@ -491,7 +491,7 @@
   "shared/packs.js": "958374b9512f2178f2a4e2834bcf6e73bee3638b4e0e6eb747d8543d9f00e37f",
   "shared/protocol.js": "154bac863f80c60f1dc829b286b6b17abbcc8295e60c51d25b009e17263fc031",
   "shared/roomDirectory.js": "efe07a5929b56ccc436d701bd78a5e607928ed9cde6172ce6cd71e9df77a9086",
-  "shared/roomExtensions.js": "6a0b99b2d294e6de6557c1c92ee2c0420ed8d3c5dc4004dbef0e9c8a1c107b83",
+  "shared/roomExtensions.js": "79400a2d6aee881c2d88adc519b951d908683169f76b17c61b0ac4d478e6e6aa",
   "shared/standIn.js": "629971c66617c60d97b084ab06dd78777fc26b270373cb24ee1f64e32dba1d42",
   "shared/stateDelta.js": "e068fdd379b1d5fa289598bd15041e120d3178c4b784c34c9a7bfb954d9842e2",
   "shared/supports.js": "71d9afcb6f6a6d33071e95d2021e92e5b260a24efa1b4a20bbd39b4ded44192c",

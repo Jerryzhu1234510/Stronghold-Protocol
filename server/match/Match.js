@@ -337,8 +337,16 @@ export class Match {
     this.disabledBonds = bans.drawn;
     this.staticInactiveBonds = bans.staticOff;
     this.bannedChess = bans.banned;
-    this.pool = new SharedPool(this.gd, { banned: bans.banned, copiesMultiplier: this.roomScale.cards });
-    if (this.isClone) for (const entry of this.pool.entries.values()) { entry.cap *= 4; entry.left *= 4; }
+    const createCardPool = () => {
+      const pool = new SharedPool(this.gd, { banned: bans.banned, copiesMultiplier: this.roomScale.cards });
+      if (this.isClone) for (const entry of pool.entries.values()) { entry.cap *= 4; entry.left *= 4; }
+      return pool;
+    };
+    this.pool = createCardPool();
+    // Keep the common membership catalogue for match-wide bans/choice eligibility.
+    // Stock mutations and weighted draws resolve through PlayerState.cardPool.
+    this.personalPools = this.extensions.personalPool
+      ? new Map(this.order.map(ps => [ps.playerId, createCardPool()])) : null;
     // 自选编队 (0.2.0): each human's slotted DIY pieces get their own stock — none for one whose bonds are all off this
     // match (player/diy.js initDiyStock); no randomness is drawn here
     const off = new Set([...bans.drawn, ...bans.staticOff]);

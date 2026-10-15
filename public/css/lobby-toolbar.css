@@ -47,6 +47,29 @@
     padding: 6px 16px;
   }
   .lobby-toolbar.topbar > .topbar__left { width: 100%; gap: 6px; }
+  /* Keep identity and cups visible on Android landscape. Reserve their space
+     in the status row so action buttons wrap without covering the profile. */
+  .lobby-toolbar.topbar > .topbar__left {
+    padding-right: calc(min(190px, 45vw) + 12px);
+    min-height: 48px;
+  }
+  .lobby-toolbar.topbar > .topbar__right > .me-chip {
+    display: flex;
+    position: absolute;
+    top: 6px;
+    right: 16px;
+    width: min(190px, 45vw);
+    max-width: min(190px, 45vw);
+    min-height: 46px;
+    margin: 0;
+    padding: 4px 6px;
+    gap: 7px;
+  }
+  .lobby-toolbar.topbar .me-chip .avatar { --av: 32px; flex: 0 0 auto; }
+  .lobby-toolbar.topbar .me-chip__text { flex: 1; min-width: 0; }
+  .lobby-toolbar.topbar .me-chip__name { max-width: 100%; font-size: 12px; }
+  .lobby-toolbar.topbar .me-chip .account-trophies { max-width: 100%; font-size: 11px; }
+  .lobby-toolbar.topbar .me-chip .micro { font-size: 9px; }
   .lobby-toolbar.topbar > .topbar__right { justify-content: flex-start; gap: 5px; }
   .lobby-toolbar.topbar > .topbar__center { display: none; }
 }

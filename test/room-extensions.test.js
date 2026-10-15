@@ -13,7 +13,8 @@ import { TestClient } from './helpers/wsClient.js';
 
 const data = getData();
 test('extensions are opt-in, bounded, extensible and reject unknown/unsafe options', () => {
-  assert.deepEqual(roomExtensions.defaults(), { bossHp: 1, enemyHp: 1, bossNoDamageLimit: false, duckEnhanced: 0 });
+  assert.deepEqual(roomExtensions.defaults(), { personalPool: false, bossHp: 1, enemyHp: 1, bossNoDamageLimit: false, duckEnhanced: 0 });
+  for (const value of [1, 0, 'true', null]) assert.equal(roomExtensions.validate({ personalPool: value }), false);
   for (const n of [0, 97, 1.5, Infinity, NaN, '96', null]) assert.equal(roomExtensions.validate({ bossHp: n }), false);
   assert.equal(roomExtensions.validate({ bossHp: 96, enemyHp: 96, duckEnhanced: true }), true);
   assert.equal(roomExtensions.validate({ duckEnhanced: 2 }), true);
@@ -149,10 +150,10 @@ test('new settings reach the real worker thread and are visible in its match sna
   try {
     c = await TestClient.connect(`ws://127.0.0.1:${srv.port}/ws`); await c.hello('WorkerExt');
     assert.equal((await c.request({ t:'room.create', mode:'coop', difficulty:'NORMAL' })).t,'ok');
-    assert.equal((await c.request({ t:'room.setExtensions', extensions:{ bossHp:96, enemyHp:96, bossNoDamageLimit:true, duckEnhanced:2 } })).t,'ok');
+    assert.equal((await c.request({ t:'room.setExtensions', extensions:{ personalPool:true, bossHp:96, enemyHp:96, bossNoDamageLimit:true, duckEnhanced:2 } })).t,'ok');
     assert.equal((await c.request({ t:'room.start' })).t,'ok');
     const pub = await c.waitFor('m.public');
-    assert.deepEqual(pub.extensions,{bossHp:96,enemyHp:96,bossNoDamageLimit:true,duckEnhanced:2});
+    assert.deepEqual(pub.extensions,{personalPool:true,bossHp:96,enemyHp:96,bossNoDamageLimit:true,duckEnhanced:2});
   } finally { await c?.terminate(); await srv.close(); }
 });
 
@@ -192,16 +193,18 @@ test('room extension ownership, readiness and post-start locking use the real We
     await req(b, { t: 'room.join', code: room.code }); await req(b, { t: 'room.ready', ready: true });
     assert.equal((await req(b, { t: 'room.setExtensions', extensions: { bossHp: 96 } })).code, 'NOT_HOST');
     assert.equal((await req(b, { t: 'room.setExtensions', extensions: { bossNoDamageLimit: true } })).code, 'NOT_HOST');
+    assert.equal((await req(b, { t: 'room.setExtensions', extensions: { personalPool: true } })).code, 'NOT_HOST');
     assert.equal((await req(a, { t: 'room.setExtensions', extensions: { bossHp: 97 } })).t, 'error');
     assert.equal((await req(a, { t: 'room.setExtensions', extensions: { bossNoDamageLimit: 1 } })).t, 'error');
     assert.equal((await req(a, { t: 'room.setExtensions', extensions: { arbitrary: true } })).t, 'error');
     assert.equal((await req(a, { t: 'room.setExtensions', extensions: { bossHp: 96, enemyHp: 96, bossNoDamageLimit: true, duckEnhanced: true } })).t, 'ok');
     assert.equal(room.seatOf(b.id).ready, false);
-    assert.deepEqual(room.toState().extensions, { bossHp: 96, enemyHp: 96, bossNoDamageLimit: true, duckEnhanced: 1 });
+    assert.deepEqual(room.toState().extensions, { personalPool: false, bossHp: 96, enemyHp: 96, bossNoDamageLimit: true, duckEnhanced: 1 });
     await req(b, { t: 'room.ready', ready: true }); await req(a, { t: 'room.start' });
     assert.equal(room.match.extensions.bossHp, 96);
     assert.equal(room.match.extensions.bossNoDamageLimit, true);
     assert.equal((await req(a, { t: 'room.setExtensions', extensions: { bossHp: 1 } })).code, 'ROOM_STARTED');
     assert.equal((await req(a, { t: 'room.setExtensions', extensions: { bossNoDamageLimit: false } })).code, 'ROOM_STARTED');
+    assert.equal((await req(a, { t: 'room.setExtensions', extensions: { personalPool: true } })).code, 'ROOM_STARTED');
   } finally { await Promise.all(clients.map(c => c.terminate())); await srv.close(); }
 });

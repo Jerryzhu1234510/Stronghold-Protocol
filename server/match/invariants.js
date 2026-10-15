@@ -36,6 +36,7 @@ export function collectViolations(m, { limit = 25 } = {}) {
   const fail = (msg) => { if (out.length < limit) out.push(msg); };
   const gd = m.gd;
   const held = new Map();
+  const personalHeld = new Map();
   const uids = new Set();
   const banned = new Set(m.bannedChess || []);
   const note = (ps, p) => {
@@ -53,6 +54,8 @@ export function collectViolations(m, { limit = 25 } = {}) {
     // the player's view of the data (its slotted 自选 slots are its operators) and the copies its 自选 pieces hold
     const pgd = ps.gd || gd;
     const diyHeld = new Map();
+    const poolHeld = m.personalPools ? new Map() : held;
+    if (m.personalPools) personalHeld.set(id, poolHeld);
     if (!Number.isInteger(ps.funds) || ps.funds < 0) fail(`${id}: funds ${ps.funds}`);
     if (!Number.isInteger(ps.pendingFunds) || ps.pendingFunds < 0) fail(`${id}: pendingFunds ${ps.pendingFunds}`);
     if (!Number.isFinite(ps.lp)) fail(`${id}: lp ${ps.lp}`);
@@ -100,7 +103,7 @@ export function collectViolations(m, { limit = 25 } = {}) {
         const maxCopies = rec.isGolden ? gd.goldenCopies : 1;
         if (!Number.isInteger(p.poolCopies) || p.poolCopies < 0 || p.poolCopies > maxCopies) fail(`${id}: ${p.id} holds ${p.poolCopies} copies`);
         const base = gd.baseIdOf(p.id);
-        const tally = rec.isDiy ? diyHeld : held;
+        const tally = rec.isDiy ? diyHeld : poolHeld;
         tally.set(base, (tally.get(base) || 0) + (p.poolCopies || 0));
       } else if (p.kind === 'item') {
         if (!gd.item(p.id)) fail(`${id}: unknown item ${p.id}`);
@@ -185,13 +188,25 @@ export function collectViolations(m, { limit = 25 } = {}) {
     for (const [base, n] of diyHeld) if (!(ps.diyStock && ps.diyStock.has(base)) && n !== 0) fail(`${id}: 自选 slot ${base} without stock holds ${n} copies`);
   }
 
-  // shared pool accounting
-  for (const [base, e] of m.pool.entries) {
-    if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`pool ${base}: left ${e.left} cap ${e.cap}`);
-    const h = held.get(base) || 0;
-    if (e.left + h !== e.cap) fail(`pool ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
+  // The shared pool remains unchanged in personal mode; each player's stock
+  // accounts only for that player's pieces, including merge and overdraw debt.
+  const stocks = [{ label: 'pool', pool: m.pool, held }];
+  if (m.personalPools) {
+    if (m.personalPools.size !== m.players.size || new Set(m.personalPools.values()).size !== m.players.size) fail('personal pools are missing or shared');
+    for (const ps of m.players.values()) {
+      const pool = m.personalPools.get(ps.playerId);
+      if (!pool) { fail(`${ps.playerId}: missing personal pool`); continue; }
+      stocks.push({ label: `${ps.playerId} pool`, pool, held: personalHeld.get(ps.playerId) });
+    }
   }
-  for (const [base, n] of held) if (!m.pool.has(base) && n !== 0) fail(`non-pool chess ${base} holds ${n} copies`);
+  for (const stock of stocks) {
+    for (const [base, e] of stock.pool.entries) {
+      if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`${stock.label} ${base}: left ${e.left} cap ${e.cap}`);
+      const h = stock.held.get(base) || 0;
+      if (e.left + h !== e.cap) fail(`${stock.label} ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
+    }
+    for (const [base, n] of stock.held) if (!stock.pool.has(base) && n !== 0) fail(`${stock.label}: non-pool chess ${base} holds ${n} copies`);
+  }
 
   // combat fields
   if (m.phase === PHASE.COMBAT) {

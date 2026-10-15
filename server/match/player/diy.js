@@ -199,9 +199,12 @@ export class PlayerDiy {
     this.diyBanned = Object.freeze(banned);
   }
 
-  /** The copy accounting of base chess `baseId` for this player: its own stock for a slotted DIY slot, else the shared pool. */
+  /** Ordinary stock belongs to the room unless the personal-pool option is enabled. */
+  get cardPool() { return this.m.personalPools?.get(this.playerId) ?? this.m.pool; }
+
+  /** A slotted DIY piece always uses its own stock; other pieces use this player's effective card pool. */
   poolOf(baseId) {
-    return this.diyStock && this.diyStock.has(baseId) ? this.diyStock : this.m.pool;
+    return this.diyStock && this.diyStock.has(baseId) ? this.diyStock : this.cardPool;
   }
 
   /**

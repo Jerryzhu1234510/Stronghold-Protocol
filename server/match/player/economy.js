@@ -68,7 +68,7 @@ export class PlayerEconomy {
     if (!this.gd.focusSlots) return [];
     if (!this._shopFocusOptions) {
       const bonds = new Set();
-      const ids = [...this.m.pool.entries.keys(), ...Object.keys(this.diy || {})];
+      const ids = [...this.cardPool.entries.keys(), ...Object.keys(this.diy || {})];
       for (const id of ids) for (const b of this.gd.chess(id)?.bonds || []) bonds.add(b);
       this._shopFocusOptions = this.gd.bondIds.filter(id => bonds.has(id)
         && !this.gd.modeInactiveBonds.has(id) && !this.m.disabledBonds.includes(id));
@@ -89,14 +89,14 @@ export class PlayerEconomy {
     const opts = { maxTier: this.shop.level, extra: this.diyRollEntries() };
     let id = null;
     if (focus && this.shop.focusBondId && (this.m.isClone || this.m.rngShop() < .5)) {
-      id = this.m.pool.roll(this.m.rngShop, { ...opts, filter: id => this.gd.chess(id)?.bonds?.includes(this.shop.focusBondId) });
+      id = this.cardPool.roll(this.m.rngShop, { ...opts, filter: id => this.gd.chess(id)?.bonds?.includes(this.shop.focusBondId) });
     }
-    if (!id) id = this.m.pool.roll(this.m.rngShop, opts);
+    if (!id) id = this.cardPool.roll(this.m.rngShop, opts);
     return id ? { kind: 'chess', id, basePrice: this.gd.chessPrice(id), frozen: false, sold: false } : null;
   }
 
   _rollItemSlot() {
-    const id = this.m.pool.rollItem(this.m.rngShop, this.shop.level);
+    const id = this.cardPool.rollItem(this.m.rngShop, this.shop.level);
     return id ? { kind: 'item', id, basePrice: this.gd.itemPrice(id), frozen: false, sold: false } : null;
   }
 

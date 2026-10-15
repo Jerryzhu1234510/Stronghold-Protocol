@@ -13,7 +13,7 @@ test('HP-only challenge increases retain full cups; clone, no-limit and Ducklord
     assert.equal(matchTrophyPolicy(input).custom,false);
   }
   for (const input of [{gameMode:'clone'}, {gameMode:'clone',extensions:{bossHp:96,enemyHp:96}},
-    {extensions:{bossNoDamageLimit:true}}, {extensions:{duckEnhanced:1}},
+    {extensions:{bossNoDamageLimit:true}}, {extensions:{duckEnhanced:1}}, {extensions:{personalPool:true}},
     {gameMode:'clone',extensions:{bossHp:96,enemyHp:96,bossNoDamageLimit:true,duckEnhanced:2}}]) {
     assert.deepEqual(matchTrophyPolicy(input),{version:1,custom:true,multiplier:.5,reason:'custom'});
   }
