@@ -28,11 +28,12 @@ import { BondStrip, BondPopup } from '../ui/bondStrip.js';
 import { versusBondRecord } from '/shared/versusBonds.js';
 import { VERSUS_RULES } from '/shared/versusRules.js';
 import { detailUnit, monsterPreview } from './details.js';
-import { resourceDocumentUrl, waitForResourceController } from '../resources/client.js';
+import { resourceDocumentUrl, waitForResourceController, requireLocalResourceController } from '../resources/client.js';
 
 async function bootVersus() {
 const canonical = resourceDocumentUrl(location.href, performance.getEntriesByType('navigation')[0]?.name, globalThis.__SP_GENERATION);
 if (canonical) { location.reload(); return; }
+await requireLocalResourceController();
 await waitForResourceController();
 const html = htm.bind(h);
 installDeviceSupport();

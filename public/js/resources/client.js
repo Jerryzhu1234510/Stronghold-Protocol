@@ -1,11 +1,26 @@
 import { isBundledClient } from './manifest.js';
 let starting;
-export const localResourcesRequired = () => globalThis.__SP_LOCAL_RESOURCES_REQUIRED === true && !isBundledClient();
+// Every document on 8443, including child frames and auxiliary pages, must choose
+// the same worker policy. A missing HTML flag must never downgrade its scope.
+export const localResourcesRequired = () => (globalThis.__SP_LOCAL_RESOURCES_REQUIRED === true
+  || globalThis.location?.hostname?.toLowerCase() === 'weishuxieyiwangye.cn') && !isBundledClient();
 const worker = new URL('./worker.js', import.meta.url);
 // The policy is part of the worker identity, so suspension/restart cannot reset it.
 if (localResourcesRequired()) worker.searchParams.set('localOnly', '1');
 const workerUrl = worker.href;
 const startupError = message => Object.assign(new Error(message), { code: 'LOCAL_RESOURCES_REQUIRED' });
+
+// A still-open legacy auxiliary page can register the older network-enabled
+// worker over this scope. Restore the required identity without deleting data.
+let restoring = false;
+function restoreRequiredWorker() {
+  const controller = globalThis.navigator?.serviceWorker?.controller;
+  if (!localResourcesRequired() || !controller || controller.scriptURL === workerUrl || restoring) return;
+  restoring = true; starting = undefined;
+  Promise.resolve().then(startResourceCache).catch(() => null).finally(() => { restoring = false; });
+}
+globalThis.navigator?.serviceWorker?.addEventListener?.('controllerchange', restoreRequiredWorker);
+globalThis.document?.addEventListener?.('visibilitychange', restoreRequiredWorker);
 
 export async function requireLocalResourceController() {
   if (!localResourcesRequired()) return;

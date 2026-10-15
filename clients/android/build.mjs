@@ -20,7 +20,8 @@ await fs.copyFile(path.join(originalRoot,'android/assets/servers.json'),path.joi
 let packManifest=path.join(originalRoot,'resource-manifest.json');try{await fs.access(packManifest);}catch{packManifest=path.resolve(originalRoot,'../../public/data/resource-cache.json');}
 const raw=await fs.readFile(packManifest,'utf8');
 const manifest=JSON.parse(raw.replace(/^\uFEFF/,''));
-let source=path.resolve(originalRoot,'resources/public');try{await fs.access(source);}catch{source=path.resolve(originalRoot,'../../server-025/public');}
+let source=path.resolve(process.env.SP_MOBILE_RESOURCE_ROOT||path.resolve(originalRoot,'resources/public'));
+try{await fs.access(source);}catch(e){if(process.env.SP_MOBILE_RESOURCE_ROOT)throw e;source=path.resolve(originalRoot,'../../server-025/public');}
 // The frozen r25 manifest omits model/configuration files and its font stylesheet.
 // Bind these signed additions to the known build so future versions fetch changed files.
 manifest.extras=manifest.extras||{};
@@ -61,5 +62,5 @@ try{await fs.access(keystore);}catch{
 const apk=path.join(root,`export/卫戍协议-安卓完整版-v${version}.apk`);
 run(path.join(jdk,'java.exe'),['-jar',path.join(sdk,'lib/apksigner.jar'),'sign','--ks',keystore,'--ks-key-alias','weishu-release','--ks-pass','env:SP_APK_PASSWORD','--key-pass','env:SP_APK_PASSWORD','--out',apk,path.join(out,'aligned.apk')],env);
 const verification=run(path.join(jdk,'java.exe'),['-jar',path.join(sdk,'lib/apksigner.jar'),'verify','--verbose','--print-certs',apk]);
-const info={ok:true,version,apk:path.join(originalRoot,'export',path.basename(apk)),files:count,extras:Object.keys(manifest.extras).length,bytes:(await fs.stat(apk)).size,sha256:sha(await fs.readFile(apk)),verification};
+const info={ok:true,version,apk,files:count,extras:Object.keys(manifest.extras).length,bytes:(await fs.stat(apk)).size,sha256:sha(await fs.readFile(apk)),verification};
 await fs.writeFile(path.join(root,'export/apk-build.json'),JSON.stringify(info,null,2));console.log(JSON.stringify({...info,verification:'signature verified'}));

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { manifestForNative } from '../public/js/resources/manifest.js';
+import { manifestForNative, isBundledClient } from '../public/js/resources/manifest.js';
 import { resourcePath, resourceEntry } from '../public/js/resources/policy.js';
 
 test('hashed assets reuse plain-path caches across hot versions, including media aliases', () => {
@@ -23,4 +23,14 @@ test('native hot pages keep plain bundled paths; normal browsers retain immutabl
   assert.deepEqual(native.spine.textures,['/assets/a/x.png']);
   assert.equal(native.other,source.other);
   assert.match(source.spine.skel,/~0123456789abcdef/);
+});
+
+test('an unrelated chrome.webview object cannot bypass required web resource reads', () => {
+  const prior = globalThis.window;
+  try {
+    globalThis.window = { chrome: { webview: {} } };
+    assert.equal(isBundledClient(), false);
+    globalThis.window.SPAndroidResources = { getManifest() {} };
+    assert.equal(isBundledClient(), true);
+  } finally { if (prior === undefined) delete globalThis.window; else globalThis.window = prior; }
 });

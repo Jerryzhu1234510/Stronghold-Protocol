@@ -6,7 +6,8 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import assert from 'node:assert/strict';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const manifest=JSON.parse(await fs.readFile(root+'/export/resource-manifest.json','utf8'));
+const artifactRoot=process.env.SP_ANDROID_TEST_HOME||root;
+const manifest=JSON.parse(await fs.readFile(artifactRoot+'/export/resource-manifest.json','utf8'));
 const servers=JSON.parse(await fs.readFile(root+'/android/assets/servers.json','utf8'));
 const base=Object.entries(manifest.entries).filter(([u])=>!manifest.extras[u]);
 const choose=(items,ext)=>items.filter(([u])=>u.toLowerCase().endsWith(ext)).sort((a,b)=>a[1].bytes-b[1].bytes)[0];
@@ -18,7 +19,7 @@ const cdn='https://assets.weishuxieyi.icu/pilot/content/'+png[1].hash+'.png';
 const snapshot={version:1,entries:{[png[0]]:{...png[1],cdn},[audio[0]]:audio[1]},aliases:{'/media/test-audio':audio[0]}};
 const changed=structuredClone(snapshot);changed.entries[png[0]].hash='0'.repeat(64);
 function literal(v){if(v===null)return 'null';if(Array.isArray(v))return 'new JSONArray()'+v.map(x=>'.put('+literal(x)+')').join('');if(typeof v==='object')return 'new JSONObject()'+Object.entries(v).map(([k,x])=>'.put('+JSON.stringify(k)+','+literal(x)+')').join('');return typeof v==='number'?v+'L':JSON.stringify(v);}
-const qa=root+'/test-output/native-101';await fs.mkdir(qa,{recursive:true});
+const qa=artifactRoot+'/test-output/native-path-r02';await fs.mkdir(qa,{recursive:true});
 const sources={
 'org/json/JSONException.java':`package org.json; public class JSONException extends Exception {public JSONException(String s){super(s);}}`,
 'org/json/JSONObject.java':`package org.json; import java.util.*;
@@ -57,11 +58,15 @@ public final class NativeTest {
   assets=new AssetManager(args[0]);BundledResources lib=new BundledResources(assets);JSONObject bridge=new JSONObject(lib.getManifest());require(bridge.getJSONArray("entries").length()==1,"audio/extras must not enlarge the core gate");require(bridge.getLong("files")==5,"bundle files");
   ExecutorService pool=Executors.newFixedThreadPool(4);List<Future<byte[]>> pending=new ArrayList<>();for(int i=0;i<4;i++)pending.add(pool.submit(()->bytes(get(lib,PNG,null))));for(Future<byte[]> f:pending)require(Arrays.equals(f.get(),original(PNG)),"concurrent first local image");pool.shutdown();require(fetches==1,"first asset must load/deduplicate manifest before fallback");
   require(Arrays.equals(bytes(get(lib,PNG.toUpperCase(Locale.ROOT).replace("/ASSETS/","/assets/"),null)),original(PNG)),"Windows case alias");
+  String hashed=PNG.replaceFirst("^/assets/","/assets/~${png[1].hash.slice(0,16)}/");require(Arrays.equals(bytes(get(lib,hashed,null)),original(PNG)),"hashed image path must stay local");
+  String hashedAudio=AUDIO.replaceFirst("^/assets/","/assets/~${audio[1].hash.slice(0,16)}/");require(Arrays.equals(bytes(get(lib,hashedAudio,"bytes=2-8")),Arrays.copyOfRange(original(AUDIO),2,9)),"hashed audio range must stay local");
   require(Arrays.equals(bytes(get(lib,OBJ,null)),original(OBJ)),"model extra");require(get(lib,OBJ,null).mime.equals("text/plain"),"OBJ MIME");require(get(lib,JSONFILE,null).mime.equals("application/json"),"JSON MIME");require(get(lib,"/fonts/fonts.css",null).mime.equals("text/css"),"font CSS MIME");
   WebResourceResponse part=get(lib,AUDIO,"bytes=2-8");require(part.status==206,"audio range status");require(Arrays.equals(bytes(part),Arrays.copyOfRange(original(AUDIO),2,9)),"audio partial bytes");
   WebResourceResponse suffix=get(lib,AUDIO,"bytes=-3");byte[] all=original(AUDIO);require(Arrays.equals(bytes(suffix),Arrays.copyOfRange(all,all.length-3,all.length)),"suffix bytes");require(get(lib,AUDIO,"bytes=999999999-").status==416,"invalid range");
   lib.setPage(ORIGIN+"/_build/"+BUILD+"/");require(Arrays.equals(bytes(lib.intercept(request(ORIGIN+"/media/TEST-AUDIO",null,"GET"))),all),"audio case alias");
-  require(lib.intercept(request(ORIGIN+"/_build/changed"+PNG,null,"GET"))==null,"changed server hash must use network");require(lib.intercept(request(ORIGIN+"/_build/changed"+OBJ,null,"GET"))==null,"extras must not override future builds");
+  require(lib.intercept(request(ORIGIN+"/_build/changed"+PNG,null,"GET")).status==503,"8443 changed hash must stop automatic downloads");require(lib.intercept(request(ORIGIN+"/_build/changed"+OBJ,null,"GET")).status==503,"extras must not override future builds");
+  WebResourceResponse missingAudio=get(lib,"/assets/audio/missing.mp3",null);require(missingAudio.status==200&&missingAudio.mime.equals("audio/wav"),"missing optional audio returns local silence");require(bytes(missingAudio).length==8044,"local silence is bounded");
+  require(lib.intercept(request("https://weishuxieyi.icu/_build/changed"+PNG,null,"GET"))==null,"ICU retains its existing network fallback");
   require(Arrays.equals(bytes(lib.intercept(request("https://weishuxieyi.icu/_build/"+BUILD+PNG,null,"GET"))),original(PNG)),"ICU resources use their own manifest");require(Arrays.equals(bytes(lib.intercept(request(${JSON.stringify(cdn)},null,"GET"))),original(PNG)),"ICU validated CDN alias uses local bytes");require(lib.intercept(request("https://unknown.example/_build/"+BUILD+PNG,null,"GET"))==null,"foreign origins must not receive local resources");require(lib.intercept(request(ORIGIN+"/_build/"+BUILD+PNG,null,"POST"))==null,"POST fallback");
   ServerRegistry registry=new ServerRegistry(assets);require(registry.servers.size()==2,"two server cards");require(registry.servers.get(0).name.equals("8443服")&&registry.servers.get(1).name.equals("icu服"),"requested names");for(ServerRegistry.Server s:registry.servers){require(s.url.endsWith("/game.html"),"direct game URL");require(registry.contains(Uri.parse(s.url)),"registered HTTPS origin");}require(!registry.contains(Uri.parse("https://weishuxieyi.icu.evil.example/")),"foreign origin");require(!registry.contains(Uri.parse("http://weishuxieyi.icu/")),"HTTP origin");require(!registry.contains(Uri.parse("https://user@weishuxieyi.icu/")),"credential URL");
   System.out.println("native resource and server registry checks passed");
@@ -69,9 +74,9 @@ public final class NativeTest {
 }`};
 const files=[];for(const [name,body]of Object.entries(sources)){const filename=path.join(qa,name);await fs.mkdir(path.dirname(filename),{recursive:true});await fs.writeFile(filename,body);files.push(filename);}
 for(const filename of ['BundledResources.java','ServerRegistry.java'])files.push(root+'/android/src/cn/weishuxieyi/mobile/'+filename);
-const jdk=root+'/tools/jdk/jdk-21.0.12.1+1/bin/';
+const jdk=artifactRoot+'/tools/jdk/jdk-21.0.12.1+1/bin/';
 function run(exe,args){const r=spawnSync(jdk+exe,args,{encoding:'utf8',maxBuffer:1048576,windowsHide:true});if(r.status!==0)throw Error(r.stderr||r.stdout||String(r.error));return r.stdout;}
 await fs.mkdir(qa+'/classes',{recursive:true});run('javac.exe',['-encoding','UTF-8','-d',qa+'/classes',...files]);
-const result=run('java.exe',['-cp',qa+'/classes','NativeTest',root+'/export/卫戍协议-安卓完整版-v1.0.2.apk']);
-const receipt={ok:true,kind:'JVM with Android API adapters; not a device test',checks:['production interceptor returns APK bytes for concurrent first image requests with one manifest fetch','core bridge excludes optional audio and frozen-build extras','Windows case aliases and audio aliases','OBJ/JSON/font stylesheet extras with correct MIME types','audio range, suffix and invalid range','changed hashes and future-build extras fall back to network','other origins and POST do not receive bundled resources','signed registry has both direct game URLs with requested names and rejects foreign/HTTP/credential origins'],output:result.trim()};
-await fs.writeFile(root+'/export/native-verification.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));
+const result=run('java.exe',['-cp',qa+'/classes','NativeTest',process.env.SP_ANDROID_TEST_APK||artifactRoot+'/export/卫戍协议-安卓完整版-v1.0.2.apk']);
+const receipt={ok:true,kind:'JVM with Android API adapters; not a device test',checks:['production interceptor returns APK bytes for concurrent first image requests with one manifest fetch','core bridge excludes optional audio and frozen-build extras','Windows case aliases, hashed image paths and hashed audio ranges stay local','OBJ/JSON/font stylesheet extras with correct MIME types','audio range, suffix and invalid range','8443 changed hashes and missing core assets stop automatic downloads; missing optional audio returns bounded silence','ICU retains its existing fallback; other origins and POST do not receive bundled resources','signed registry has both direct game URLs with requested names and rejects foreign/HTTP/credential origins'],output:result.trim()};
+await fs.writeFile(artifactRoot+'/export/native-verification-path-r02.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));

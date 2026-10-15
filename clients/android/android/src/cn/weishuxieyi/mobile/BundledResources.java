@@ -79,7 +79,19 @@ public final class BundledResources {
             Snapshot snapshot=new Snapshot(value,raw);if(snapshots.size()>=8)snapshots.clear();snapshots.put(key,snapshot);return snapshot;
         }
     }
-    private static String canonical(String path){StringBuilder result=new StringBuilder();for(String part:Uri.decode(path).split("/",-1)){if(result.length()>0||!part.isEmpty())result.append('/');result.append(Uri.encode(part));}return result.toString();}
+    private static String canonical(String path){String decoded=Uri.decode(path).replaceFirst("^/(assets|fonts|media)/~[a-f0-9]{16}(/)","/$1$2");StringBuilder result=new StringBuilder();for(String part:decoded.split("/",-1)){if(result.length()>0||!part.isEmpty())result.append('/');result.append(Uri.encode(part));}return result.toString();}
+    private static WebResourceResponse missing(Uri uri){
+        if(!trusted(uri))return null;
+        String path=uri.getEncodedPath();if(path==null)return null;Matcher build=BUILD.matcher(path);if(build.matches())path="/"+build.group(2);
+        if(!path.matches("^/(assets|fonts|media)/.+"))return null;
+        Map<String,String> headers=new HashMap<>();headers.put("Cache-Control","no-store");headers.put("Access-Control-Allow-Origin","*");headers.put("X-SP-Native-Resource","LOCAL-MISSING");
+        if(path.startsWith("/media/")||path.toLowerCase(Locale.ROOT).matches(".*\\.(mp3|ogg|oga|opus|wav|m4a|aac|flac)$")){
+            byte[] body=new byte[8044];java.nio.ByteBuffer b=java.nio.ByteBuffer.wrap(body).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            b.put("RIFF".getBytes(StandardCharsets.US_ASCII)).putInt(8036).put("WAVEfmt ".getBytes(StandardCharsets.US_ASCII)).putInt(16).putShort((short)1).putShort((short)1).putInt(8000).putInt(8000).putShort((short)1).putShort((short)8).put("data".getBytes(StandardCharsets.US_ASCII)).putInt(8000);Arrays.fill(body,44,body.length,(byte)128);
+            headers.put("Content-Length",String.valueOf(body.length));return new WebResourceResponse("audio/wav",null,200,"OK",headers,new ByteArrayInputStream(body));
+        }
+        byte[] body="Local resources unavailable; reinstall the complete client or resource update.".getBytes(StandardCharsets.UTF_8);headers.put("Content-Length",String.valueOf(body.length));return new WebResourceResponse("text/plain","UTF-8",503,"Local Resource Missing",headers,new ByteArrayInputStream(body));
+    }
     public WebResourceResponse intercept(WebResourceRequest request){
         Uri uri=request.getUrl();if(!"GET".equals(request.getMethod()))return null;
         try{
@@ -91,8 +103,8 @@ public final class BundledResources {
             }
             String origin=origin(uri),encoded=uri.getEncodedPath(),build=activeBuilds.get(origin),path=encoded;Matcher match=BUILD.matcher(encoded);
             if(match.matches()){build=match.group(1);path="/"+match.group(2);activeBuilds.put(origin,build);}
-            if(build==null)return null;
-            if(build.isEmpty())return null;
+            if(build==null)return missing(uri);
+            if(build.isEmpty())return missing(uri);
             String key=origin+"/"+build,manifestUrl=origin+"/_build/"+build+"/data/resource-cache.json";
             if(path.equals("/data/resource-cache.json")){
                 Snapshot snapshot=load(key,manifestUrl);
@@ -101,15 +113,15 @@ public final class BundledResources {
             }
             if(!path.startsWith("/assets/")&&!path.startsWith("/fonts/")&&!path.startsWith("/media/"))return null;
             Snapshot snapshot=load(key,manifestUrl);
-            path=canonical(path);if(path.startsWith("/media/")){if(snapshot.aliases==null)return null;String alias=snapshot.aliases.optString(path,"");if(alias.isEmpty())alias=snapshot.aliasFolded.get(path.toLowerCase(Locale.ROOT));if(alias==null||alias.isEmpty())return null;path=alias;}
+            path=canonical(path);if(path.startsWith("/media/")){if(snapshot.aliases==null)return missing(uri);String alias=snapshot.aliases.optString(path,"");if(alias.isEmpty())alias=snapshot.aliasFolded.get(path.toLowerCase(Locale.ROOT));if(alias==null||alias.isEmpty())return missing(uri);path=alias;}
             JSONObject expected=snapshot.entries.optJSONObject(path);if(expected==null)expected=snapshot.folded.get(path.toLowerCase(Locale.ROOT));
             // Extras omitted by the old server manifest are valid only for their frozen build.
             if(expected==null&&extraBuilds.contains(build))expected=extras.get(path);
             if(expected==null&&extrasByBuild!=null){JSONObject scoped=extrasByBuild.optJSONObject(build);if(scoped!=null)expected=scoped.optJSONObject(path);}
-            if(expected==null)return null;
-            Item item=byHash.get(expected.optString("hash"));if(item==null||item.bytes!=expected.optLong("bytes"))return null;
+            if(expected==null)return missing(uri);
+            Item item=byHash.get(expected.optString("hash"));if(item==null||item.bytes!=expected.optLong("bytes"))return missing(uri);
             return asset(item,request.getRequestHeaders(),path);
-        }catch(Exception ignored){return null;}
+        }catch(Exception ignored){return missing(uri);}
     }
     private WebResourceResponse asset(Item item,Map<String,String> requestHeaders,String url)throws IOException{
         String range=null;for(Map.Entry<String,String> h:requestHeaders.entrySet())if(h.getKey().equalsIgnoreCase("Range"))range=h.getValue();

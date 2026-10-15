@@ -1,4 +1,5 @@
 import { createTrainingModAdapter } from './mod-adapter.js';
+import { requireLocalResourceController } from '../resources/client.js';
 import { DATA_FILES, LIMITS, TRAINING_HISTORY_KEY, defaultScenario, validateScenario, legalTiles, deployTiles, trainingBonds, battleOptions, loadTraining, saveTraining, summarizeTraining, saveTrainingResult } from './model.js';
 
 const root = document.getElementById('training-app');
@@ -95,6 +96,7 @@ function start(){try{scenario=validateScenario(scenario,raw);try{saveTraining(st
 function reset(){running=false;modAdapter.reset();battle=null;budget=0;finishedSaved=false;drawGrid();drawPreview();renderStats();syncButtons();say('已返回布阵。修改后可用相同种子重新测试。');}
 
 async function main(){
+  await requireLocalResourceController();
   const fetched=await Promise.all(DATA_FILES.map(async n=>{const ctl=new AbortController();const timer=setTimeout(()=>ctl.abort(),30000);try{const r=await fetch(`/data/${n}.json`,{signal:ctl.signal});if(!r.ok)throw new Error(`训练数据 ${n} 加载失败（${r.status}）`);return[n,await r.json()];}finally{clearTimeout(timer);}}));
   raw=Object.fromEntries(fetched);modAdapter.setData(raw);const simUrl='/js/browser/sim.js';sim=await import(simUrl);sim.simdata.setSimData(raw);sim.support.setGameData?.(null);ds=new sim.simdata.DataSource(raw,null);scenario=loadTraining(storage,raw);
   root.replaceChildren();root.setAttribute('aria-busy','false');
