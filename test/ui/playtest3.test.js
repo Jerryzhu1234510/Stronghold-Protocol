@@ -1,8 +1,8 @@
 // Regression tests (Node) of user playtest #3, HUD / UI items:
-//   2  the own LP drops live while the own battle's enemies enter the blue gate — pendingLoss / liveLp (the settle
+//   2  the own LP's pending loss is marked live while the own battle's enemies enter the blue gate — pendingLoss / liveLp (the settle
 //      rule min(lpCapPerRound, counted leaks), reset when the settled m.private lands, 联防中 during 联防), the team
 //      panel rows (rowLp: own live value, teammates' m.public players[].pendingLp), the LP tower's −N tick, and the
-//      server's pendingLp (server/match/Match.js _pendingLpView)
+//      server's pendingLp (server/match/match/views.js _pendingLpView)
 //   3  the temp overflow row (临时整备区): the ready button's visible reason, the row's frame geometry (tempRowFrame)
 //   8  the operator's own effect (特质 / garrison) right under the detail card's header (CHESS_SECTIONS, rendered order)
 //   9  no spinning busy indicators next to texts: no wait / progress cursors, the button's busy bar instead of a
@@ -59,7 +59,7 @@ const hasClass = (v, c) => typeof v?.props?.class === 'string' && v.props.class.
 
 // ---- 2: live LP ----------------------------------------------------------------------------------------------------
 
-describe('2: the own LP drops live while the battle runs', () => {
+describe("2: the own LP's pending loss is marked live while the battle runs", () => {
   test('pendingLoss is the settle rule: min(lpCapPerRound, counted leaks), never negative', () => {
     assert.equal(pendingLoss(0), 0);
     assert.equal(pendingLoss(3), 3);
@@ -78,8 +78,7 @@ describe('2: the own LP drops live while the battle runs', () => {
     assert.equal(ownLeaks(4, undefined), 4);
     for (const [a, b] of [[undefined, undefined], [NaN, null], [-2, 'x']]) assert.equal(ownLeaks(a, b), 0);
     // the game screen feeds liveLp with it
-    assert.match(read('public/js/screens/game.js'), /leaks: ownLeaks\(localLeaks, gate\.serverOk \? meP\?\.pendingLp : undefined\)/, 'the server\'s count joins once the own picture finished');
-    assert.match(read('public/js/screens/game.js'), /const localLeaks = drawnBattle && drawnBattle\.leaks \? drawnBattle\.leaks\[ownFieldId\(myId\)\] : undefined;/, 'the local count is the drawn one (test/ui/hud-drawn-clock.test.js)');
+    assert.match(read('public/js/screens/game.js'), /leaks: ownLeaks\(localLeaks, meP\?\.pendingLp\)/);
   });
 
   /** Feed liveLp a sequence of states, keeping its base like the game screen (lpBaseRef). */
@@ -151,7 +150,7 @@ describe('2: the own LP drops live while the battle runs', () => {
     assert.deepEqual(rowLp({ lp: 30 }, { phase: PHASE.FINAL_ASSAULT }, { lp: 99, pending: 5 }), { lp: 30, pending: 0, unite: false, left: null }, 'boss rounds: the row keeps its own share');
   });
 
-  test('LP tower: lp − pending in red with a −N tick keyed by the pending value (it pops again on every leak), the 联防中 tag', () => {
+  test('LP tower: the settled LP in red with a −N tick keyed by the pending value (it pops again on every leak) — the official keeps the current value until settlement (GitHub #479), the 联防中 tag', () => {
     const plain = LpTower({ value: 24, size: 'lg' });
     assert.ok(!hasClass(plain, 'is-pending'));
     assert.equal(textOf(plain), '24');
@@ -161,11 +160,11 @@ describe('2: the own LP drops live while the battle runs', () => {
     assert.equal(pend.key, 3, 'keyed: a new count re-mounts the tick (its pop animation plays again)');
     assert.equal(textOf(pend), '−3');
     const val = [...walk(v)].find((n) => hasClass(n, 'lp__val'));
-    assert.equal(textOf(val), '21');
+    assert.equal(textOf(val), '24', 'the number keeps the settled LP; the −3 tick carries the pending loss (GitHub #479)');
     assert.equal(v.props.title, 'x');
     const unite = LpTower({ value: 5, pending: 9, note: '联防中' });
-    assert.equal(textOf([...walk(unite)].find((n) => hasClass(n, 'lp__val'))), '0', 'clamped');
-    assert.equal(textOf([...walk(unite)].find((n) => hasClass(n, 'lp__pend'))), '−5');
+    assert.equal(textOf([...walk(unite)].find((n) => hasClass(n, 'lp__val'))), '5');
+    assert.equal(textOf([...walk(unite)].find((n) => hasClass(n, 'lp__pend'))), '−5', 'the tick clamps at the LP left');
     assert.equal(textOf([...walk(unite)].find((n) => hasClass(n, 'lp__note'))), '联防中');
     assert.equal(textOf(LpTower({ value: null, pending: 3 })), '--');
   });
@@ -270,6 +269,17 @@ describe('3: the temp overflow row (临时整备区)', () => {
 // ---- 8: the operator's own effect first --------------------------------------------------------------------------------
 
 describe('8: 特质 right under the detail card\'s header', () => {
+  // GitHub #175 (from PR #192 by @kukiC): the card's 7 / 14 is the cap the battle applies
+  test('华法琳\'s normal and elite cards show the 7 / 14 layer caps (GitHub #175)', async () => {
+    await data.loadAll('chess', 'garrisons', 'assets', 'bonds', 'items');
+    for (const [id, cap] of [['chess_char_4_26_a', 7], ['chess_char_4_26_b', 14]]) {
+      const blocks = ChessDetail({ chess: data.lookup('chess', id), piece: null, editable: false, bonds: [], loadout: null });
+      const block = blocks.find((b) => b.key === 'garrison');
+      const rich = [...walk(block.type(block.props))].find((n) => n.props?.text != null);
+      assert.match(rich.props.text, new RegExp(`每场战斗至多${cap}层`));
+    }
+  });
+
   test('the block order', () => {
     assert.deepEqual(CHESS_SECTIONS, ['head', 'garrison', 'trait', 'stats', 'skill', 'module', 'equip', 'talents', 'actions']);
   });

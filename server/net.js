@@ -29,6 +29,8 @@
 //
 // The handler object (implemented by server/lobby.js) receives:
 //   onHello(session, { resumed, repeat })  after `welcome` was sent
+//   welcomeInfo() → object (optional)      extra fields of every `welcome` (never one of its own keys): the lobby's
+//                                          `diyKitted` (0.2.0 自选编队 — which operators a DIY slot may field)
 //   onMessage(session, msg) → { ok: true } | { error: ERR code, detail?: string } | undefined
 //   routeGame(session, msg) → same (optional): client-side combat reports `b.progress` / `b.result` (DESIGN §14) go
 //                                          straight to the running match through it; without it they reach onMessage
@@ -36,6 +38,7 @@
 //   onExpire(session)                      the session was purged (disconnected longer than the window)
 
 import { randomBytes } from 'node:crypto';
+import { StateEncoder } from '../shared/stateDelta.js';
 import { isIP } from 'node:net';
 import { C2S, validateC2S } from '../shared/protocol.js';
 import { ERR, ERR_TEXT, NAME_MAX_LEN, PROTOCOL_VERSION } from '../shared/constants.js';
@@ -48,7 +51,7 @@ export const NET_DEFAULTS = Object.freeze({
   heartbeatMs: 30_000,          // ping interval; a socket that missed one full interval is terminated
   helloTimeoutMs: 30_000,       // sockets that never say hello are closed (4002)
   reconnectWindowMs: 10 * 60_000, // disconnected sessions stay resumable this long
-  snapDropBytes: 1 << 20,       // skip b.snap while bufferedAmount exceeds this
+  snapDropBytes: 32 << 10,      // stop adding replaceable pictures before a long queue builds
   hardBufferBytes: 16 << 20,    // terminate a socket whose send queue exceeds this
   maxConnections: 2000,         // concurrent sockets (enforced by index.js at upgrade time)
   maxConnectionsPerAddr: 64,    // concurrent sockets per client network key (0 = unlimited); see clientAddress
@@ -56,15 +59,16 @@ export const NET_DEFAULTS = Object.freeze({
   heavyPerSec: 2,               // refill of the bucket for resend-heavy intents (HEAVY_TYPES)
   heavyBurst: 6,
   trustProxy: 'auto',           // forwarding headers: 'auto' = from loopback/private peers only, true = always, false = never
-  autoTimers: true,             // Workers use platform alarms instead of keeping an idle object awake
 });
 
 /**
  * Intents that also draw from the per-connection heavy bucket: g.watch (its reply is a large state resend, m.field),
- * room.loadout (a ≤ 160-entry map validated against the game data; the client debounces its edits) and room.spectate
+ * room.loadout (a ≤ 160-entry map validated against the game data; the client debounces its edits), room.ownership
+ * (a ≤ 160-id list, the same way), room.diy (≤ 8 自选 picks checked against the data, the same way) and room.spectate
  * (taking a spectator seat in a running match resends its state like a watcher's g.watch — server/lobby.js spectate).
+ * room.list returns the public directory and shares this bucket to bound refresh amplification.
  */
-export const HEAVY_TYPES = new Set(['g.watch', 'room.loadout', 'room.spectate']);
+export const HEAVY_TYPES = new Set(['g.watch', 'room.loadout', 'room.ownership', 'room.diy', 'room.spectate', 'room.list']);
 
 /** Close codes (see header). */
 export const CLOSE = Object.freeze({ REPLACED: 4001, HELLO_TIMEOUT: 4002, POLICY: 1008, SHUTDOWN: 1001 });
@@ -89,6 +93,7 @@ export class Session {
     this.token = token;
     /** @type {string} sanitized nickname */
     this.name = name;
+    this.accountId = null;
     /** @type {import('ws').WebSocket | null} currently bound socket */
     this.ws = null;
     /** @type {boolean} */
@@ -107,6 +112,10 @@ export class Session {
     this.resyncAt = -Infinity;
     /** @type {Record<string, { skill: number, module: string|null }> | null} checked operator loadout (lobby-owned, DESIGN §16) */
     this.loadout = null;
+    /** @type {readonly string[] | null} checked not-owned chess ids (干员持有, lobby-owned, 0.2.0 补位) */
+    this.notOwned = null;
+    /** @type {Readonly<Record<string, { charId: string, skillIndex: number, uniEquipId: string|null }>> | null} checked 自选 picks (lobby-owned, 0.2.0 自选编队) */
+    this.diy = null;
     /** @type {string} client address of the latest connection (logging) */
     this.addr = '?';
     /** @type {string | null} per-network limit key of the latest connection (null = not limited), see clientAddress */
@@ -133,6 +142,7 @@ export class SessionRegistry {
     this.now = now;
     /** @type {Map<string, Session>} */ this.byPlayerId = new Map();
     /** @type {Map<string, Session>} */ this.byTokenMap = new Map();
+    this.byAccount = new Map();
   }
 
   get size() { return this.byPlayerId.size; }
@@ -167,10 +177,21 @@ export class SessionRegistry {
   /** @param {string} playerId @returns {Session | null} */
   byId(playerId) { return this.byPlayerId.get(playerId) || null; }
 
+  byAccountId(id) {
+    const session = this.byAccount.get(id);
+    return session && !this.isExpired(session, this.now()) ? session : null;
+  }
+  bindAccount(id, session) {
+    if (session.accountId && this.byAccount.get(session.accountId) === session) this.byAccount.delete(session.accountId);
+    session.accountId = id;
+    if (id) this.byAccount.set(id, session);
+  }
+
   /** @param {Session} s */
   remove(s) {
     if (this.byPlayerId.get(s.playerId) === s) this.byPlayerId.delete(s.playerId);
     if (this.byTokenMap.get(s.token) === s) this.byTokenMap.delete(s.token);
+    if (s.accountId && this.byAccount.get(s.accountId) === s) this.byAccount.delete(s.accountId);
   }
 
   /**
@@ -255,6 +276,9 @@ export function encode(msg) {
 }
 
 const onSendDone = (err) => { void err; }; // errors surface through the socket's 'error'/'close' events
+const TRAFFIC = Symbol('aggregateTraffic');
+const NETWORK_METRICS = Symbol('networkMetrics');
+const STATE_ENCODER = Symbol('stateEncoder');
 
 /**
  * Send an already-encoded frame. Skips when the socket is not OPEN, when `droppable` and the socket is
@@ -268,9 +292,19 @@ export function sendRaw(ws, data, { droppable = false } = {}) {
   if (!ws || ws.readyState !== WS_OPEN || typeof data !== 'string') return false;
   try {
     const queued = ws.bufferedAmount;
+    const metrics = ws[NETWORK_METRICS];
+    if (metrics) metrics.queuePeakBytes = Math.max(metrics.queuePeakBytes, queued);
     if (queued > NET_DEFAULTS.hardBufferBytes) { ws.terminate(); return false; }
-    if (droppable && queued > NET_DEFAULTS.snapDropBytes) return false;
-    ws.send(data, onSendDone);
+    // One oversized picture may pass on an empty connection. Critical frames never use this guard.
+    if (droppable && queued > 0 && queued + Buffer.byteLength(data) > NET_DEFAULTS.snapDropBytes) {
+      if (metrics) metrics.skippedSnapshots++;
+      return false;
+    }
+    const traffic = ws[TRAFFIC];
+    ws.send(data, traffic ? (err) => {
+      if (!err) { try { traffic.recordWebSocket('out', data); } catch { /* metrics must not interrupt play */ } }
+    } : onSendDone);
+    if (metrics) metrics.queuePeakBytes = Math.max(metrics.queuePeakBytes, ws.bufferedAmount);
     return true;
   } catch {
     return false;
@@ -288,7 +322,20 @@ export const isDroppable = (msg) => !!msg && msg.t === 'b.snap';
  */
 export function send(ws, msg) {
   const data = encode(msg);
+  return sendEncoded(ws, msg, data);
+}
+
+/** Shared broadcasts encode once, then use each recipient's negotiated state baseline. */
+export function sendEncoded(ws, msg, data) {
   if (data == null) return false;
+  if (ws?.[STATE_ENCODER]) {
+    try {
+      const frame = ws[STATE_ENCODER].prepare(msg, data);
+      const sent = sendRaw(ws, frame.data, { droppable: isDroppable(msg) });
+      if (sent) frame.commit();
+      return sent;
+    } catch { return false; }
+  }
   return sendRaw(ws, data, { droppable: isDroppable(msg) });
 }
 
@@ -338,26 +385,15 @@ const STRIP_RE = new RegExp('[' + STRIP_RANGES.map(([a, b]) => (a === b ? hexEsc
 const LONE_SURROGATE_RE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 
 /**
- * Normalize a name without shortening it: strip control/invisible characters and lone surrogates, collapse
- * whitespace, trim, then NFC. NFC comes last so that a normalized name normalizes to itself: stripping can bring
- * together characters that NFC composes (x, soft hyphen, combining diaeresis). Returns '' when nothing printable
- * remains.
- * @param {unknown} raw
- * @returns {string}
- */
-export function normalizeName(raw) {
-  if (typeof raw !== 'string') return '';
-  return raw.replace(LONE_SURROGATE_RE, '').replace(/\s+/g, ' ').replace(STRIP_RE, '').replace(/ {2,}/g, ' ').trim().normalize('NFC');
-}
-
-/**
- * Normalize a nickname (normalizeName) and cap it at NAME_MAX_LEN code points. Returns null when nothing printable
- * remains.
+ * Normalize a nickname: strip control/invisible characters and lone surrogates, collapse whitespace,
+ * trim, cap at NAME_MAX_LEN code points. Returns null when nothing printable remains.
  * @param {unknown} raw
  * @returns {string | null}
  */
 export function sanitizeName(raw) {
-  const s = [...normalizeName(raw)].slice(0, NAME_MAX_LEN).join('').trim();
+  if (typeof raw !== 'string') return null;
+  let s = raw.normalize('NFC').replace(LONE_SURROGATE_RE, '').replace(/\s+/g, ' ').replace(STRIP_RE, '').replace(/ {2,}/g, ' ').trim();
+  s = [...s].slice(0, NAME_MAX_LEN).join('').trim();
   return s.length > 0 ? s : null;
 }
 
@@ -509,37 +545,62 @@ export class Network {
   /**
    * @param {{
    *   registry: SessionRegistry,
-   *   handler: { onHello?: Function, onMessage: Function, onDisconnect?: Function, onExpire?: Function },
+   *   handler: { onHello?: Function, onMessage: Function, onDisconnect?: Function, onExpire?: Function, welcomeInfo?: Function },
    *   log?: { info: Function, warn: Function, error: Function, debug?: Function },
    *   now?: () => number,
    *   options?: Partial<typeof NET_DEFAULTS>,
+   *   traffic?: { recordWebSocket: Function } | null,
    * }} opts
    */
-  constructor({ registry, handler, log = noopLog, now = Date.now, options = {} }) {
+  constructor({ registry, handler, log = noopLog, now = Date.now, options = {}, traffic = null, accounts = null }) {
     this.registry = registry;
     this.handler = handler;
     this.log = log;
     this.now = now;
+    this.traffic = traffic;
+    this.accounts = accounts;
+    this.queuePeakBytes = 0;
+    this.skippedSnapshots = 0;
     this.opts = { ...NET_DEFAULTS, ...options };
     /** @type {Map<import('ws').WebSocket, Connection>} */
     this.conns = new Map();
     /** @type {Map<string, number>} open sockets per client network key */
     this.connsPerKey = new Map();
     this.closed = false;
-    if (this.opts.autoTimers) {
-      this.heartbeatTimer = setInterval(() => this.heartbeat(), this.opts.heartbeatMs);
-      this.heartbeatTimer.unref?.();
-      const sweepMs = Math.max(20, Math.min(15_000, Math.floor(this.opts.reconnectWindowMs / 4)));
-      this.sweepTimer = setInterval(() => this.sweep(), sweepMs);
-      this.sweepTimer.unref?.();
-    }
+    this.heartbeatTimer = setInterval(() => this.heartbeat(), this.opts.heartbeatMs);
+    this.heartbeatTimer.unref?.();
+    const sweepMs = Math.max(20, Math.min(15_000, Math.floor(this.opts.reconnectWindowMs / 4)));
+    this.sweepTimer = setInterval(() => this.sweep(), sweepMs);
+    this.sweepTimer.unref?.();
   }
 
   /** Number of open sockets. */
   get connectionCount() { return this.conns.size; }
 
+  /** Bounded aggregate only; client numbers are observations, never trusted gameplay input. */
+  performanceSample(at = this.now()) {
+    let queueMaxBytes = this.queuePeakBytes, queueTotalBytes = 0, congestedConnections = 0;
+    let clientStallMaxMs = 0, clientQueueMaxBytes = 0;
+    const rtts = [];
+    for (const conn of this.conns.values()) {
+      if (conn.closing || conn.ws.readyState !== WS_OPEN) continue;
+      const queue = Math.max(0, Number(conn.ws.bufferedAmount) || 0);
+      queueMaxBytes = Math.max(queueMaxBytes, queue); queueTotalBytes += queue;
+      if (queue >= NET_DEFAULTS.snapDropBytes) congestedConnections++;
+      const d = conn.diagnostics;
+      if (!conn.session?.connected || !d?.visible || at - d.at > 10_000 || at - d.at < 0 || d.ageMs + at - d.at > 10_000) continue;
+      rtts.push(d.rttMs); clientStallMaxMs = Math.max(clientStallMaxMs, d.stallMs); clientQueueMaxBytes = Math.max(clientQueueMaxBytes, d.queueBytes);
+    }
+    rtts.sort((a, b) => a - b);
+    const result = { queueMaxBytes, queueTotalBytes, congestedConnections, skippedSnapshots: this.skippedSnapshots,
+      clientReports: rtts.length, rttMaxMs: rtts.at(-1) || 0, rttP95Ms: rtts[Math.max(0, Math.ceil(rtts.length * .95) - 1)] || 0,
+      clientStallMaxMs, clientQueueMaxBytes };
+    this.queuePeakBytes = 0; this.skippedSnapshots = 0;
+    return result;
+  }
+
   /**
-   * Upgrade-time admission check (server/index.js): null to accept, otherwise the reason to refuse.
+   * Upgrade-time admission check (server/http/websocket.js): null to accept, otherwise the reason to refuse.
    * @param {import('node:http').IncomingMessage} req
    * @returns {null | 'shutdown' | 'full' | 'per-address'}
    */
@@ -560,9 +621,12 @@ export class Network {
   handleConnection(ws, req) {
     if (this.closed) { try { ws.close(CLOSE.SHUTDOWN, 'server shutdown'); } catch { /* ignore */ } return; }
     const conn = new Connection(ws, clientAddress(req, this.opts.trustProxy), this.now(), this.opts);
+    if (this.traffic) ws[TRAFFIC] = this.traffic;
+    ws[NETWORK_METRICS] = this;
     this.conns.set(ws, conn);
     if (conn.key) this.connsPerKey.set(conn.key, (this.connsPerKey.get(conn.key) || 0) + 1);
     ws.on('message', (data, isBinary) => {
+      try { this.traffic?.recordWebSocket('in', data, isBinary); } catch { /* metrics must not interrupt play */ }
       try { this.onFrame(conn, data, isBinary); } catch (e) { this.log.error('[net] frame handler crashed', e); }
     });
     ws.on('pong', () => { conn.alive = true; if (conn.session && conn.session.ws === ws) conn.session.lastSeen = this.now(); });
@@ -578,6 +642,12 @@ export class Network {
     // A socket we are closing (replaced by another tab, hello timeout, flooding, shutdown) may still have
     // frames in flight; acting on them could e.g. mint an orphan session from a late `hello`.
     if (conn.closing || this.closed) return;
+    if (conn.authenticating) {
+      conn.accountQueue ||= [];
+      if (conn.accountQueue.length >= 16) { conn.close(CLOSE.POLICY, 'handshake queue full'); return; }
+      conn.accountQueue.push([data, isBinary]);
+      return;
+    }
     const now = this.now();
     conn.alive = true;
     if (conn.session && conn.session.ws === conn.ws) conn.session.lastSeen = now;
@@ -607,12 +677,35 @@ export class Network {
     if (reason) { this.reply(conn, errorMsg(ERR.BAD_MSG, rid, reason)); return; }
 
     if (msg.t === 'ping') {
+      const d = msg.diagnostics;
+      if (d) conn.diagnostics = { at: now, visible: d.visible, rttMs: d.rttMs, ageMs: d.ageMs || 0, stallMs: d.stallMs, queueBytes: d.queueBytes };
       const pong = { t: 'pong', c: msg.c, s: now };
       if (validRid(rid)) pong.rid = rid;
       this.reply(conn, pong);
       return;
     }
-    if (msg.t === 'hello') { this.onHelloMsg(conn, msg, now); return; }
+    if (msg.t === 'hello') {
+      if (!this.accounts) { this.onHelloMsg(conn, msg, now); return; }
+      conn.authenticating = true;
+      Promise.resolve().then(() => this.accounts.resolve(msg.account)).then(account => {
+        if (conn.closing || this.closed || conn.ws.readyState !== WS_OPEN) return;
+        if (account?.resumeBuild) {
+          this.reply(conn, { t: 'account.resume', build: account.resumeBuild });
+          conn.close(CLOSE.REPLACED, 'resume previous version');
+          return;
+        }
+        this.onHelloMsg(conn, msg, this.now(), account);
+      }).catch(error => {
+        this.log.error('[accounts] handshake failed', error.message);
+        this.reply(conn, errorMsg(ERR.INTERNAL, rid, '账号服务暂不可用，请稍后重试'));
+      }).finally(() => {
+        conn.authenticating = false;
+        const queued = conn.accountQueue || [];
+        conn.accountQueue = [];
+        for (const frame of queued) this.onFrame(conn, ...frame);
+      });
+      return;
+    }
     if (!conn.session) { this.reply(conn, errorMsg(ERR.BAD_MSG, rid, 'hello required')); return; }
     if (HEAVY_TYPES.has(msg.t) && !conn.heavy.take(now)) { this.reply(conn, errorMsg(ERR.RATE, rid, `${msg.t} too often`)); return; }
 
@@ -626,6 +719,20 @@ export class Network {
       this.log.error(`[net] handler crashed on ${msg.t}`, e);
       res = { error: ERR.INTERNAL };
     }
+    if (res && typeof res.then === 'function') {
+      Promise.resolve(res).then(result => {
+        if (!conn.closing && !this.closed) this.replyResult(conn, msg, result);
+      }).catch(e => {
+        this.log.error(`[net] asynchronous handler failed on ${msg.t}`, e);
+        if (!conn.closing && !this.closed) this.replyResult(conn, msg, { error: ERR.INTERNAL });
+      });
+      return;
+    }
+    this.replyResult(conn, msg, res);
+  }
+
+  replyResult(conn, msg, res) {
+    const rid = msg.rid;
     if (res && res.error) {
       // fire-and-forget battle progress (no rid) that reached no running match — the match just ended, the room went
       // back to the lobby — is stale, not a client mistake: never answered (DESIGN §14; a rid-less error frame would
@@ -635,30 +742,26 @@ export class Network {
     } else if (validRid(rid)) this.reply(conn, { t: 'ok', rid });
   }
 
-  /**
-   * The session's name for a hello: the name the player typed (null: none usable). A platform that names its
-   * sessions itself (the Workers rooms: the account's display name) overrides this.
-   * @param {Connection} conn @param {any} msg @returns {string | null}
-   */
-  helloName(conn, msg) { // eslint-disable-line no-unused-vars
-    return sanitizeName(msg.name);
-  }
-
   /** @param {Connection} conn @param {any} msg @param {number} now */
-  onHelloMsg(conn, msg, now) {
+  onHelloMsg(conn, msg, now, account = null) {
     const rid = msg.rid;
     if (msg.version != null && msg.version !== PROTOCOL_VERSION) {
       this.reply(conn, errorMsg(ERR.BAD_MSG, rid, `version mismatch: server ${PROTOCOL_VERSION}`));
       return;
     }
-    const name = this.helloName(conn, msg);
+    const name = sanitizeName(msg.name);
     if (!name) { this.reply(conn, errorMsg(ERR.BAD_MSG, rid, 'bad field name')); return; }
 
     let session = conn.session;
+    if (session?.accountId && session.accountId !== account?.accountId) {
+      this.reply(conn, errorMsg(ERR.BAD_MSG, rid, '切换账号前请重新连接')); return;
+    }
     let resumed = false;
     const repeat = !!session;
     if (!session) {
       session = msg.token ? this.registry.byToken(msg.token) : null;
+      if (session?.accountId && session.accountId !== account?.accountId) session = null;
+      if (!session && account?.accountId) session = this.registry.byAccountId(account.accountId);
       if (session) {
         resumed = true;
         if (session.ws && session.ws !== conn.ws) this.detachReplaced(session.ws);
@@ -671,12 +774,19 @@ export class Network {
       session.connected = true;
       session.disconnectedAt = null;
     }
-    session.name = name;
+    session.name = account?.profile?.name || name;
+    if (account?.accountId) this.registry.bindAccount(account.accountId, session);
     session.lastSeen = now;
     session.addr = conn.ip;
     session.limitKey = conn.key;
+    const stateDelta = msg.stateDelta === true && process.env.SP_STATE_DELTA !== 'off';
+    conn.ws[STATE_ENCODER] = stateDelta ? new StateEncoder() : null;
 
-    const welcome = { t: 'welcome', playerId: session.playerId, token: session.token, name: session.name, serverNow: now, version: PROTOCOL_VERSION, resumed };
+    let extra = null;
+    try { extra = this.handler.welcomeInfo?.() ?? null; } catch (e) { this.log.error('[net] welcomeInfo crashed', e); }
+    const welcome = { ...(extra && typeof extra === 'object' ? extra : null), t: 'welcome', playerId: session.playerId, token: session.token, name: session.name, serverNow: now, version: PROTOCOL_VERSION, resumed };
+    if (stateDelta) welcome.stateDelta = true;
+    if (account?.profile) welcome.account = account.profile;
     if (validRid(rid)) welcome.rid = rid;
     this.reply(conn, welcome);
     try {

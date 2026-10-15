@@ -2,9 +2,9 @@
 //
 // Exports: html (bound htm), Icon, Button, Panel, MicroLabel, Chevrons, HexBadge, TierChip,
 // BondDisc, SevenSeg, Countdown, Modal, confirmDialog/alertDialog + DialogHost, Tooltip +
-// TooltipLayer, ProgressBar, Tabs, Spinner, AvatarFrame, PhaseBanner, PingPill, DifficultyTag,
+// TooltipLayer, ProgressBar, Tabs, Spinner, AvatarFrame, PhaseBanner, ResultDialog, PingPill, DifficultyTag,
 // DifficultyIcon, TextField, UiHosts (mount once: dialogs + tooltips), useTicker, secondsLeft/hasDeadline,
-// roman(), PlayerName, doctorNo().
+// roman(), doctorNo().
 //
 // Look: research 06 §11–§12 — near-black green-grey panels, 1px lines, mint accents, bracket
 // corners, hexagon badges, roman tier chips, bond discs with segmented rings, 7-segment countdown
@@ -14,11 +14,12 @@
 import { h, Fragment } from '../../vendor/preact.module.js';
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from '../../vendor/hooks.module.js';
 import htm from '../../vendor/htm.module.js';
-import { DIFFICULTY_NAMES, DIFFICULTY_COLORS } from '../../../shared/constants.js';
-import { nameParts } from '../../../shared/account-protocol.js';
+import { DIFFICULTY_NAMES, DIFFICULTY_COLORS, SEAT_HUES } from '../../../shared/constants.js';
+import { t } from '../../../shared/i18n.js';
 import { serverNow } from '../store.js';
 import { data, useData, localAsset } from '../data.js';
 import { uiUrl } from './assetUrls.js';
+import { useRetryImage } from './imageRetry.js';
 
 /**
  * h() for htm with its static-subtree cache switched off. htm keeps the vnode it built for a fully static subtree in
@@ -42,6 +43,7 @@ const cx = (...parts) => parts.flat().filter(Boolean).join(' ');
 
 /** 24×24 glyph paths (original, simple geometric shapes). `eo` = even-odd fill rule. */
 export const ICONS = {
+  chat: { d: 'M3 3h18v14H8l-5 4zm2 2v11.2L7.3 15H19V5zm2 3h10v2H7zm0 4h7v2H7z', eo: true },
   check: { d: 'M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6L20.1 8.4 18.7 7z' },
   close: { d: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z' },
   exit: { d: 'M20 3H10v2h8v14h-8v2h10zM8.4 7.4 7 6l-6 6 6 6 1.4-1.4L4.8 13H15v-2H4.8z' },
@@ -75,8 +77,6 @@ export const ICONS = {
   expand: { d: 'M3 3h7v2H5v5H3zm11 0h7v7h-2V5h-5zM3 14h2v5h5v2H3zm16 0h2v7h-7v-2h5z' },
   collapse: { d: 'M8 3h2v7H3V8h5zm6 0h2v5h5v2h-7zM3 14h7v7H8v-5H3zm11 0h7v2h-5v5h-2z' },
   rotate: { d: 'M7 2h8a2 2 0 0 1 2 2v7h-2V4H7v16h4v2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 12h5a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2zm0 2v4h5v-4z', eo: true },
-  archive: { d: 'M3 4h18v5h-1v11H4V9H3zm3 5v9h12V9zm3 2h6v2H9z', eo: true },
-  download: { d: 'M11 3h2v9.2l3.6-3.6L18 10l-6 6-6-6 1.4-1.4 3.6 3.6zM4 18h16v2H4z' },
   book: { d: 'M2 4h7.5A3.5 3.5 0 0 1 12 5.1 3.5 3.5 0 0 1 14.5 4H22v16h-7.5a1.5 1.5 0 0 0-1.5 1.5h-2A1.5 1.5 0 0 0 9.5 20H2zm2 2v12h5.5c.5 0 1 .1 1.5.3V7.5A1.5 1.5 0 0 0 9.5 6zm10.5 0A1.5 1.5 0 0 0 13 7.5v10.8c.5-.2 1-.3 1.5-.3H20V6z', eo: true },
   // 观战 (spectator seats; the same eye as gameComponents.js GIcon 'eye')
   eye: { d: 'M12 5c5 0 9 4.5 10 7-1 2.5-5 7-10 7S3 14.5 2 12c1-2.5 5-7 10-7zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4z', eo: true },
@@ -196,12 +196,12 @@ export function tierChipUrl(t) {
  * @param {{ tier: number, golden?: boolean, size?: 'sm'|'md'|'lg', class?: string }} props
  */
 export function TierChip({ tier, golden = false, size = 'md', class: cls }) {
-  const t = Math.max(1, Math.min(6, Number(tier) | 0 || 1));
-  const src = tierChipUrl(t);
-  const [bad, setBad] = useState(null);
-  const img = !!src && bad !== src;
-  return html`<span class=${cx('tier', `tier--${t}`, `tier--${size}`, golden && 'tier--golden', img && 'tier--img', cls)} aria-label=${`${t}阶`}>
-    ${img ? html`<img src=${src} alt="" draggable=${false} onError=${() => setBad(src)} />` : roman(t)}
+  const n = Math.max(1, Math.min(6, Number(tier) | 0 || 1));
+  const src = tierChipUrl(n);
+  const image = useRetryImage(src);
+  const img = image.ok;
+  return html`<span class=${cx('tier', `tier--${n}`, `tier--${size}`, golden && 'tier--golden', img && 'tier--img', cls)} aria-label=${t('{tier}阶', { tier: n })}>
+    ${img ? html`<img src=${src} alt="" draggable=${false} onError=${image.onError} onLoad=${image.onLoad} />` : roman(n)}
   </span>`;
 }
 
@@ -215,9 +215,8 @@ export function BondDisc({
   name = '', icon, count, layers, tier = 0, maxTier = 3, active = false, disabled = false, layersDisabled = false,
   size = 'md', showName = true, onClick, class: cls, title,
 }) {
-  // Remember which URL failed (a per-URL flag can't race a reset effect).
-  const [badSrc, setBadSrc] = useState(null);
-  const imgOk = !!icon && badSrc !== icon;
+  const image = useRetryImage(icon);
+  const imgOk = image.ok;
   const n = Math.max(1, Math.min(8, maxTier | 0 || 3));
   const filled = Math.max(0, Math.min(n, tier | 0));
   const R = 46;
@@ -238,11 +237,11 @@ export function BondDisc({
       </svg>
       <span class="bond__core">
         ${imgOk
-          ? html`<img class="bond__icon" src=${icon} alt="" draggable=${false} onError=${() => setBadSrc(icon)} />`
+          ? html`<img class="bond__icon" src=${icon} alt="" draggable=${false} onError=${image.onError} onLoad=${image.onLoad} />`
           : html`<span class="bond__glyph">${glyph}</span>`}
       </span>
       ${stack != null ? html`<span class="bond__count">${stack}</span>` : null}
-      ${disabled ? html`<span class="bond__ban" aria-label="禁用"><${Icon} name="close" /></span>` : null}
+      ${disabled ? html`<span class="bond__ban" aria-label=${t('禁用')}><${Icon} name="close" /></span>` : null}
     </span>
     ${showName && name ? html`<span class="bond__name">${name}</span>` : null}
   <//>`;
@@ -375,7 +374,7 @@ export function Countdown({ deadline, seconds, total, warnAt = 10, label = 'COUN
 
   // untimed phase: no timer on screen (hooks above run unconditionally, so the component may toggle freely)
   if (remain == null) return null;
-  return html`<div class=${cx('countdown', `countdown--${size}`, warn && 'is-warn', cls)} role="timer" aria-label=${remain == null ? '无倒计时' : `剩余${remain}秒`}>
+  return html`<div class=${cx('countdown', `countdown--${size}`, warn && 'is-warn', cls)} role="timer" aria-label=${remain == null ? t('无倒计时') : t('剩余{remain}秒', { remain })}>
     <div class="countdown__main">
       <${SevenSeg} text=${text} tone=${warn ? 'orange' : 'mint'} flicker=${warn && remain > 0} />
       ${label ? html`<span class="countdown__label">${label}</span>` : null}
@@ -395,7 +394,7 @@ const modalStack = []; // open modals, topmost last: only the topmost reacts to 
  * @param {{ open: boolean, title?: any, micro?: string, tone?: string, onClose?: Function, actions?: any,
  *   width?: string, closeOnBackdrop?: boolean, class?: string, children?: any }} props
  */
-export function Modal({ open, title, micro, tone = 'mint', onClose, actions, width, closeOnBackdrop = true, class: cls, children }) {
+export function Modal({ open, title, titleHint, micro, tone = 'mint', onClose, actions, width, closeOnBackdrop = true, trapFocus = false, class: cls, children }) {
   const boxRef = useRef(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -425,15 +424,23 @@ export function Modal({ open, title, micro, tone = 'mint', onClose, actions, wid
   if (!open) return null;
   return html`<div class="modal" role="presentation"
       onMouseDown=${(e) => { if (closeOnBackdrop && e.target === e.currentTarget && onClose) onClose(); }}>
-    <div ref=${boxRef} class=${cx('modal__box', 'brackets', `modal__box--${tone}`, cls)} role="dialog" aria-modal="true"
-         style=${width ? `width:${width}` : undefined}>
+    <div ref=${boxRef} class=${cx('modal__box', 'brackets', `modal__box--${tone}`, cls)} role="dialog" aria-modal="true" aria-label=${typeof title === 'string' ? title : micro || '对话框'}
+         style=${width ? `width:${width}` : undefined} onKeyDown=${(e) => {
+           if (!trapFocus || e.key !== 'Tab') return;
+           const controls = [...e.currentTarget.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex="0"]')];
+           const first = controls[0], last = controls.at(-1);
+           if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+             e.preventDefault(); (e.shiftKey ? last : first)?.focus();
+           }
+         }}>
       <div class="modal__stripe" aria-hidden="true"></div>
-      ${title || micro ? html`<header class="modal__head">
+      ${title || micro ? html`<header class="modal__head" role="presentation">
         ${micro ? html`<${MicroLabel}>${micro}<//>` : null}
         ${title ? html`<h2 class="modal__title">${title}</h2>` : null}
+        ${titleHint ? html`<span class="modal__title-hint">${titleHint}</span>` : null}
       </header>` : null}
       <div class="modal__body">${children}</div>
-      ${actions ? html`<footer class="modal__actions">${actions}</footer>` : null}
+      ${actions ? html`<footer class="modal__actions" role="presentation">${actions}</footer>` : null}
     </div>
   </div>`;
 }
@@ -491,7 +498,7 @@ export function DialogHost() {
   }, []);
   const d = dialogs[0];
   if (!d) return null;
-  const { title = '确认', text, okText = '确认', cancelText = '取消', tone, danger, micro = 'CONFIRMATION' } = d.opts;
+  const { title = t('确认'), text, okText = t('确认'), cancelText = t('取消'), tone, danger, micro = 'CONFIRMATION' } = d.opts;
   const isConfirm = d.kind === 'confirm';
   // Enter confirms unless a specific button has focus (then the native click decides).
   const onKey = (e) => {
@@ -510,24 +517,27 @@ export function DialogHost() {
 
 // ---- Tooltip -----------------------------------------------------------------------------------
 
-let tipState = null; // { id, content, rect, placement }
+let tipState = null; // { id, content, aside, rect, placement }
 let tipSeq = 0;
 const tipListeners = new Set();
 const setTip = (s) => { tipState = s; for (const fn of [...tipListeners]) fn(); };
 
 /**
  * Hover/focus tooltip around its children. Content renders in <TooltipLayer/> (fixed, viewport-clamped).
- * @param {{ text: any, placement?: 'top'|'bottom', delay?: number, block?: boolean, class?: string, children?: any }} props
+ * `aside`: a second section in the same clamped, scrollable box; stacked on narrow screens.
+ * @param {{ text: any, aside?: any, placement?: 'top'|'bottom', delay?: number, block?: boolean, class?: string, children?: any }} props
  */
 const TOUCH_TIP_MS = 450;
 
-export function Tooltip({ text, placement = 'top', delay = 120, block = false, class: cls, children }) {
+export function Tooltip({ text, aside = null, placement = 'top', delay = 120, block = false, class: cls, children }) {
   const ref = useRef(null);
   const idRef = useRef(0);
   const timer = useRef(null);
   const textRef = useRef(text);
+  const asideRef = useRef(aside);
   const pressed = useRef(false); // pointer pressed inside: the focus that follows is not a keyboard focus
   textRef.current = text;
+  asideRef.current = aside;
   if (!idRef.current) idRef.current = ++tipSeq;
   const show = () => {
     clearTimeout(timer.current);
@@ -536,7 +546,8 @@ export function Tooltip({ text, placement = 'top', delay = 120, block = false, c
       const el = ref.current;
       const content = textRef.current; // the text of the render current when the delay ends (a click may change it)
       if (!el || !el.isConnected || content == null || content === '') return;
-      setTip({ id: idRef.current, content, rect: el.getBoundingClientRect(), placement });
+      setTip({ id: idRef.current, content, aside: asideRef.current, rect: el.getBoundingClientRect(), placement,
+        hold: () => clearTimeout(timer.current), hide });
     }, delay);
   };
   const hide = () => {
@@ -546,7 +557,7 @@ export function Tooltip({ text, placement = 'top', delay = 120, block = false, c
   // A click hides the tooltip until the pointer leaves: the focus it gives the button must not bring it back
   // (with the text of the click's closure) over whatever the click opened. Keyboard focus still shows it.
   // Touch: a tap never shows it (the compatibility mouseenter that follows a tap is ignored); a long press
-  // (≥ 450 ms) does, and it goes away shortly after the finger lifts.
+  // (≥ 450 ms) does. Ordinary tips expire after release; compound lists stay open for scrolling until dismissed.
   const touchAt = useRef(0);
   const longTimer = useRef(null);
   const onPointerDown = (e) => {
@@ -562,18 +573,24 @@ export function Tooltip({ text, placement = 'top', delay = 120, block = false, c
     if (!e || e.pointerType === 'mouse') return;
     touchAt.current = Date.now();
     clearTimeout(longTimer.current);
-    if (tipState?.id === idRef.current) { clearTimeout(timer.current); timer.current = setTimeout(hide, 1600); }
+    if (tipState?.id === idRef.current && !asideRef.current) { clearTimeout(timer.current); timer.current = setTimeout(hide, 1600); }
   };
   const onMouseEnter = () => { if (Date.now() - touchAt.current > 900) show(); };
   const onFocusIn = () => { if (!pressed.current && Date.now() - touchAt.current > 900) show(); };
-  const onLeave = () => { pressed.current = false; if (Date.now() - touchAt.current > 900) hide(); };
+  const onLeave = () => {
+    pressed.current = false;
+    if (Date.now() - touchAt.current > 900) {
+      if (asideRef.current) { clearTimeout(timer.current); timer.current = setTimeout(hide, 250); }
+      else hide();
+    }
+  };
   useEffect(() => () => { clearTimeout(longTimer.current); hide(); }, []);
   // Keep the visible tooltip's content fresh when `text` changes (and hide it when text goes away).
   useEffect(() => {
     if (tipState?.id !== idRef.current) return;
     if (text == null || text === '') setTip(null);
-    else setTip({ ...tipState, content: text });
-  }, [text]);
+    else setTip({ ...tipState, content: text, aside: asideRef.current });
+  }, [text, aside]);
   return html`<span ref=${ref} class=${cx('tt-anchor', block && 'tt-anchor--block', cls)}
       onMouseEnter=${onMouseEnter} onMouseLeave=${onLeave} onFocusIn=${onFocusIn} onFocusOut=${onLeave} onPointerDown=${onPointerDown}
       onPointerUp=${onPointerEnd} onPointerCancel=${onPointerEnd} onContextMenu=${(e) => { if (Date.now() - touchAt.current < 900) e.preventDefault(); }}>
@@ -588,7 +605,12 @@ export function TooltipLayer() {
   const [pos, setPos] = useState(null);
   useEffect(() => {
     tipListeners.add(force);
-    return () => tipListeners.delete(force);
+    const outside = (e) => { if (tipState?.aside && !e.target?.closest?.('.tooltip')) tipState.hide?.(); };
+    const escape = (e) => { if (e.key === 'Escape') tipState?.hide?.(); };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    window.addEventListener('resize', force);
+    return () => { tipListeners.delete(force); document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); window.removeEventListener('resize', force); };
   }, []);
   useLayoutEffect(() => {
     const el = boxRef.current;
@@ -604,13 +626,21 @@ export function TooltipLayer() {
     if (place === 'bottom' && top + b.height > vh - m) { place = 'top'; top = Math.max(m, r.top - b.height - m); }
     let left = r.left + r.width / 2 - b.width / 2;
     left = Math.max(m, Math.min(vw - b.width - m, left));
+    top = Math.max(m, Math.min(vh - b.height - m, top));
     const next = { top: Math.round(top), left: Math.round(left), place, id: tipState.id };
     if (!pos || pos.top !== next.top || pos.left !== next.left || pos.id !== next.id || pos.place !== next.place) setPos(next);
   });
   if (!tipState) return null;
   const ready = pos && pos.id === tipState.id;
-  return html`<div ref=${boxRef} class=${cx('tooltip', ready && 'is-shown', ready && `tooltip--${pos.place}`)} role="tooltip"
-    style=${ready ? `top:${pos.top}px;left:${pos.left}px` : 'top:-9999px;left:-9999px'}>${tipState.content}</div>`;
+  const hasAside = tipState.aside != null && tipState.aside !== '';
+  const off = 'top:-9999px;left:-9999px';
+  return html`<div ref=${boxRef} class=${cx('tooltip', hasAside && 'tooltip--compound', ready && 'is-shown', ready && `tooltip--${pos.place}`)} role="tooltip"
+    tabIndex=${hasAside ? 0 : undefined} onMouseEnter=${() => tipState?.hold?.()} onMouseLeave=${() => tipState?.hide?.()}
+    onFocusIn=${() => tipState?.hold?.()} onPointerDown=${() => tipState?.hold?.()}
+    onFocusOut=${(e) => { if (!e.currentTarget.contains(e.relatedTarget)) tipState?.hide?.(); }}
+    style=${ready ? `top:${pos.top}px;left:${pos.left}px` : off}>
+    ${hasAside ? html`<div class="tooltip__main">${tipState.content}</div><div class="tooltip--aside">${tipState.aside}</div>` : tipState.content}
+  </div>`;
 }
 
 // ---- ProgressBar, Tabs, Spinner ----------------------------------------------------------------
@@ -672,43 +702,32 @@ export function Spinner({ size = 'md', label, tone = 'mint', class: cls }) {
       <polygon class="spinner__track" points="25,3 44,14 44,36 25,47 6,36 6,14" />
       <polygon class="spinner__arc" points="25,3 44,14 44,36 25,47 6,36 6,14" />
     </svg>
-    ${label ? html`<span class="spinner__label">${label}</span>` : html`<span class="sr-only">加载中</span>`}
+    ${label ? html`<span class="spinner__label">${label}</span>` : html`<span class="sr-only">${t('加载中')}</span>`}
   </span>`;
 }
 
 // ---- Avatar frame ------------------------------------------------------------------------------
 
 /**
- * Seat colours (the hue of the avatar frame / PlayerAvatar backdrop, `--seat-hue`): one per seat of the largest room
- * (shared/constants.js MAX_SEATS = 8). P1–P4 keep the four hues of the official 4-seat room (mint, cyan, amber,
- * violet); P5–P8 (a remake extension) add rose, blue, lime and magenta between them.
- */
-export const SEAT_HUES = Object.freeze([162, 196, 38, 280, 350, 225, 95, 320]);
-/** The seat colour's hue of a seat index (0-based; wraps past the palette). */
-export function seatHue(seat) {
-  const n = SEAT_HUES.length;
-  return SEAT_HUES[(((seat | 0) % n) + n) % n];
-}
-/**
  * Square avatar frame with bracket corners. Falls back to a glyph (first letter / robot).
  * @param {{ name?: string, src?: string, size?: 'sm'|'md'|'lg'|'xl', seat?: number, host?: boolean, bot?: boolean,
  *   self?: boolean, ready?: boolean, offline?: boolean, dead?: boolean, empty?: boolean, class?: string }} props
  */
 export function AvatarFrame({ name = '', src, size = 'md', seat = 0, host, bot, self, ready, offline, dead, empty, class: cls }) {
-  const [badSrc, setBadSrc] = useState(null);
-  const imgOk = !!src && badSrc !== src;
-  const hue = seatHue(seat);
+  const image = useRetryImage(src);
+  const imgOk = image.ok;
+  const hue = SEAT_HUES[((seat | 0) % SEAT_HUES.length + SEAT_HUES.length) % SEAT_HUES.length];
   const glyph = [...(name || '').trim()][0] || '?';
   return html`<div class=${cx('avatar', `avatar--${size}`, 'brackets', host && 'is-host', bot && 'is-bot', self && 'is-self',
       ready && 'is-ready', offline && 'is-offline', dead && 'is-dead', empty && 'is-empty', cls)} style=${`--seat-hue:${hue}`}>
     <div class="avatar__img">
       ${empty ? html`<${Icon} name="plus" class="avatar__empty" />`
-        : imgOk ? html`<img src=${src} alt="" draggable=${false} onError=${() => setBadSrc(src)} />`
+        : imgOk ? html`<img src=${src} alt="" draggable=${false} onError=${image.onError} onLoad=${image.onLoad} />`
         : bot ? html`<${Icon} name="robot" class="avatar__bot" />`
         : html`<span class="avatar__glyph">${glyph}</span>`}
     </div>
-    ${host ? html`<span class="avatar__badge avatar__badge--host" title="创建者"><${Icon} name="crown" /></span>` : null}
-    ${self ? html`<span class="avatar__badge avatar__badge--self" title="你"><${Icon} name="user" /></span>` : null}
+    ${host ? html`<span class="avatar__badge avatar__badge--host" title=${t('创建者')}><${Icon} name="crown" /></span>` : null}
+    ${self ? html`<span class="avatar__badge avatar__badge--self" title=${t('你')}><${Icon} name="user" /></span>` : null}
     ${bot && !empty ? html`<span class="avatar__tag">AI</span>` : null}
   </div>`;
 }
@@ -744,19 +763,40 @@ export function PhaseBanner({ title, sub, micro, tone = 'mint', mode = 'inline',
   </div>`;
 }
 
-// ---- domain helpers ----------------------------------------------------------------------------
-
 /**
- * A player's name in a one-line box. Where the box is too narrow for it, the nickname ends in an ellipsis but never
- * the #NNNN of an account's display name (昵称#NNNN): that is what tells apart two accounts of one nickname. Any other
- * name is plain text (its box's own ellipsis applies).
- * @param {{ name: string }} props
+ * The round's result box (the official round result dialog, shown at settlement; GitHub #235, PR #112 by @Convey123):
+ * a centred framed plate — tone-coloured frame and corner ticks, chevrons either side of the title — that opens, holds
+ * `duration` ms and closes by itself. Purely presentational: ui/gameLogic/phases.js (roundResultBox / uniteResultBox /
+ * battleResultBox) picks the words, screens/game.js the moment (SETTLE). `pointer-events: none`: it never takes a click.
+ * @param {{ title: any, sub?: any, micro?: string, tone?: 'mint'|'orange'|'red', duration?: number, onDone?: Function }} props
+ *   duration (ms) > 0 auto-hides then calls onDone. Re-key to replay.
  */
-export function PlayerName({ name }) {
-  const { nickname, tag } = nameParts(name);
-  if (!tag) return name;
-  return html`<span class="pname"><span class="pname__nick">${nickname}</span><span class="pname__tag">${tag}</span></span>`;
+export function ResultDialog({ title, sub, micro, tone = 'mint', duration = 2800, onDone }) {
+  const [leaving, setLeaving] = useState(false);
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    if (!(duration > 0)) return undefined;
+    const t1 = setTimeout(() => setLeaving(true), duration);
+    const t2 = setTimeout(() => { setGone(true); onDone?.(); }, duration + 300);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [duration]);
+  if (gone) return null;
+  return html`<div class=${cx('rdialog', `rdialog--${tone}`, leaving && 'is-leaving')} role="status" aria-live="polite">
+    <div class="rdialog__box">
+      <span class="rdialog__tick rdialog__tick--tl"></span><span class="rdialog__tick rdialog__tick--tr"></span>
+      <span class="rdialog__tick rdialog__tick--bl"></span><span class="rdialog__tick rdialog__tick--br"></span>
+      ${micro ? html`<span class="rdialog__micro">${micro}</span>` : null}
+      <div class="rdialog__row">
+        <${Chevrons} count=${3} tone=${tone} class="rdialog__chev" />
+        <span class="rdialog__title">${title}</span>
+        <${Chevrons} count=${3} tone=${tone} dir="left" class="rdialog__chev" />
+      </div>
+      ${sub ? html`<span class="rdialog__sub">${sub}</span>` : null}
+    </div>
+  </div>`;
 }
+
+// ---- domain helpers ----------------------------------------------------------------------------
 
 /**
  * Stable 4-digit "博士 #1234" tag for a player id (FNV-1a hash; ids themselves are opaque strings).
@@ -779,7 +819,7 @@ export function doctorNo(id) {
 export function PingPill({ ms, online = true, class: cls }) {
   const ok = online && Number.isFinite(ms);
   const tier = !ok ? 'off' : ms < 60 ? 'low' : ms < 200 ? 'medium' : 'high';
-  return html`<span class=${cx('ping', `ping--${tier}`, cls)} title=${ok ? `当前延迟 ${ms}ms` : '未连接'}>
+  return html`<span class=${cx('ping', `ping--${tier}`, cls)} title=${ok ? t('当前延迟 {ms}ms', { ms }) : t('未连接')}>
     <${Icon} name=${ok ? 'signal' : 'wifiOff'} class="ping__icon" />
     <span class="ping__value">${ok ? Math.min(9999, Math.round(ms)) : '--'}</span><span class="ping__unit">ms</span>
   </span>`;
@@ -793,11 +833,11 @@ export function PingPill({ ms, online = true, class: cls }) {
  */
 export function DifficultyIcon({ difficulty, class: cls }) {
   useData('assets');
-  const [badSrc, setBadSrc] = useState(null);
   const ui = DIFFICULTY_NAMES[difficulty] ? data.get('assets')?.ui : null;
   const src = ui && typeof ui === 'object' ? ui[`modeIcon/mode_${String(difficulty).toLowerCase()}_icon`] : null;
-  if (typeof src === 'string' && src && badSrc !== src) {
-    return html`<img class=${cx('icon', 'dicon', cls)} src=${src} alt="" draggable=${false} onError=${() => setBadSrc(src)} />`;
+  const image = useRetryImage(typeof src === 'string' ? src : null);
+  if (image.ok) {
+    return html`<img class=${cx('icon', 'dicon', cls)} src=${src} alt="" draggable=${false} onError=${image.onError} onLoad=${image.onLoad} />`;
   }
   return html`<${Icon} name="rook" class=${cls} />`;
 }
@@ -807,7 +847,7 @@ export function DifficultyIcon({ difficulty, class: cls }) {
  * @param {{ difficulty: string, size?: 'sm'|'md'|'lg', class?: string, code?: string }} props
  */
 export function DifficultyTag({ difficulty, size = 'md', class: cls, code }) {
-  const name = DIFFICULTY_NAMES[difficulty] || difficulty || '—';
+  const name = DIFFICULTY_NAMES[difficulty] ? t(DIFFICULTY_NAMES[difficulty]) : difficulty || '—';
   const color = DIFFICULTY_COLORS[difficulty] || 'var(--text-lo)';
   return html`<span class=${cx('dtag', `dtag--${size}`, cls)} style=${`--d-color:${color}`}>
     <${DifficultyIcon} difficulty=${difficulty} class="dtag__icon" />
@@ -817,17 +857,12 @@ export function DifficultyTag({ difficulty, size = 'md', class: cls, code }) {
 }
 
 /**
- * Bracketed text input. `type` 'password' hides what is typed; `autocomplete` lets a browser's password manager fill
- * the field ('username', 'current-password', 'new-password'; default 'off'). Phone keyboards: no autocorrect, no
- * auto-capitalisation unless `autoCapitalize` asks for it (iOS rewrote typed room codes), and the Enter key labelled for
- * its action (`enterKeyHint` go / search) — phone audit T10.
+ * Bracketed text input.
  * @param {{ label?: any, micro?: string, value: string, onInput: (v: string) => void, onEnter?: Function,
  *   placeholder?: string, maxLength?: number, transform?: (v: string) => string, autoFocus?: boolean,
- *   disabled?: boolean, size?: 'md'|'lg'|'code', icon?: string, class?: string, inputRef?: any, name?: string,
- *   hint?: any, invalid?: boolean, type?: 'text'|'password', autocomplete?: string,
- *   autoCapitalize?: string, enterKeyHint?: string, inputMode?: string }} props
+ *   disabled?: boolean, size?: 'md'|'lg'|'code', icon?: string, class?: string, inputRef?: any, name?: string }} props
  */
-export function TextField({ label, micro, value, onInput, onEnter, placeholder, maxLength, transform, autoFocus, disabled, size = 'md', icon, class: cls, inputRef, name, hint, invalid, type = 'text', autocomplete = 'off', autoCapitalize, enterKeyHint, inputMode }) {
+export function TextField({ label, micro, value, onInput, onEnter, placeholder, maxLength, transform, autoFocus, disabled, type = 'text', size = 'md', icon, class: cls, inputRef, name, hint, invalid }) {
   const localRef = useRef(null);
   const ref = inputRef || localRef;
   const composing = useRef(false);
@@ -847,9 +882,8 @@ export function TextField({ label, micro, value, onInput, onEnter, placeholder, 
     ${label || micro ? html`<span class="field__label">${label}${micro ? html`<span class="micro">${micro}</span>` : null}</span>` : null}
     <span class="field__box brackets">
       ${icon ? html`<${Icon} name=${icon} class="field__icon" />` : null}
-      <input id=${id} ref=${ref} class="field__input" type=${type} name=${name} value=${value} placeholder=${placeholder}
-        maxLength=${maxLength} disabled=${disabled} autocomplete=${autocomplete} spellcheck=${false}
-        autocorrect="off" autocapitalize=${autoCapitalize || 'off'} enterkeyhint=${enterKeyHint} inputmode=${inputMode}
+      <input id=${id} ref=${ref} type=${type} class="field__input" name=${name} value=${value} placeholder=${placeholder}
+        maxLength=${maxLength} disabled=${disabled} autocomplete="off" spellcheck=${false}
         onInput=${handle}
         oncompositionstart=${() => { composing.current = true; }}
         oncompositionend=${(e) => { composing.current = false; handle(e); }}

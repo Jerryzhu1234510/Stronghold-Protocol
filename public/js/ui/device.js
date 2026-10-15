@@ -13,12 +13,6 @@
 //                           variant (iPadOS / older Safari); iPhone Safari has no element fullscreen → unsupported and the
 //                           button hides. Android: after entering, the orientation is locked to landscape when allowed.
 //   FullscreenButton        HUD / title button (hidden where unsupported), follows fullscreenchange.
-//   rotate hint button      全屏并横屏 in the portrait hint (index.html .rotate-hint__fs, shown by html.sp-fs): its tap is the
-//                           gesture that lets fullscreen.enter run — for a player whose rotation lock beats the page.
-//   keepScreenAwake()       Screen Wake Lock while the match / room screen is mounted (useWakeLock); re-requested when the
-//                           page is visible again (the lock is released whenever it hides).
-//   isPhone()               a touch screen whose shorter side is under PHONE_SHORT_SIDE CSS px (settings.js: the graphics
-//                           quality a player who never chose one starts on).
 //   long-press              a still touch of LONG_PRESS_MS on a DOM control → a synthetic `contextmenu` (= detail) when
 //                           the browser sends none (iOS Safari); when a handler took it (preventDefault: detail card,
 //                           tooltip) the click of the release is swallowed — otherwise the slow tap stays a tap.
@@ -27,13 +21,11 @@
 
 import { useEffect, useState } from '../../vendor/hooks.module.js';
 import { html, Icon } from './components.js';
-import { inApp } from '../appShell.js';
+import { t } from '../../../shared/i18n.js';
 
 /** A touch held this long without moving opens the detail (contextmenu) on DOM controls. */
 export const LONG_PRESS_MS = 520;
 const LONG_PRESS_SLOP = 10;
-/** A touch screen whose shorter side is below this (CSS px) is a phone (iPhone Pro Max 430, big Android phones ≤ 480; the smallest tablets 600+). */
-export const PHONE_SHORT_SIDE = 500;
 
 const mq = (win, q) => { try { return !!win.matchMedia?.(q)?.matches; } catch { return false; } };
 
@@ -66,9 +58,7 @@ export function detectFeatures(win = globalThis) {
   const fine = mq(win, '(any-pointer: fine)');
   const hover = mq(win, '(any-hover: hover)') || mq(win, '(hover: hover)');
   const el = doc?.documentElement;
-  // the Android app is full screen already, and its WebView hosts no element fullscreen (appShell.js)
-  const app = inApp(nav.userAgent || '');
-  const fsEnabled = !app && !!(doc && (doc.fullscreenEnabled || doc.webkitFullscreenEnabled))
+  const fsEnabled = !!(doc && (doc.fullscreenEnabled || doc.webkitFullscreenEnabled))
     && !!(el && (typeof el.requestFullscreen === 'function' || typeof el.webkitRequestFullscreen === 'function'));
   let importMaps = false;
   try { importMaps = typeof win.HTMLScriptElement?.supports === 'function' && win.HTMLScriptElement.supports('importmap'); } catch { importMaps = false; }
@@ -78,7 +68,7 @@ export function detectFeatures(win = globalThis) {
     fine,
     hover,
     fullscreen: fsEnabled,
-    standalone: app || mq(win, '(display-mode: standalone)') || mq(win, '(display-mode: fullscreen)') || nav.standalone === true,
+    standalone: mq(win, '(display-mode: standalone)') || mq(win, '(display-mode: fullscreen)') || nav.standalone === true,
     reducedMotion: mq(win, '(prefers-reduced-motion: reduce)'),
     screenLandscape: screenLandscape(win),
     importMaps,
@@ -87,17 +77,6 @@ export function detectFeatures(win = globalThis) {
     gestureEvents: typeof win.GestureEvent === 'function',   // WebKit only (pinch zoom has to be cancelled by hand)
     visualViewport: !!win.visualViewport,
   };
-}
-
-/**
- * A touch phone: a coarse pointer on a screen whose shorter side is under PHONE_SHORT_SIDE. The SCREEN, not the viewport
- * (a desktop window dragged narrow is no phone), and min() of both sides — iOS reports portrait sizes, Android follows
- * the rotation. Unknown screen size → not a phone.
- * @param {any} [win]
- */
-export function isPhone(win = globalThis) {
-  const short = Math.min(Number(win.screen?.width) || Infinity, Number(win.screen?.height) || Infinity);
-  return detectFeatures(win).coarse && short < PHONE_SHORT_SIDE;
 }
 
 /** The classes installDeviceSupport puts on <html> for a feature set (pure; tested). */
@@ -134,67 +113,35 @@ export function useDocClass(name, on = true) {
   }, [name, !!on]);
 }
 
-// ---- screen wake lock ----------------------------------------------------------------------------------------------
-
-/**
- * Keep the screen on (Screen Wake Lock API: Chrome / Edge / Safari 16.4+ / Firefox 126+, secure contexts only — over plain
- * http on a LAN there is no navigator.wakeLock and this does nothing). A battle is mostly watched, not touched: the phone
- * dimmed and locked mid-battle, which killed the socket. The browser releases the lock whenever the page hides, so it is
- * asked for again when the page is visible. Never throws; a refusal (battery saver, no permission) just means the screen
- * may dim as before — the next visibilitychange tries again.
- * @param {any} [win]
- * @returns {() => void} release
- */
-export function keepScreenAwake(win = globalThis) {
-  const lock = win.navigator?.wakeLock;
-  const doc = win.document;
-  if (!lock || typeof lock.request !== 'function') return () => {};
-  let sentinel = null;   // the WakeLockSentinel we hold
-  let asking = false;    // a request is in flight
-  let wanted = true;     // false once released: a request that resolves late is let go at once
-  const acquire = async () => {
-    if (!wanted || sentinel || asking || doc?.visibilityState === 'hidden') return;
-    asking = true;
-    try {
-      const s = await lock.request('screen');
-      if (!wanted) { try { await s.release(); } catch { /* ignore */ } return; }
-      sentinel = s;
-      s.addEventListener?.('release', () => { if (sentinel === s) sentinel = null; });
-    } catch { /* refused */ } finally { asking = false; }
-  };
-  const onVisible = () => { if (doc?.visibilityState === 'visible') acquire(); };
-  doc?.addEventListener?.('visibilitychange', onVisible);
-  acquire();
-  return () => {
-    wanted = false;
-    doc?.removeEventListener?.('visibilitychange', onVisible);
-    const s = sentinel;
-    sentinel = null;
-    try { Promise.resolve(s?.release?.()).catch(() => {}); } catch { /* ignore */ }
-  };
-}
-
-/** Keep the screen awake while a component is mounted and `on` holds (the match screen, the room screen). */
-export function useWakeLock(on = true) {
-  useEffect(() => (on ? keepScreenAwake() : undefined), [!!on]);
-}
-
 // ---- fullscreen ----------------------------------------------------------------------------------------------------
+
+/** Called directly from a tap: browsers require user activation for fullscreen. */
+export async function enterLandscape(win = globalThis) {
+  const result = { fullscreen: false, landscape: false };
+  const el = win.document?.documentElement;
+  if (!el) return result;
+  try {
+    if (!fullscreen.active(win)) {
+      if (typeof el.requestFullscreen === 'function') await el.requestFullscreen({ navigationUI: 'hide' });
+      else if (typeof el.webkitRequestFullscreen === 'function') await el.webkitRequestFullscreen();
+      else return result;
+    }
+    result.fullscreen = true;
+  } catch { return result; }
+  try {
+    if (typeof win.screen?.orientation?.lock === 'function') {
+      await win.screen.orientation.lock('landscape');
+      result.landscape = true;
+    } else result.landscape = screenLandscape(win) === true;
+  } catch { result.landscape = screenLandscape(win) === true; }
+  return result;
+}
 
 export const fullscreen = {
   supported(win = globalThis) { return detectFeatures(win).fullscreen; },
   active(win = globalThis) { const d = win.document; return !!(d && (d.fullscreenElement || d.webkitFullscreenElement)); },
   async enter(win = globalThis) {
-    const el = win.document?.documentElement;
-    if (!el) return false;
-    try {
-      if (typeof el.requestFullscreen === 'function') await el.requestFullscreen({ navigationUI: 'hide' });
-      else if (typeof el.webkitRequestFullscreen === 'function') el.webkitRequestFullscreen();
-      else return false;
-    } catch { return false; }
-    // Android Chrome: a landscape game may lock the orientation while fullscreen (refused elsewhere — ignored)
-    try { await win.screen?.orientation?.lock?.('landscape'); } catch { /* not allowed here */ }
-    return true;
+    return (await enterLandscape(win)).fullscreen;
   },
   async exit(win = globalThis) {
     const d = win.document;
@@ -221,7 +168,7 @@ export function FullscreenButton({ class: cls = '' }) {
     return () => { d.removeEventListener('fullscreenchange', upd); d.removeEventListener('webkitfullscreenchange', upd); };
   }, []);
   if (!ok) return null;
-  const label = on ? '退出全屏' : '全屏';
+  const label = on ? t('退出全屏') : t('全屏');
   return html`<button type="button" class=${`fsbtn tapx ${cls}`} aria-label=${label} title=${label} aria-pressed=${on ? 'true' : 'false'}
       onClick=${() => fullscreen.toggle()}>
     <${Icon} name=${on ? 'collapse' : 'expand'} />
@@ -249,6 +196,20 @@ export function installDeviceSupport(win = globalThis) {
     for (const [k, v] of Object.entries(cls)) root.classList.toggle(k, v);
   };
   apply();
+  const rotateButton = doc.getElementById?.('rotate-fullscreen');
+  const rotateStatus = doc.getElementById?.('rotate-status');
+  on(rotateButton, 'click', async () => {
+    if (rotateButton.disabled) return;
+    rotateButton.disabled = true;
+    try {
+      const result = await enterLandscape(win);
+      if (rotateStatus) rotateStatus.textContent = result.landscape
+        ? '已切换横屏。'
+        : result.fullscreen ? '已进入全屏。浏览器无法自动横屏，请开启手机自动旋转后横放手机。'
+          : '浏览器未允许全屏横屏，请开启手机自动旋转后横放手机，或使用支持全屏的浏览器。';
+      apply();
+    } finally { rotateButton.disabled = false; }
+  });
   for (const q of ['(any-pointer: coarse)', '(pointer: coarse)', '(any-hover: hover)', '(prefers-reduced-motion: reduce)', '(display-mode: standalone)']) {
     let m = null;
     try { m = win.matchMedia?.(q); } catch { m = null; }
@@ -284,10 +245,6 @@ export function installDeviceSupport(win = globalThis) {
   on(doc, 'wheel', (e) => { if (e.ctrlKey && e.cancelable) e.preventDefault(); }, { passive: false });
   // (double-tap zoom and two-finger pinch on Chromium / Firefox / iOS 13+: `touch-action` in css/devices.css — no
   // scroll-blocking touchmove listener, so lists keep scrolling smoothly)
-
-  // 全屏并横屏 in the rotate hint (index.html; hidden unless html.sp-fs): a player whose rotation is locked cannot turn the
-  // phone, but where the Fullscreen API exists this tap enters it and fullscreen.enter locks landscape (Android)
-  on(doc, 'click', (e) => { if (e.target?.closest?.('.rotate-hint__fs')) fullscreen.enter(win); });
 
   // long-press = detail on DOM controls: Android fires `contextmenu` on a long press by itself, iOS Safari never does.
   // A touch held still for LONG_PRESS_MS without a native contextmenu gets a synthetic one (the shop cards, reward cards

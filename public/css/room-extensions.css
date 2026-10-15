@@ -1,0 +1,32 @@
+.room-extensions{padding:.24rem;max-height:82dvh;overflow:auto;min-height:0}
+.local-training-entry{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:12px 16px;border:1px solid #4ed8af70;background:#19342b;color:#b3f3d9;text-decoration:none;font-size:15px;font-weight:700}
+.local-training-entry span{font-size:12px;font-weight:400;color:#a8beb4}.local-training-entry b{margin-left:auto}
+.local-training-entry:hover,.local-training-entry:focus-visible{border-color:#7ff5c8;background:#224638}
+.room-extensions header,.room-extensions footer{display:flex;align-items:center;gap:.12rem;flex-wrap:wrap;justify-content:space-between}
+.room-extensions h3{font-size:.24rem;margin:0}
+.room-extensions p,.room-extensions footer>span{color:var(--dim,#a0b9b0);font-size:.14rem;line-height:1.7}
+.room-extensions__list{display:grid;gap:.12rem;margin:.18rem 0}
+.room-extension{display:flex;align-items:center;justify-content:space-between;gap:.2rem;padding:.16rem;border:1px solid #3c6659;background:#11221c}
+.room-extension>span:first-child{min-width:0}.room-extension b{display:block;font-size:.17rem;color:#9cebd0}
+.room-extension small{display:block;font-size:.13rem;line-height:1.7;color:#b9c7c1;margin-top:.06rem}
+.room-extension input[type=number]{width:.82rem;min-height:.4rem;background:#0c1712;border:1px solid #61caaa;color:#fff;font-size:.18rem;padding:.06rem}
+.room-extension input[type=checkbox]{width:.26rem;height:.26rem;accent-color:#4ed8af;flex-shrink:0}
+.room-extension__number{white-space:nowrap}.room-extensions-entry{display:inline-flex}
+.fr-room-state{font-size:.12rem;line-height:1.5;color:#9ac7b6;display:block}
+.fr-row__name{min-width:0;overflow-wrap:anywhere}.fr-row__acts{flex-wrap:wrap;gap:.06rem}
+.fr-room-ticket{padding:.12rem;border:1px solid #405a50;margin-bottom:.08rem;display:flex;gap:.1rem;align-items:center;flex-wrap:wrap}
+.fr-room-ticket span{flex:1;min-width:1.8rem;font-size:.14rem}
+@media(max-width:650px){.room-extension{gap:.1rem;padding:.1rem}.room-extension small{font-size:.12rem}.fr-row{flex-wrap:wrap}.fr-row__acts{width:100%;justify-content:flex-end}}
+
+/* Keep room options readable at the game's scaled root font size. */
+.room-extensions{padding:20px}
+.room-extensions h3{font-size:22px}
+.room-extensions p,.room-extensions footer>span{font-size:13px}
+.room-extension{padding:14px;gap:18px}
+.room-extension b{font-size:16px}
+.room-extension small{font-size:13px}
+.room-extension input[type=number]{width:82px;min-height:38px;font-size:18px;padding:6px}
+.room-extension input[type=checkbox]{width:24px;height:24px}
+.room-extension select{min-width:170px;max-width:100%;min-height:38px;background:#0c1712;border:1px solid #61caaa;color:#fff;font-size:14px;padding:6px;flex-shrink:0}
+@media(max-width:650px){.room-extension--select{flex-wrap:wrap}.room-extension select{width:100%}}
+@media(max-width:650px){.room-extensions{padding:12px}.room-extension{padding:10px;gap:10px}.room-extension small{font-size:12px}}

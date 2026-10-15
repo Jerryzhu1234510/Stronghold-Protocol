@@ -1,0 +1,2302 @@
+{
+  "scenario": {
+    "id": "diy-138",
+    "family": "diy",
+    "kind": "normal",
+    "modeId": "mode_single_hard",
+    "round": 13,
+    "stageId": "act1autochess_m06",
+    "seed": 1340399568,
+    "pass": 1,
+    "rect": {
+      "r0": 9,
+      "r1": 12,
+      "c0": 0,
+      "c1": 10
+    },
+    "timeLimit": 230,
+    "routes": [
+      {
+        "motion": "WALK",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          12,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            12,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          12,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            12,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "WALK",
+        "start": [
+          12,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            12,
+            9
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          12,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            12,
+            9
+          ],
+          [
+            9,
+            9
+          ],
+          [
+            9,
+            7
+          ],
+          [
+            12,
+            7
+          ],
+          [
+            12,
+            6
+          ],
+          [
+            9,
+            6
+          ],
+          [
+            9,
+            5
+          ],
+          [
+            12,
+            5
+          ],
+          [
+            12,
+            4
+          ],
+          [
+            9,
+            4
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          12,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            12,
+            9
+          ],
+          [
+            9,
+            9
+          ],
+          [
+            9,
+            7
+          ],
+          [
+            12,
+            7
+          ],
+          [
+            12,
+            6
+          ],
+          [
+            9,
+            6
+          ],
+          [
+            9,
+            5
+          ],
+          [
+            12,
+            5
+          ],
+          [
+            12,
+            4
+          ],
+          [
+            9,
+            4
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          12,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            12,
+            9
+          ],
+          [
+            9,
+            9
+          ],
+          [
+            9,
+            7
+          ],
+          [
+            12,
+            7
+          ],
+          [
+            12,
+            6
+          ],
+          [
+            9,
+            6
+          ],
+          [
+            9,
+            5
+          ],
+          [
+            12,
+            5
+          ],
+          [
+            12,
+            4
+          ],
+          [
+            9,
+            4
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          12,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            12,
+            9
+          ],
+          [
+            9,
+            9
+          ],
+          [
+            9,
+            7
+          ],
+          [
+            12,
+            7
+          ],
+          [
+            12,
+            6
+          ],
+          [
+            9,
+            6
+          ],
+          [
+            9,
+            5
+          ],
+          [
+            12,
+            5
+          ],
+          [
+            12,
+            4
+          ],
+          [
+            9,
+            4
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          12,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            12,
+            9
+          ],
+          [
+            9,
+            9
+          ],
+          [
+            9,
+            7
+          ],
+          [
+            12,
+            7
+          ],
+          [
+            12,
+            6
+          ],
+          [
+            9,
+            6
+          ],
+          [
+            9,
+            5
+          ],
+          [
+            12,
+            5
+          ],
+          [
+            12,
+            4
+          ],
+          [
+            9,
+            4
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          12,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            12,
+            9
+          ],
+          [
+            11,
+            8
+          ],
+          [
+            11,
+            6
+          ],
+          [
+            10,
+            6
+          ],
+          [
+            10,
+            5
+          ],
+          [
+            11,
+            5
+          ],
+          [
+            11,
+            3
+          ],
+          [
+            9,
+            3
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            8
+          ],
+          [
+            12,
+            8
+          ],
+          [
+            12,
+            5
+          ],
+          [
+            9,
+            5
+          ],
+          [
+            9,
+            4
+          ],
+          [
+            12,
+            4
+          ],
+          [
+            12,
+            3
+          ],
+          [
+            9,
+            3
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            8
+          ],
+          [
+            12,
+            8
+          ],
+          [
+            12,
+            5
+          ],
+          [
+            9,
+            5
+          ],
+          [
+            9,
+            4
+          ],
+          [
+            12,
+            4
+          ],
+          [
+            12,
+            3
+          ],
+          [
+            9,
+            3
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            8
+          ],
+          [
+            12,
+            8
+          ],
+          [
+            12,
+            5
+          ],
+          [
+            9,
+            5
+          ],
+          [
+            9,
+            4
+          ],
+          [
+            12,
+            4
+          ],
+          [
+            12,
+            3
+          ],
+          [
+            9,
+            3
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            8
+          ],
+          [
+            11,
+            8
+          ],
+          [
+            11,
+            6
+          ],
+          [
+            10,
+            6
+          ],
+          [
+            10,
+            5
+          ],
+          [
+            11,
+            5
+          ],
+          [
+            11,
+            3
+          ],
+          [
+            9,
+            3
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            8
+          ],
+          [
+            11,
+            8
+          ],
+          [
+            11,
+            6
+          ],
+          [
+            10,
+            6
+          ],
+          [
+            10,
+            5
+          ],
+          [
+            11,
+            5
+          ],
+          [
+            11,
+            3
+          ],
+          [
+            9,
+            3
+          ]
+        ]
+      },
+      {
+        "motion": "FLY",
+        "start": [
+          9,
+          10
+        ],
+        "end": [
+          9,
+          2
+        ],
+        "checkpoints": [
+          [
+            9,
+            8
+          ],
+          [
+            11,
+            8
+          ],
+          [
+            11,
+            6
+          ],
+          [
+            10,
+            6
+          ],
+          [
+            10,
+            5
+          ],
+          [
+            11,
+            5
+          ],
+          [
+            11,
+            3
+          ],
+          [
+            9,
+            3
+          ]
+        ]
+      }
+    ],
+    "waveId": "act1autochess_h06",
+    "enemyOverrides": {},
+    "flags": {
+      "layerGainsEnabled": true,
+      "dpInit": 10,
+      "dpPerSec": 1,
+      "dpMax": 99
+    },
+    "players": [
+      {
+        "playerId": "p1",
+        "seat": 0,
+        "side": "L",
+        "colOffset": 0,
+        "units": [
+          {
+            "uid": 1,
+            "kind": "chess",
+            "chessId": "chess_char_5_diy1_a",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 0,
+              "uniEquipId": null
+            },
+            "row": 9,
+            "col": 3,
+            "dir": "RIGHT",
+            "items": []
+          },
+          {
+            "uid": 2,
+            "kind": "chess",
+            "chessId": "chess_char_5_diy2_a",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 1,
+              "uniEquipId": null
+            },
+            "row": 9,
+            "col": 5,
+            "dir": "RIGHT",
+            "items": []
+          },
+          {
+            "uid": 3,
+            "kind": "chess",
+            "chessId": "chess_char_5_diy1_a",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 2,
+              "uniEquipId": null
+            },
+            "row": 9,
+            "col": 6,
+            "dir": "RIGHT",
+            "items": []
+          },
+          {
+            "uid": 4,
+            "kind": "chess",
+            "chessId": "chess_char_5_diy2_b",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 0,
+              "uniEquipId": null
+            },
+            "row": 9,
+            "col": 9,
+            "dir": "RIGHT",
+            "items": []
+          },
+          {
+            "uid": 5,
+            "kind": "chess",
+            "chessId": "chess_char_5_diy1_b",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 1,
+              "uniEquipId": null
+            },
+            "row": 11,
+            "col": 6,
+            "dir": "RIGHT",
+            "items": []
+          },
+          {
+            "uid": 6,
+            "kind": "chess",
+            "chessId": "chess_char_5_diy2_b",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 2,
+              "uniEquipId": null
+            },
+            "row": 11,
+            "col": 7,
+            "dir": "RIGHT",
+            "items": []
+          },
+          {
+            "uid": 7,
+            "kind": "chess",
+            "chessId": "chess_char_6_diy1_a",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 0,
+              "uniEquipId": null
+            },
+            "row": 11,
+            "col": 8,
+            "dir": "UP",
+            "items": []
+          },
+          {
+            "uid": 8,
+            "kind": "chess",
+            "chessId": "chess_char_6_diy2_a",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 1,
+              "uniEquipId": null
+            },
+            "row": 10,
+            "col": 4,
+            "dir": "RIGHT",
+            "items": []
+          },
+          {
+            "uid": 9,
+            "kind": "chess",
+            "chessId": "chess_char_6_diy1_a",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 2,
+              "uniEquipId": null
+            },
+            "row": 10,
+            "col": 5,
+            "dir": "RIGHT",
+            "items": []
+          },
+          {
+            "uid": 10,
+            "kind": "chess",
+            "chessId": "chess_char_6_diy2_b",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 0,
+              "uniEquipId": null
+            },
+            "row": 11,
+            "col": 3,
+            "dir": "RIGHT",
+            "items": []
+          },
+          {
+            "uid": 11,
+            "kind": "chess",
+            "chessId": "chess_char_6_diy1_b",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 1,
+              "uniEquipId": null
+            },
+            "row": 11,
+            "col": 4,
+            "dir": "RIGHT",
+            "items": []
+          },
+          {
+            "uid": 12,
+            "kind": "chess",
+            "chessId": "chess_char_6_diy2_b",
+            "diy": {
+              "charId": "char_4231_clemnt",
+              "skillIndex": 2,
+              "uniEquipId": null
+            },
+            "row": 11,
+            "col": 5,
+            "dir": "RIGHT",
+            "items": []
+          }
+        ],
+        "bonds": {},
+        "bandId": null,
+        "playerEffects": [],
+        "deviceOverrides": {}
+      }
+    ],
+    "spawns": [
+      {
+        "time": 7,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 0,
+        "count": 2,
+        "interval": 4.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 0,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 10,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 1,
+        "count": 2,
+        "interval": 7.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 1,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 39,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 2,
+        "count": 2,
+        "interval": 7.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 2,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 62,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 3,
+        "count": 2,
+        "interval": 6,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 3,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 11,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 4,
+        "count": 5,
+        "interval": 5.4,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 4,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 37,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 5,
+        "count": 5,
+        "interval": 7.2,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 5,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 55,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 6,
+        "count": 5,
+        "interval": 5.4,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 6,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 2,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 7,
+        "count": 5,
+        "interval": 8,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 7,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 10,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 8,
+        "count": 5,
+        "interval": 5.6,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 8,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 32,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 9,
+        "count": 4,
+        "interval": 7.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 9,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 7,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 10,
+        "count": 1,
+        "interval": 0,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 10,
+        "preview": {
+          "gate": "upper",
+          "start": [
+            12,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 3,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 11,
+        "count": 4,
+        "interval": 5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 11,
+        "preview": {
+          "gate": "upper",
+          "start": [
+            12,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 21,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 12,
+        "count": 3,
+        "interval": 10,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 12,
+        "preview": {
+          "gate": "upper",
+          "start": [
+            12,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 65,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 0,
+        "count": 2,
+        "interval": 4.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 0,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 68,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 1,
+        "count": 2,
+        "interval": 7.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 1,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 97,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 2,
+        "count": 2,
+        "interval": 7.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 2,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 120,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 3,
+        "count": 2,
+        "interval": 6,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 3,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 69,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 4,
+        "count": 5,
+        "interval": 5.4,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 4,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 95,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 5,
+        "count": 5,
+        "interval": 7.2,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 5,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 113,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 6,
+        "count": 5,
+        "interval": 5.4,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 6,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 60,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 7,
+        "count": 5,
+        "interval": 8,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 7,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 68,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 8,
+        "count": 5,
+        "interval": 5.6,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 8,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 90,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 9,
+        "count": 4,
+        "interval": 7.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 9,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 65,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 10,
+        "count": 1,
+        "interval": 0,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 10,
+        "preview": {
+          "gate": "upper",
+          "start": [
+            12,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 61,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 11,
+        "count": 4,
+        "interval": 5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 11,
+        "preview": {
+          "gate": "upper",
+          "start": [
+            12,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 79,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 12,
+        "count": 3,
+        "interval": 10,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 12,
+        "preview": {
+          "gate": "upper",
+          "start": [
+            12,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 123,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 0,
+        "count": 2,
+        "interval": 4.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 0,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 126,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 1,
+        "count": 2,
+        "interval": 7.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 1,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 155,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 2,
+        "count": 2,
+        "interval": 7.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 2,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 178,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 3,
+        "count": 2,
+        "interval": 6,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 3,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 127,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 4,
+        "count": 5,
+        "interval": 5.4,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 4,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 153,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 5,
+        "count": 5,
+        "interval": 7.2,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 5,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 171,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 6,
+        "count": 5,
+        "interval": 5.4,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 6,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 118,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 7,
+        "count": 5,
+        "interval": 8,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 7,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 126,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 8,
+        "count": 5,
+        "interval": 5.6,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 8,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 148,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 9,
+        "count": 4,
+        "interval": 7.5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 9,
+        "preview": {
+          "gate": "lower",
+          "start": [
+            9,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 123,
+        "enemyKey": "enemy_1288_duskls",
+        "routeIndex": 10,
+        "count": 1,
+        "interval": 0,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "N"
+        },
+        "actionIndex": 10,
+        "preview": {
+          "gate": "upper",
+          "start": [
+            12,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 119,
+        "enemyKey": "enemy_1288_duskls_2",
+        "routeIndex": 11,
+        "count": 4,
+        "interval": 5,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "E"
+        },
+        "actionIndex": 11,
+        "preview": {
+          "gate": "upper",
+          "start": [
+            12,
+            10
+          ],
+          "fly": false,
+          "elite": false,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      },
+      {
+        "time": 137,
+        "enemyKey": "enemy_1292_duskld",
+        "routeIndex": 12,
+        "count": 3,
+        "interval": 10,
+        "mods": {
+          "hpMul": 1.65888,
+          "atkMul": 1.17128,
+          "speedMul": 1,
+          "slot": "S"
+        },
+        "actionIndex": 12,
+        "preview": {
+          "gate": "upper",
+          "start": [
+            12,
+            10
+          ],
+          "fly": false,
+          "elite": true,
+          "boss": false
+        },
+        "ownerPlayerId": "p1"
+      }
+    ],
+    "about": "5_diy1_a=clemnt/S1 5_diy2_a=clemnt/S2 5_diy1_a=clemnt/S3 5_diy2_b=clemnt/S1 5_diy1_b=clemnt/S2 5_diy2_b=clemnt/S3 6_diy1_a=clemnt/S1 6_diy2_a=clemnt/S2 6_diy1_a=clemnt/S3 6_diy2_b=clemnt/S1 6_diy1_b=clemnt/S2 6_diy2_b=clemnt/S3"
+  },
+  "digest": {
+    "kind": "normal",
+    "stageId": "act1autochess_m06",
+    "modeId": "mode_single_hard",
+    "round": 13,
+    "seed": 1340399568,
+    "waveId": "act1autochess_h06",
+    "time": 215.8,
+    "ticks": 6474,
+    "reason": "cleared",
+    "killed": 58,
+    "total": 135,
+    "unspawned": 0,
+    "bossHpLeft": null,
+    "rngDraws": 1523,
+    "errors": {
+      "count": 0,
+      "kinds": []
+    },
+    "players": {
+      "p1": {
+        "killed": 58,
+        "total": 135,
+        "perfect": false,
+        "leaks": 77,
+        "leaksUncounted": 0,
+        "coins": 0,
+        "dmg": 2075979,
+        "bossDmg": 0,
+        "heal": 0,
+        "deaths": 10,
+        "layerGains": {}
+      }
+    },
+    "units": [
+      [
+        "p1",
+        1,
+        "op",
+        "chess_char_5_diy1_a",
+        0,
+        null,
+        0,
+        0,
+        149,
+        1,
+        40500,
+        4080,
+        0,
+        44,
+        10
+      ],
+      [
+        "p1",
+        2,
+        "op",
+        "chess_char_5_diy2_a",
+        1,
+        null,
+        2040,
+        1,
+        7,
+        5,
+        684984,
+        0,
+        0,
+        115,
+        5
+      ],
+      [
+        "p1",
+        3,
+        "op",
+        "chess_char_5_diy1_a",
+        2,
+        null,
+        2040,
+        1,
+        9,
+        7,
+        407471,
+        0,
+        0,
+        85,
+        2
+      ],
+      [
+        "p1",
+        4,
+        "op",
+        "chess_char_5_diy2_b",
+        0,
+        "none",
+        2367.66,
+        1,
+        153,
+        4,
+        28954,
+        5105,
+        0,
+        51,
+        11
+      ],
+      [
+        "p1",
+        5,
+        "op",
+        "chess_char_5_diy1_b",
+        1,
+        "none",
+        2491,
+        1,
+        8,
+        3,
+        164100,
+        0,
+        0,
+        42,
+        5
+      ],
+      [
+        "p1",
+        6,
+        "op",
+        "chess_char_5_diy2_b",
+        2,
+        "none",
+        1785.25,
+        1,
+        10,
+        9,
+        244415,
+        706,
+        0,
+        56,
+        2
+      ],
+      [
+        "p1",
+        7,
+        "op",
+        "chess_char_6_diy1_a",
+        0,
+        null,
+        2040,
+        1,
+        154,
+        2,
+        27502,
+        4080,
+        0,
+        44,
+        11
+      ],
+      [
+        "p1",
+        8,
+        "op",
+        "chess_char_6_diy2_a",
+        1,
+        null,
+        0,
+        0,
+        134,
+        5,
+        148751,
+        4080,
+        0,
+        77,
+        3
+      ],
+      [
+        "p1",
+        9,
+        "op",
+        "chess_char_6_diy1_a",
+        2,
+        null,
+        2040,
+        1,
+        155,
+        5,
+        108461,
+        4080,
+        0,
+        39,
+        1
+      ],
+      [
+        "p1",
+        10,
+        "op",
+        "chess_char_6_diy2_b",
+        0,
+        "none",
+        2491,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        "p1",
+        11,
+        "op",
+        "chess_char_6_diy1_b",
+        1,
+        "none",
+        2491,
+        1,
+        3,
+        9,
+        84291,
+        0,
+        0,
+        25,
+        5
+      ],
+      [
+        "p1",
+        12,
+        "op",
+        "chess_char_6_diy2_b",
+        2,
+        "none",
+        2491,
+        1,
+        5,
+        8,
+        136550,
+        0,
+        0,
+        36,
+        2
+      ]
+    ],
+    "enemies": {
+      "enemy_1288_duskls": [
+        27,
+        10,
+        17,
+        1131,
+        246754
+      ],
+      "enemy_1288_duskls_2": [
+        57,
+        25,
+        32,
+        5293,
+        657344
+      ],
+      "enemy_1292_duskld": [
+        51,
+        23,
+        28,
+        15708,
+        1171881
+      ]
+    },
+    "hooks": [
+      1,
+      155,
+      6474,
+      737,
+      737,
+      1901,
+      2243,
+      0,
+      68,
+      145,
+      57,
+      54,
+      44,
+      19848,
+      0,
+      112,
+      135,
+      77,
+      1,
+      226,
+      0,
+      37,
+      0
+    ],
+    "events": {
+      "atk": 845,
+      "deploy": 20,
+      "die": 68,
+      "dmg": 2243,
+      "engage": 11,
+      "fx": 477,
+      "leak": 77,
+      "skill": 111,
+      "spawn": 147,
+      "status": 336
+    },
+    "fx": {
+      "aoe": 132,
+      "appear": 13,
+      "burst": 37,
+      "clemntVortex": 17,
+      "dash": 18,
+      "disappear": 13,
+      "ember": 158,
+      "revive": 89
+    },
+    "snaps": "167f9c7d 7327447d 01993d67 3d2f161d 5e168926 5315dea9 d777f850 d621ec7b b9b71fa8 fe13af29 16680cfb 23f57373 4b495420 5f6a12dc 8229f5d2 c39457f2 e8ca2586 5b0f8ad4 b1e16cef aa9f829d df2b71d9 4ed1bf28"
+  }
+}

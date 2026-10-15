@@ -1,0 +1,90 @@
+/* Compact landscape controls; the existing invisible touch targets stay in place. */
+@media (orientation: landscape) and (any-pointer: coarse) and (hover: none) and (max-height: 900px),
+       (orientation: landscape) and (max-height: 600px) {
+  html.sp-touch { font-size: 40px; }
+  .room-screen .topbar { display: grid; grid-template-columns: 124px minmax(0, 1fr) auto; min-height: 64px; height: auto; padding: 4px 12px; gap: 10px; }
+  .room-screen .topbar__left { display: grid; grid-template-columns: 36px minmax(0, 1fr); grid-template-rows: 32px 24px; gap: 2px 6px; }
+  .room-screen .topbar__left > .tt-anchor { grid-column: 1; grid-row: 1; }
+  .room-screen .topbar__left > .room-ping { grid-column: 2; grid-row: 1; }
+  .room-screen .topbar__left > .release-notes-entry { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 4px; }
+  .room-screen .topbar__left .btn--lg { width: 32px; min-height: 32px; height: 32px; }
+  .room-screen .release-notes-entry .btn { min-height: 24px; height: 24px; padding: 0 3px; font-size: 10px; }
+  .room-screen .release-notes-entry__feedback { font-size: 9px; line-height: 12px; }
+  .room-screen .room-heading { gap: 10px; }
+  .room-screen .topbar__title { font-size: 16px; white-space: nowrap; }
+  .room-screen .topbar__sep, .room-screen .topbar__title .dtag, .room-screen .topbar__center > .micro, .room-screen .room-guide, .room-stage-warning { display: none; }
+  .room-screen .population-strip { padding: 0; gap: 6px; border: 0; }
+  .room-screen .population-strip small { font-size: 9px; }
+  .room-screen .population-strip strong { font-size: 13px; }
+  .room-screen .room-options { justify-content: flex-start; gap: 8px; }
+  .room-screen .room-capacity-picker, .room-screen .room-map-picker, .room-screen .room-mode-picker { gap: 4px; margin: 0; font-size: 10px; white-space: nowrap; flex-wrap: nowrap; }
+  .room-screen .room-clone-note { padding: 3px 12px; font-size: 11px; }
+  .room-screen .room-options select { height: 30px; min-height: 30px; padding: 0 4px; font-size: 11px; max-width: 124px; }
+  .room-screen .invite { padding: 4px; gap: 6px; grid-template-columns: auto auto; }
+  .room-screen .invite__label { display: none; }
+  .room-screen .invite__code { gap: 2px; }
+  .room-screen .invite__code span { width: 20px; height: 28px; font-size: 20px; }
+  .room-screen .invite__btns { flex-direction: row; gap: 6px; }
+  .room-screen .invite__btns .btn { width: 44px; min-width: 44px; min-height: 44px; height: 44px; padding: 0; font-size: 0; }
+  .room-screen .invite__btns .icon { width: 16px; height: 16px; }
+  .room-screen .room-description { padding: 0 12px; gap: 8px; min-height: 24px; }
+  .room-screen .room-description__label, .room-screen .room-description p, .room-screen .room-description button { font-size: 11px; }
+  .room-screen .room-description p { max-height: 24px; }
+  .room-screen .room-description button { min-height: 24px; }
+  .room-screen .seats { padding: 6px 12px; gap: 8px; overflow-y: auto; grid-template-rows: minmax(90px, 1fr); }
+  .room-screen .seat { min-height: 90px; padding: 6px 8px; gap: 3px; }
+  .room-screen .seat__name { font-size: 14px; }
+  .room-screen .seat__wait { font-size: 11px; }
+  .room-screen .seat__art { margin: 0; }
+  .room-screen .seat__art .avatar { --av: 32px; }
+  .room-screen .seat__art .micro, .room-screen .seat > .micro, .room-screen .seat__radar { display: none; }
+  .room-screen .seat__head .micro { font-size: 9px; }
+  .room-screen .seat__foot { min-height: 28px; padding-top: 2px; }
+  .room-screen .seat__foot .btn { min-height: 28px; height: 28px; font-size: 11px; }
+  .room-screen .seats--expanded { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(72px, 1fr)); }
+  .room-screen .seats--expanded .seat { min-height: 72px; }
+  .room-screen .seats--expanded .seat__art { display: none; }
+  .room-screen .room-chat-strip { margin: 0 12px; padding: 4px 0; gap: 8px; }
+  .room-screen .room-chat-strip__preview { min-height: 32px; padding: 0 7px; }
+  .room-screen .room-chat-strip__preview b, .room-screen .room-chat-strip__preview span { font-size: 11px; }
+  .room-screen .room-chat-strip__preview small { display: none; }
+  .room-screen .room-chat-strip input { min-height: 32px; font-size: 16px; padding: 0 7px; }
+  .room-screen .room-chat-strip form .btn { min-height: 32px; height: 32px; padding: 0 10px; font-size: 11px; }
+  .room-screen .room-bar { grid-template-columns: minmax(0, 1.1fr) minmax(70px, .4fr) minmax(0, 1fr); gap: 10px; padding: 5px 12px; }
+  .room-screen .room-bar__left { gap: 5px; grid-column: 1; grid-row: 1; }
+  .room-screen .room-bar__center { grid-column: 2; grid-row: 1; padding: 0; align-items: center; }
+  .room-screen .room-bar__right { grid-column: 3; grid-row: 1; justify-self: stretch; min-width: 0; }
+  .room-screen .room-bar__label { display: none; }
+  .room-screen .dpick__opt { min-height: 30px; height: 30px; padding: 0 7px; font-size: 11px; }
+  .room-screen .room-access-controls { gap: 6px; }
+  .room-screen .room-access-toggle button { min-height: 30px; height: 30px; min-width: 40px; padding: 0 6px; font-size: 11px; }
+  .room-screen .room-access-hint, .room-screen .room-bar__status { font-size: 10px; }
+  .room-screen .room-recruit { min-height: 30px; height: 30px; min-width: 80px; font-size: 11px; }
+  .room-screen .room-bar__right--directory { gap: 5px; }
+  .room-screen .room-bar__right--directory .btn { min-height: 30px; height: 30px; padding: 0 7px; font-size: 12px; letter-spacing: 0; min-width: 0; }
+  .room-screen .room-bar .icon { width: 14px; height: 14px; }
+  /* Avoid one row's enlarged hit area intercepting the adjacent row's controls. */
+  .sp-coarse .room-screen .btn::before { width: 100%; height: 100%; }
+  .app-root:has(.room-screen) .integration-stage-label { display: none; }
+  .gm .gtop__prep-actions { min-width: 144px; max-width: 164px; gap: 8px; }
+  .gm .gtop__prep-actions .readybtn { width: 100%; min-height: 44px; height: 44px; font-size: 14px; padding: 0 8px; }
+  .gm .gtop__prep-actions .readywrap__count { font-size: 11px; line-height: 14px; }
+  .gm .gtop__prep-actions .readywrap__count b { font-size: 12px; }
+  .gm .prep-vote__tools { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .gm .prep-vote__tools button { width: 100%; min-height: 34px; padding: 4px; font-size: 11px; }
+  .gm .prep-vote { width: 100%; }
+  .gm .prep-vote__panel { max-height: 130px; overflow-y: auto; }
+  .gm .gtop__clock .shop-focus { min-width: 0; }
+  .gm .gtop__clock .shop-focus select { max-width: 100px; }
+}
+@media (orientation: landscape) and (max-width: 740px) {
+  .room-screen .room-heading { gap: 6px; }
+  .room-screen .topbar { grid-template-columns: 116px minmax(0, 1fr) auto; gap: 6px; }
+  .room-screen .room-options { gap: 4px; }
+  .room-screen .room-options .room-capacity-picker, .room-screen .room-options .room-map-picker, .room-screen .room-options .room-mode-picker { font-size: 0; flex-direction: row; gap: 0; }
+  .room-screen .room-options select { width: 86px; max-width: 86px; }
+  .room-screen .room-options .room-mode-picker select { width: 72px; max-width: 72px; }
+  .room-screen .seat__art, .room-screen .seat__head .micro { display: none; }
+  .room-screen .seat__name { font-size: 12px; }
+  .room-screen .seat__foot { margin-top: auto; }
+}

@@ -35,15 +35,20 @@
 //   await assets.local();                           // optional local-client art manifest (data/local-assets.json,
 //   assets.localUrl('map/autochess', 'TX_autochessi_D')   DESIGN §13) → URL or null (never required)
 //   assets.spineEntry('enemy_1305_mhslim')          // its official model from the local client once local() listed
-//                                                   // it (manifest spineLocal), else the web model; `.fallback`
+//                                                   // it (manifest spineLocal; enemies and tokens), else the web
+//                                                   // model; `.fallback`
 //
 // Every URL helper is also exported as a pure function taking the manifest first (`avatarUrl(manifest, …)`),
 // so it can be unit tested without a browser. Helpers never throw on unknown ids — they return null and the
 // caller falls back (docs/ASSETS.md "Other fallbacks").
 
+import { selectedSkin, sanitizeCosmetics } from '../../shared/cosmetics.js';
+
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' && v ? v : null);
 const get = (o, k) => (isObj(o) && Object.hasOwn(o, k) ? o[k] : undefined);
+
+import { manifestForNative } from './resources/manifest.js';
 
 // ---- pure URL helpers (manifest first) ---------------------------------------------------------------------
 
@@ -61,6 +66,8 @@ export function baseCharId(id) {
 export function avatarUrl(m, id, opts) {
   const s = str(id);
   if (!s) return null;
+  const skin = selectedSkin(m, s);
+  if (skin?.avatar) return skin.avatar;
   const direct = get(get(m, 'chars'), s);
   let rec = direct, e2 = !!(opts && opts.e2);
   if (!rec) {
@@ -76,6 +83,8 @@ export function avatarUrl(m, id, opts) {
 export function portraitUrl(m, id, opts) {
   const s = str(id);
   if (!s) return null;
+  const skin = selectedSkin(m, s);
+  if (skin?.portrait) return skin.portrait;
   let rec = get(get(m, 'chars'), s), e2 = !!(opts && opts.e2);
   if (!rec) {
     rec = get(get(m, 'chars'), baseCharId(s));
@@ -141,21 +150,25 @@ export function subProfIconUrl(m, sub) {
  * Spine manifest entry for a unit asset id (operator charId, token id, enemy id). `opts.back` asks for the Back
  * model (operators only; falls back to Front). Enemy aliases are resolved transparently. Returns the Spine
  * object of docs/ASSETS.md or null.
- * `opts.local` (the data/local-assets.json manifest): an enemy whose official model only the local client has
- * (`spineLocal`, e.g. 灼热源石虫 — user feedback after 0.1.0, D3) gets that model when the manifest lists every one of
- * its files; the returned entry's `fallback` is the web model (aliased), for a load failure (DESIGN §13: local art is
+ * `opts.local` (the data/local-assets.json manifest): an enemy or token whose official model only the local client has
+ * (`spineLocal`, e.g. 灼热源石虫 — user feedback after 0.1.0, D3 — and most 自选 summons) gets that model when the
+ * manifest lists every one of its files; the returned entry's `fallback` is the web model (an enemy's alias; a token's
+ * web model, mostly none — its view then keeps the avatar diamond), for a load failure (DESIGN §13: local art is
  * optional, everything works without it).
  */
 export function spineEntry(m, id, opts) {
   const s = str(id);
   if (!s) return null;
-  const ch = get(get(m, 'chars'), s) || get(get(m, 'chars'), baseCharId(s));
+  const ch = selectedSkin(m, s) || get(get(m, 'chars'), s) || get(get(m, 'chars'), baseCharId(s));
   if (ch && isObj(ch.spine)) {
     const sp = (opts && opts.back && isObj(ch.spine.back)) ? ch.spine.back : ch.spine.front;
     return validSpine(sp) ? sp : null;
   }
   const tk = get(get(m, 'tokens'), s);
-  if (tk) return validSpine(tk.spine) ? tk.spine : null;
+  if (tk) {
+    const web = validSpine(tk.spine) ? tk.spine : null;
+    return (opts && opts.local && localSpineEntry(tk.spineLocal, opts.local, web)) || web;
+  }
   const en = get(get(m, 'enemies'), s);
   if (en) {
     let web = null;
@@ -196,7 +209,7 @@ export function localSpineEntry(sl, local, web) {
 
 /** Whether an operator/token/enemy has a Back model. */
 export function hasBackSpine(m, id) {
-  const ch = get(get(m, 'chars'), str(id) || '') || get(get(m, 'chars'), baseCharId(id) || '');
+  const ch = selectedSkin(m, id) || get(get(m, 'chars'), str(id) || '') || get(get(m, 'chars'), baseCharId(id) || '');
   return !!(ch && isObj(ch.spine) && validSpine(ch.spine.back));
 }
 
@@ -230,6 +243,38 @@ export function unitSfxUrl(m, id, kind, skillIndex) {
     if (s) return s;
   }
   return str(u[kind]);
+}
+
+export function voiceLines(m, lang, charId) {
+  const langs = get(get(get(m, 'audio'), 'voice'), 'langs');
+  const byChar = get(langs, str(lang) || '');
+  const direct = get(byChar, str(charId) || '');
+  if (direct) return direct;
+  const fallback = get(get(get(get(m, 'audio'), 'voice'), 'fallbacks'), str(lang) || '');
+  const fallbackLang = get(fallback, str(charId) || '');
+  return get(get(langs, fallbackLang || ''), str(charId) || '') || null;
+}
+
+/**
+ * URL of one battle voice clip: `/assets/audio/voice/<lang>/<charId>/<voiceId><ext>`, where `<ext>` is the
+ * block's `ext` ('.mp3' when the extractor had ffmpeg, '.wav' otherwise). A block without `ext` is one written
+ * before the extension was part of it: its `root` carried '.mp3' itself.
+ * @param {any} m manifest
+ * @param {string} lang
+ * @param {string} charId
+ * @param {string} voiceId e.g. 'CN_023'
+ * @returns {string|null}
+ */
+export function voiceUrl(m, lang, charId, voiceId) {
+  const voice = get(get(m, 'audio'), 'voice');
+  const root = str(get(voice, 'root'));
+  let l = str(lang);
+  const c = str(charId);
+  const v = str(voiceId);
+  if (!root || !l || !c || !v) return null;
+  if (!get(get(get(voice, 'langs'), l), c)) l = get(get(get(voice, 'fallbacks'), l), c) || l;
+  const ext = str(get(voice, 'ext')) || '.mp3';
+  return `${root}/${l}/${c}/${v}${ext.startsWith('.') ? ext : `.${ext}`}`;
 }
 
 // ---- generic caches ----------------------------------------------------------------------------------------
@@ -715,6 +760,7 @@ export function createAssets(options) {
   let localManifest = isObj(opts.localManifest) ? opts.localManifest : null;
   const doFetch = opts.fetch || ((...a) => globalThis.fetch(...a));
   let manifest = isObj(opts.manifest) ? opts.manifest : null;
+  let cosmeticChoices = sanitizeCosmetics(opts.cosmeticChoices);
   let readyPromise = manifest ? Promise.resolve(manifest) : null;
   const loadImage = opts.loadImage || loadImageElement;
   const images = new Map(); // url → { promise, value }
@@ -737,8 +783,9 @@ export function createAssets(options) {
   /** Adopt a manifest (fetched or seeded): resolves `ready()`, stops the background tries, tells the listeners. */
   function adopt(m) {
     if (manifest || !isObj(m)) return false;
-    manifest = m;
-    readyPromise = Promise.resolve(m);
+    manifest = manifestForNative(m);
+    manifest.cosmeticChoices = cosmeticChoices;
+    readyPromise = Promise.resolve(manifest);
     backoffN = 0;
     if (backoffTimer != null) { timers.clear(backoffTimer); backoffTimer = null; }
     notify('manifest');
@@ -849,7 +896,7 @@ export function createAssets(options) {
           const res = await doFetch(localUrl, { cache: 'no-cache' });
           if (!res || !res.ok) return localManifest;
           const json = await res.json();
-          if (!localManifest && isObj(json) && isObj(json.groups)) { localManifest = json; notify('local'); }
+          if (!localManifest && isObj(json) && isObj(json.groups)) { localManifest = manifestForNative(json); notify('local'); }
         } catch { /* optional art: absent */ }
         return localManifest;
       })();
@@ -866,10 +913,15 @@ export function createAssets(options) {
      * manifest is loaded: no second download, nothing to wait for. Returns whether it was adopted.
      */
     seed: (mf) => adopt(mf),
+    setCosmetics(choices) {
+      cosmeticChoices = sanitizeCosmetics(choices);
+      if (manifest) manifest.cosmeticChoices = cosmeticChoices;
+      notify('cosmetics');
+    },
     /** The same for the optional local-client manifest (data.js 'local'; `{ groups }`), unless one is known. */
     seedLocal(lm) {
       if (localManifest || !isObj(lm) || !isObj(lm.groups)) return false;
-      localManifest = lm;
+      localManifest = manifestForNative(lm);
       localPromise = Promise.resolve(lm);
       notify('local');
       return true;

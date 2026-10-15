@@ -13,6 +13,7 @@
 //      inactive bonds), on its card and in the detail pane (screens/bandDraft.js BandOffTag / BandOffNote); still selectable.
 //   (3, the bot's pick, is server-side: test/match/feedback1-gaps.test.js.)
 // On screen (headless Chrome, opt-in): test/ui/feedback1-gaps.e2e.test.js.
+import { snapshotComponent } from '../helpers/componentSnapshot.js';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
@@ -37,7 +38,8 @@ const { morphPairings, modeOffBonds, grantedBonds, harmonyMembers, HARMONY_BOND,
 const { data, getMode } = await import('../../public/js/data.js');
 await data.loadAll('bonds', 'chess', 'items', 'assets', 'garrisons', 'config');
 const { ItemDetail, ChessDetail, MorphPairings, MorphGrantLine, BondChips } = await import('../../public/js/ui/detailPanel.js');
-const { BondPopup, BondStrip } = await import('../../public/js/ui/bondStrip.js');
+const { BondPopup: BondPopupComponent, BondStrip } = await import('../../public/js/ui/bondStrip.js');
+const BondPopup = snapshotComponent(BondPopupComponent);
 const { popupView } = await import('../../public/js/ui/watchBonds.js');
 const { HARMONY_BOND: SERVER_HARMONY_BOND } = await import('../../server/match/bondsMeta.js');
 const { makeMatch, give, giveItem, legalTileFor } = await import('../match/harness.js');

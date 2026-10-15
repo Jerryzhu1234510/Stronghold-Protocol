@@ -17,6 +17,7 @@
     radial-gradient(120% 90% at 45% 50%, transparent 60%, rgba(0, 0, 0, .5) 100%);
 }
 .gm__loading { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; pointer-events: none; }
+.gm__render-retry { position: absolute; right: .3rem; top: 1.2rem; z-index: 4; min-height: 44px; padding: .1rem .16rem; color: #a8efd7; background: #142b25; border: 1px solid #65d6b0; cursor: pointer; }
 .gm__hud { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .gm__hud > * { pointer-events: auto; }
 .gload { align-items: center; justify-content: center; gap: .2rem; }
@@ -55,6 +56,34 @@
 .gtop__right { display: flex; flex-direction: column; align-items: flex-end; gap: .1rem; justify-self: end; }
 .gtop__right .countdown { --cd-h: .7rem; filter: drop-shadow(0 0 .12rem rgba(0, 0, 0, .8)); }
 .gtop__clock { display: flex; align-items: flex-start; gap: .14rem; }
+
+.gtop__prep-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; position: relative; }
+.prep-vote { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-right: 0; color: var(--text-hi); font-size: clamp(11px, .15rem, 15px); pointer-events: auto; }
+.prep-vote__panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 8; }
+.sp-coarse .gtop__prep-actions .readybtn::before { width: 100%; height: 100%; }
+.gm:has(.prep-vote) .gm__effects { top: max(3.5rem, 164px); }
+.prep-vote__tools, .prep-vote__choices { display: flex; gap: 5px; }
+.prep-vote button { min-height: 28px; padding: 3px 9px; background: #12241e; border: 1px solid var(--mint-600); color: var(--mint-500); border-radius: 3px; font-size: inherit; white-space: nowrap; }
+.prep-vote button:hover:not(:disabled), .prep-vote button:focus-visible { background: #204536; outline: 2px solid var(--mint-500); outline-offset: 1px; }
+.prep-vote button:disabled { opacity: .45; }
+.sp-coarse .prep-vote button { min-height: 34px; }
+.prep-vote__panel { width: clamp(180px, 3rem, 260px); display: flex; flex-direction: column; gap: 5px; padding: 8px; background: rgba(10, 19, 15, .96); border: 1px solid var(--mint-600); border-radius: 3px; box-shadow: 0 2px 8px #0008; }
+.prep-vote__choices button { flex: 1; }
+.prep-vote__headline { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; white-space: nowrap; }
+.prep-vote__panel small, .prep-vote__headline span { font-size: inherit; color: var(--text-2); }
+.prep-vote__result { max-width: 260px; font-size: 11px; padding: 2px 5px; background: #0b1512dd; }
+.prep-vote:has(.prep-vote__ballot) .prep-vote__tools { display: none; }
+.prep-vote__ballot { position: relative; top: auto; right: auto; width: 220px; max-width: calc(100vw - 24px); padding: 6px; gap: 5px; border: 2px solid transparent; background: linear-gradient(#111b19, #111b19) padding-box, linear-gradient(110deg, #63f4ca, #f9db68, #f69bad, #78d8ff) border-box; box-shadow: 0 0 12px #63f4ca33; animation: prep-ballot-glow 2s ease-in-out infinite alternate; }
+.prep-vote__request { display: flex; align-items: baseline; gap: 4px; min-width: 0; color: #ffe383; white-space: nowrap; font-size: 12px; }
+.prep-vote__request .prep-vote__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ffe383; min-width: 0; max-width: 100px; }
+.prep-vote__ballot .prep-vote__choices button { min-height: 30px; padding: 2px 5px; font-size: 12px; }
+.sp-coarse .prep-vote__ballot .prep-vote__choices button { min-height: 34px; }
+.prep-vote__countdown { color: #ffe383; font-size: 16px; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+@keyframes prep-ballot-glow { to { box-shadow: 0 0 22px #78d8ff77; } }
+@media (prefers-reduced-motion: reduce) { .prep-vote__ballot { animation: none; } }
+.team__vote { display: block; width: fit-content; font-size: clamp(10px, .13rem, 13px); line-height: 1.2; color: #e3b564; }
+.team__vote.is-yes { color: var(--mint-500); }
+.team__vote.is-no { color: #ff8989; }
 
 /* solo pause / resume (ui/hud.js PauseButton, official battle pause: two bars on a dark square) */
 .pausebtn {
@@ -229,13 +258,15 @@
 .gm__bonds .bslot, .gm__bonds .bstrip__more { pointer-events: auto; }
 .gm__bond-list { min-width: 0; }
 /* The hidden list leaves no hit area over the board; only this compact tab can reopen it (GitHub #142). */
-.gm__bonds .bonds-toggle { pointer-events: auto; flex: none; display: inline-flex; align-items: center; justify-content: center;
-  gap: max(.03rem, 2px); min-width: 44px; min-height: 44px; padding: .06rem .08rem;
-  color: var(--text-hi); background: var(--bg-1); border: 1px solid var(--line-2); cursor: pointer;
-  font-size: max(.14rem, 11px); line-height: 1; }
-.bonds-toggle .icon { width: max(.18rem, 14px); height: max(.18rem, 14px); }
-.bonds-toggle:hover { color: var(--mint-500); border-color: var(--mint-500); }
-.bonds-toggle:focus-visible { outline: 2px solid var(--mint-500); outline-offset: 2px; }
+/* The October 9 follow-up makes the tab visible: mint outline, chevron and label, retaining a 44px touch target. */
+.gm__bonds .bonds-toggle { pointer-events: auto; flex: none; display: inline-flex; flex-direction: column; gap: 3px; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; padding: 3px; color: #9be1ca; background: #10241feb; border: 1px solid #649686; cursor: pointer;
+  opacity: 1; transition: color var(--t-fast) var(--ease-out); line-height: 1; }
+.bonds-toggle span { font: 11px/1.1 "Noto Sans SC", sans-serif; }
+.bonds-toggle .icon { width: max(.22rem, 18px); height: max(.22rem, 18px); filter: drop-shadow(0 0 2px rgba(0, 0, 0, .85)); }
+.bonds-toggle[aria-expanded="false"] { background: #1b3a30; }
+.bonds-toggle:hover, .bonds-toggle:focus-visible { opacity: 1; color: var(--mint-500); }
+.bonds-toggle:focus-visible { outline: 2px solid var(--mint-500); outline-offset: -4px; }
 .bstrip { display: flex; align-items: flex-start; gap: .1rem; flex-wrap: nowrap; }
 .bstrip.is-frozen .bslot { opacity: .5; filter: saturate(.4); }
 .bstrip--empty { display: inline-flex; align-items: center; gap: .12rem; padding: .08rem .16rem; font-size: .15rem; color: var(--text-dim); background: rgba(8, 11, 10, .6); border: 1px dashed var(--line-2); }
@@ -292,8 +323,6 @@
 .team__info { display: flex; flex-direction: column; gap: .02rem; min-width: 0; padding: .04rem .12rem .04rem .06rem; background: linear-gradient(90deg, rgba(8, 11, 10, .82), rgba(8, 11, 10, 0)); }
 .team__name { font-size: .15rem; font-weight: 500; color: var(--text-md); max-width: 1.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 2px #000; }
 .team__line { display: flex; align-items: center; gap: .1rem; }
-.team__top { display: flex; align-items: center; gap: .06rem; min-width: 0; }
-.team__band { --bi: .22rem; border: 1px solid var(--line-2); }
 .team__status { width: .26rem; height: .26rem; display: grid; place-items: center; border: 1px solid currentColor; background: rgba(0, 0, 0, .5); }
 .team__status .icon { width: .18rem; height: .18rem; }
 .team__status .lsprite { width: .2rem; height: .2rem; object-fit: contain; }
@@ -309,6 +338,15 @@
 .team__row.is-self .pavatar { box-shadow: 0 0 0 2px var(--mint-500), 0 0 .18rem rgba(23, 249, 183, .35); }
 .team__row.is-watched .pavatar { box-shadow: 0 0 0 2px var(--amber), 0 0 .18rem rgba(246, 163, 41, .45); }
 .team__row.is-dead .team__name { color: var(--text-dim); text-decoration: line-through; }
+/* 最终攻势 / 隐秘核心: the viewer's pair framed in the official green from the round's start (item 51) — the official
+   ui/battle bg_team_border (a white frame with its glow) tinted through a mask; a plain green ring without the local art.
+   It replaces the own row's mint ring; a watched row keeps its amber one inside the frame. */
+.team__frame {
+  position: absolute; inset: -.07rem; pointer-events: none; z-index: 1;
+  background: var(--mint-500); -webkit-mask: var(--frame) center / 100% 100% no-repeat; mask: var(--frame) center / 100% 100% no-repeat;
+}
+.team__frame--plain { inset: -.04rem; background: none; -webkit-mask: none; mask: none; border: 2px solid var(--mint-500); box-shadow: 0 0 .14rem rgba(78, 216, 175, .65); }
+.team__row.is-self.is-team .pavatar { box-shadow: none; }
 .team__bubble { position: absolute; left: calc(100% + .06rem); top: 50%; transform: translateY(-50%); width: max-content; max-width: 3.2rem; }
 /* 前往查看 / 返回战场 (research 09 §3.1: tapping a teammate's avatar expands a mint button under it) */
 .team__row.is-open .pavatar { box-shadow: 0 0 0 2px var(--mint-400), 0 0 .2rem rgba(23, 249, 183, .45); }
@@ -316,34 +354,6 @@
 .team__ob, .team__back { align-self: flex-start; margin-top: .04rem; min-width: 1.1rem; animation: pop-in var(--t-fast) var(--ease-out); }
 .team__ob .btn__label, .team__back .btn__label { letter-spacing: .12em; }
 .team__back { border-color: rgba(255, 255, 255, .7); color: #fff; }
-/* 5–8 players (a remake extension; ui/teamPanel.js teamCompact): compact rows — a smaller avatar with smaller badges,
-   the name, LP and status on one line, 前往查看 / 返回战场 beside the row (it never pushes the rows below down) and a
-   smaller emote bubble — so 8 rows end above the corner buttons (交流 / ⚙ / 📖 / ⛶) on desktop and on phones. 1–4
-   players keep the rules above. */
-.team--compact { gap: .08rem; }
-.team--compact .pavatar { --pa: .6rem; }
-.team--compact .team__seat { font-size: .1rem; left: -.03rem; top: -.05rem; padding: 0 .03rem; }
-.team--compact .team__ai { font-size: .1rem; right: -.03rem; bottom: -.03rem; padding: 0 .03rem; }
-.team--compact .team__you { width: .18rem; height: .18rem; right: -.06rem; top: -.06rem; }
-.team--compact .team__you .icon { width: .11rem; height: .11rem; }
-.team--compact .team__info { flex-direction: row; align-items: center; gap: .08rem; padding: .03rem .1rem .03rem .05rem; }
-.team--compact .team__name { max-width: 1rem; }
-.team--compact .team__band { --bi: .2rem; }
-.team--compact .team__line { gap: .07rem; }
-.team--compact .team__status, .team--compact .team__status.has-sprite .lsprite { width: .22rem; height: .22rem; }
-.team--compact .team__status .icon { width: .15rem; height: .15rem; }
-.team--compact .team__status .lsprite { width: .17rem; height: .17rem; }
-.team--compact .team__ob, .team--compact .team__back {
-  position: absolute; left: calc(100% + .06rem); top: 50%; margin: 0; translate: 0 -50%; white-space: nowrap; z-index: 3;
-}
-/* (the bubble's own pop / fade animate `scale` — css/emotes.css —, so the compact size goes through `transform`: one row tall) */
-.team--compact .team__bubble { transform: translateY(-50%) scale(.64); transform-origin: 0 50%; }
-/* short screens (phones: the page is ≈ 9–10.8rem tall at 1rem = 40 px): still smaller rows */
-@media (max-height: 431.98px) {
-  .team--compact { gap: .05rem; }
-  .team--compact .pavatar { --pa: .48rem; }
-  .team--compact .team__bubble { transform: translateY(-50%) scale(.54); }
-}
 
 /* player avatar (band icon / glyph) */
 .pavatar {
@@ -509,10 +519,6 @@
 .chud__prog .num { color: var(--gold); font-size: .16rem; }
 .chud__prog.is-done { border-left-color: var(--mint-500); }
 .chud__prog__ok { color: var(--mint-400); font-weight: 900; }
-/* the 4–7 teammates of a 5–8-player room (ui/combatHud.js progressDense): shorter pills, two rows at most */
-.chud__progress--dense { gap: .08rem .1rem; }
-.chud__progress--dense .chud__prog { gap: .05rem; padding: .03rem .08rem; }
-.chud__progress--dense .chud__prog b { max-width: .9rem; }
 .chud__observe { gap: .14rem; padding: 0 .08rem 0 .16rem; border-color: rgba(246, 163, 41, .55); }
 .chud__observe .vswitch__label, .chud__layers .vswitch__label { display: inline-flex; align-items: center; justify-content: center; gap: .08rem; }
 .chud__observe .vswitch__label .icon { width: .24rem; height: .24rem; color: var(--amber); }
@@ -547,7 +553,34 @@
 .set-seg button:last-child { border-right: 0; }
 .set-seg button.is-on { background: var(--mint-500); color: var(--text-on-mint); font-weight: 700; }
 .set-hint { margin-top: .06rem; font-size: .14rem; color: var(--text-dim); line-height: 1.8; }
+.set-resource-cache { border-top: 1px solid var(--line); padding-top: .12rem; }
+.set-cache-actions { display: flex; flex-wrap: wrap; gap: .1rem; margin-top: .1rem; }
+.set-cache-actions .set-key { min-height: .44rem; height: auto; font-family: inherit; }
+.set-key:disabled, .set-toggle:disabled { opacity: .5; cursor: default; }
 .set-hint kbd, .lvcard__key, .toolbtn kbd { font-family: var(--font-num); font-size: .11rem; border: 1px solid var(--line-2); padding: 0 .04rem; color: var(--text-lo); background: rgba(0, 0, 0, .3); }
+/* 快捷键 (ui/settings.js HotkeySection): each shortcut with its key — click the key, press the new one; two columns,
+   one under 768 px (phones in landscape) */
+.set-keys { display: flex; flex-direction: column; gap: .08rem; padding-top: .1rem; border-top: 1px solid var(--line); }
+.set-keys__head { display: flex; align-items: center; justify-content: space-between; gap: .12rem; min-height: .44rem; }
+.set-keys__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .06rem .14rem; margin: 0; padding: 0; list-style: none; }
+.set-keys__row { display: flex; align-items: center; justify-content: space-between; gap: .1rem; min-height: .42rem; padding: .03rem .03rem .03rem .12rem; background: rgba(0, 0, 0, .22); border: 1px solid var(--line); }
+.set-keys__name { min-width: 0; font-size: .15rem; line-height: 1.35; color: var(--text-md); overflow-wrap: anywhere; }
+.set-key { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: .06rem; min-width: .9rem; height: .36rem; padding: 0 .1rem; background: #0a0d0c; border: 1px solid var(--line-2); color: var(--mint-400); font-family: var(--font-num); font-size: .15rem; cursor: pointer; }
+.set-key kbd { font: inherit; }
+.set-key:hover, .set-key:focus-visible { border-color: var(--mint-700); }
+.set-key.is-waiting { border-color: var(--amber); color: var(--amber); font-family: inherit; font-size: .13rem; animation: set-key-wait 1s ease-in-out infinite alternate; }
+.set-key.is-fixed { cursor: default; color: var(--text-lo); border-style: dashed; }
+.set-key.is-fixed small { font-family: inherit; font-size: .12rem; color: var(--text-dim); }
+.set-keys__note { min-height: 1.5em; font-size: .14rem; line-height: 1.5; color: var(--mint-400); }
+.set-keys__note.is-warn { color: var(--amber); }
+.set-keys__more > summary { padding: .06rem 0; font-size: .15rem; color: var(--mint-400); cursor: pointer; }
+.set-keys__more[open] > summary { margin-bottom: .08rem; }
+@keyframes set-key-wait { to { box-shadow: 0 0 .12rem rgba(246, 163, 41, .45); } }
+@media (max-width: 767px) { .set-keys__list { grid-template-columns: minmax(0, 1fr); } }
+@media (max-height: 600px) and (pointer: coarse), (max-height: 600px) and (any-pointer: coarse) {
+  .set-key { height: max(.38rem, 30px); }
+  .set-keys__more > summary { padding: max(.06rem, 8px) 0; }
+}
 
 /* ---- exit / away ------------------------------------------------------------------------------------------------------ */
 .exitm { display: flex; flex-direction: column; gap: .1rem; font-size: .17rem; line-height: 1.7; }
@@ -633,6 +666,8 @@
 .ff-float--arts { color: #d59cff; }
 .ff-float--true { color: #fff; }
 .ff-float--heal { color: #6dff9c; }
+.ff-float--crit { color: #ff2a2a; }
+.ff-float--miss { color: #ff9000; }
 @keyframes float-up { to { transform: translate(-50%, -.4rem); opacity: 0; } }
 .ff-badge { position: absolute; left: 50%; bottom: .08rem; transform: translateX(-50%); font-family: var(--font-display); font-size: .1rem; letter-spacing: .3em; color: var(--text-dim); opacity: .5; pointer-events: none; }
 .gm--combat .ff-badge { display: none; }
@@ -669,4 +704,25 @@
 .pauseov__note { font-size: .17rem; color: var(--text-md); text-shadow: 0 1px 2px #000; }
 .pauseov__btns { display: flex; gap: .2rem; }
 
-.spectator-presence { position: fixed; z-index: 60; right: max(.24rem, env(safe-area-inset-right)); bottom: 1.05rem; display: flex; align-items: center; gap: .12rem; padding: .08rem .14rem; border: 1px solid #86e6d866; background: #101b25ed; color: #c7f8ef; font-size: .14rem; border-radius: .06rem; }
+.team.team--expanded { bottom: 1.85rem; max-width: 3.3rem; overflow-y: auto; overflow-x: hidden; padding: .06rem .1rem .06rem .02rem; pointer-events: auto; }
+.team--expanded .team__row { flex: none; }
+
+.set-voice-controls { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: .12rem; min-width: 0; }
+.set-voice-controls .set-toggle { flex: none; min-height: 44px; }
+.set-voice-note { color: var(--text-md); font-size: max(.13rem, 12px); line-height: 1.6; }
+
+@media (max-width: 600px) {
+  .settings-modal .set-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .settings-modal .set-row__label { grid-column: 1 / -1; font-size: max(.18rem, 12px); }
+  .settings-modal .set-range { grid-column: 1; }
+  .settings-modal .set-toggle, .settings-modal .set-seg { grid-column: 1 / -1; }
+  .settings-modal .set-voice-controls { grid-column: 1 / -1; }
+}
+
+
+/* The voice controls remain usable at small responsive rem sizes. */
+.set-seg--voice button { min-width: 72px; min-height: 44px; }
+.set-voice-lang { width: 100%; max-width: 190px; min-height: 38px; color: var(--text-hi); background: var(--bg); border: 1px solid var(--line-2); border-radius: 2px; padding: 6px 10px; font: inherit; }
+.set-voice-lang { color-scheme: light; }
+.set-voice-lang option { color: #16221c; background-color: #f4f7f5; }
+@media (max-width: 600px) { .set-voice-lang { grid-column: 1 / -1; max-width: none; } }

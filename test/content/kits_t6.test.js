@@ -1,4 +1,4 @@
-// Content tests for the tier-6 kits (server/sim/content/kits/tier6.js) + 盟约·辅助干员 (chess_char_1_15).
+// Content tests for the tier-6 kits (server/sim/content/kits/ops/chess_char_6_*.js) + 盟约·辅助干员 (chess_char_1_15).
 // Every test runs a real battle through the harness and checks the signature effect of the kit.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -281,8 +281,8 @@ test('余: blocked enemies take 40 % ATK arts + 12 % burn per second, 庇护 whi
   assert.ok(dot.length >= 2);
   const burn = h.dmg.filter((d) => d.src === u.id && d.element === 'burn');
   assert.ok(burn.length >= 2);
-  // 庇护 (ba.protect): physical and arts damage only
-  assert.ok(u.findBuff('yu:shelter') && near(u.s.physTakenMul, 1 - t0.damage_resistance) && near(u.s.artsTakenMul, 1 - t0.damage_resistance));
+  // 庇护 (ba.protect): physical and arts damage only — the shared effect of every source (kits/shared/tier1.js holdProtect)
+  assert.ok(u.findBuff('protect')?.source === u && near(u.s.physTakenMul, 1 - t0.damage_resistance) && near(u.s.artsTakenMul, 1 - t0.damage_resistance));
   assert.equal(u.s.trueTakenMul, 1, '庇护 does not reduce true damage');
   assert.equal(u.s.dmgTakenMul, 1);
   const base = u.base.maxHp;
@@ -997,8 +997,9 @@ test('荒芜拉普兰德: 叙拉古的荣幸 +5 initial SP on every deployment; 
   // (S3 may be running — its drones do not normal-attack): wait for a normal attack after stage 3
   assert.ok(h.runUntil(() => h.dmg.some((d) => d.src === u.id && d.attack && d.tgt === e.id && d.t > ts), 60));
   const last = h.dmg.filter((d) => d.src === u.id && d.attack && d.tgt === e.id).at(-1);
-  const same = h.dmg.filter((d) => d.src === u.id && d.attack && d.t === last.t);
-  assert.equal(same.length, 2, 'two drone hits per attack');
+  const same = h.dmg.filter((d) => d.src === u.id && d.t === last.t);
+  assert.equal(same.filter((d) => d.attack).length, 1, 'one body hit per attack');
+  assert.equal(same.filter((d) => d.tags.includes('funnel')).length, 2, 'two drone additions per attack');
 });
 
 test('缪尔赛思: 流形 copies stats/range/damage type but not the attack shape (锏 2-hit); a capped melee copy steals nothing more', () => {

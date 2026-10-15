@@ -1,3 +1,5 @@
+import { isTrioUnite, trioUniteStage } from '../../../shared/uniteLayout.js';
+import { createAdaptiveLoad } from './adaptiveLoad.js';
 // render/app.js — battlefield view (DESIGN §9). PixiJS 7 (global PIXI) + pixi-spine (PIXI.spine), loaded on demand
 // from /vendor when the page did not include them as classic <script> tags.
 //
@@ -14,16 +16,21 @@
 //   view.setPrep(privateState, { editable, canPlace })       hand/temp/board pieces; editable enables drag & drop; a
 //                                               new board piece flashes (fx.deploy), and so does a card that just arrived in the hand or temp; a merge's elite — on the tile of
 //                                               the deployed copy it replaced, or on its bench slot — gets the
-//                                               promotion cue instead (render/promote.js, fx.promote)
+//                                               promotion cue instead (render/promote.js, fx.promote). Landings (PR #416,
+//                                               UnitView.land: the Start clip again + the landing sound, once): an
+//                                               operator that just arrived on the bench (a purchase, a reward, a grant)
+//                                               and a merge's elite [ASSUMED], a piece this state puts on a board tile it
+//                                               was not on — from the bench, from another tile, a swap — [ASSUMED]
+//   view.replayDeploys(uids)                    the round start: the own board's pieces `uids` (deployment order) land one
+//                                               after another, DEPLOY_REPLAY_MS apart (the maintainer's confirmation from
+//                                               official play, 2026-10-13) → how many of them the board holds now (0: not
+//                                               built yet); the timers end with prep mode (enterBattle) and destroy
 //   view.enterBattle(fieldMeta)                 m.field { fieldId, kind, rect, stageId, units: [UnitInfo] } — each
 //                                               unit through renderInfo(UnitInfo) (an enemy's `form`: a view built
 //                                               mid-battle starts in the current model form)
-//   view.pushSnapshot(snap); view.pushEvents(ev | { ev, gt, quiet? })  b.snap / b.ev wire frames as received (game time in
+//   view.pushSnapshot(snap); view.pushEvents(ev | { ev, gt })  b.snap / b.ev wire frames as received (game time in
 //                                               `gt`; a numeric `t` is accepted for raw Battle snapshots / recordings)
-//                                               — drawn LOOK_AHEAD (1 game s) behind them, a look-ahead for attack
-//                                               swings (render/spine.js); emits 'battleEvents' as they are drawn
-//                                               (the sound follows; `quiet`: a replay — a field entered late — is
-//                                               drawn but heard only for its spawns, heardEvents); b.snap `down` keeps knocked-out
+//                                               — 100 ms interpolation buffer; b.snap `down` keeps knocked-out
 //                                               operators on the field under a redeploy ring and `elem` draws the
 //                                               element gauges (user playtest #4 items 8 / 9, render/units.js); a
 //                                               'die' with reason FORCED_EXIT (an operator entering 联防 knocked out,
@@ -31,23 +38,18 @@
 //                                               fx with a `form` (shared/protocol.js fxForm) switches the enemy's
 //                                               model to that clip set (render/units.js FORMS)
 //   view.setLocalFeed({ on, speed })            frames come from the local sim every frame (client-side combat):
-//                                               the same LOOK_AHEAD, at the battle's game speed
-//   view.setPaused(on)                          solo pause: the battle picture (units, effects, tiles, the render clock)
-//                                               stands still with the sim; the camera and the UI keep running
-//   view.renderLag()                            real seconds the battle is drawn behind its frames (the HUD follows)
+//                                               ~2-frame buffer at the battle's game speed
 //   view.highlightTiles(tiles, style)           [[r,c]] | [{row,col}]; style 'legal'|'illegal'|'range'|'rangeStand'|
 //                                               'hover'|'target'|{color,fill,line,group}; highlightTiles(null) clears all
 //   view.on(name, fn) → unsubscribe ; view.off(name, fn)
 //        pieceDragStart { uid, piece, from } · pieceDrop { uid, piece, from, target } · pieceDragEnd {uid, dropped}
 //        pieceClick { uid, piece, button, detail, clientX, clientY } (battle units: { unitId, uid, unit, … })
 //        pieceDetail (right-click / long-press) · pieceHover { uid } | { uid: null } (battle: + unitId, unit)
-//        tileClick { row, col, button, clientX, clientY } — the ground itself was tapped and nothing stands there
-//        (GitHub issue #184: a special terrain tile's own tip; the screen resolves it with gameLogic.terrainInfo).
-//        Prep: a BOARD tile (through the boss-prep transform); battle (a fight, a scouted / spectated board): the
-//        drawn stage tile. A mouse on press; a finger at its release, only when it stayed a tap (TAP_SLOP_PX) and was
-//        no pinch — like a battle unit's pick on a touch screen (DESIGN §26.1)
+//        tileClick { row, col, x, y } — the ground itself was tapped and nothing stands there (GitHub issue #184:
+//        a special terrain tile's own tip; the screen resolves it with gameLogic.terrainInfo)
 //        tileHover { row, col, area, idx } | null (while dragging: the drop target — the tile under the pointer)
 //   view.pieceScreenRect(uid) → { left, top, right, bottom, width, height, x, y } (client px: the drawn body) | null
+//                               (null also until the piece is first drawn)
 // Picking (user playtest #4 item 1: the ground is drawn as tiles — a press on a tile is a press on the unit standing
 // there): every "which unit is under the pointer" — prep press / click / detail / drag start / hover (pieceAt), battle
 // clicks and hover (battleUnitAt), the pen (penUnitAt) — is render/pick.js over the tile under the pointer (groundTile:
@@ -61,7 +63,8 @@
 //   view.holdPiece(uid, {row,col} | null)       keep a dropped prep piece standing on a tile while its direction is
 //                                               chosen / the move is in flight (null releases; setPrep then settles it)
 //   view.setPieceDir(uid, dir)                  show a prep piece facing UP|RIGHT|DOWN|LEFT (wheel preview / stored dir)
-//   view.setSettings({ damageNumbers, quality: 'high'|'medium'|'low' }) ; view.resize() ; view.destroy()
+//   view.setSettings({ damageNumbers, officialDamageNumbers, ammoCount, quality: 'high'|'medium'|'low' }) ; view.resize() ; view.destroy()
+//                                               (ammoCount: 设置「弹药数量」, the count under an ammo skill's bar — PR #552)
 //   view.stats() → { fps, frameMs, cpuMs, renderMs, units, particles, impostor, impostorAtlas, boardArt, … } (dev / perf)
 //
 // Enemy preview pen (research 09 §2.2 / 08 §4.2, render/pen.js): in prep the next round's enemies idle in the pen
@@ -79,8 +82,7 @@
 // The round's leader (community report #12, owner's decision 2026-10-04; research 09 §2.2: in the official Final Assault
 // prep image the boss stands on the boss field with its HP bar): a nextEnemies entry with its spawn tile `start`
 // (render/prepfield.js leaderStand) stands there — idle, with its (full) HP bar, facing the player's half, a tap shows its
-// details like a pen enemy — instead of in the pen, shown by the boss-field cameras only (`leaderShown`: the own prep half,
-// and during prep a teammate's scouted / a spectated boss field, Match.prepFieldMeta, issue #9); while an
+// details like a pen enemy — instead of in the pen, shown by the boss-field prep camera only (`leaderShown`); while an
 // operator's range preview shows (a RANGE_GROUPS highlight: the direction wheel's 'facing', a selected piece's range) its
 // hit tiles (the sim's hit rectangle, render/pick.js hitTiles) are lit in red beside it (LEADER_HIT_STYLE). Display only.
 // Final Assault / Hidden Core prep (research 09 §1.2, render/prepfield.js): `view.setCamera('bossPrep', { side })`
@@ -88,7 +90,10 @@
 // boss rows 2–5, bench 7 → 0, temp 8 → 1, side 'R' mirrored col c → 20 − c with RIGHT ↔ LEFT. Every public
 // coordinate stays in BOARD space (pieceDrop targets, canPlace, highlightTiles, tileScreen, holdPiece, setPieceDir,
 // stored `dir`); `view.prepField()` → { kind, side, mirror } and `tileScreen(...).mirror` tell the direction wheel
-// that a screen-right swipe means board LEFT on the mirrored half.
+// that a screen-right swipe means board LEFT on the mirrored half. The pair partner's board stands on the other half
+// (`priv.bossMate` units, already in boss-field coordinates — server/match/match/views.js bossMateView), read-only
+// ('m:<uid>' views: never picked or dragged), and the lit rect is the whole boss field: both players of a pair are
+// shown together, as in the battle (community report of 2026-10-06, item 51).
 // Lost WebGL context of the 3D board: the 2D board takes over at once and the 3D board is rebuilt on a fresh context
 // a moment later (up to 3 tries; a context lost again right away counts as a failure; `setBoardMode('2d')` stops it).
 //
@@ -109,14 +114,18 @@
 // Assault prep = the boss field).
 // Battle device boxes (`ctx.createBox`) follow the board layer (switchableBox), so a 3D ⇄ 2D switch keeps crates.
 // Crowds and clipped Spine skeletons render through the shared impostor atlas (render/impostor.js), flushed once per
-// frame before the main pass.
+// frame before the main pass; each frame also measures queued Spine clips within a small time budget
+// (spine.js stepClipBounds: the impostor boxes, GitHub #542).
 // canPlace: `(uid, target, piece) => bool` (the game UI's form: target = {area:'board',row,col}|{area:'hand',idx})
 // or `(piece, row, col, target) => bool` (functions declaring ≥ 3 parameters). Throwing ⇒ illegal.
 // Piece shape (DESIGN §8.3): { uid, kind: 'chess'|'item'|'token', id, golden, tier, items: [{uid,id}], count, ownerUid }.
 // `assets` may be the store from public/js/assets.js or the raw /data/assets.json manifest (it is wrapped);
 // `data` is the client data store (public/js/data.js: lookup(file, id)) or plain { chess, tokens, items, enemies } maps.
+//
+// The helpers live in public/js/render/app/*.js and are re-exported below, so existing imports keep
+// working. createFieldView stays here: it is one closure over the view's own state.
 
-import { GEO, ANIM, UF } from '../../../shared/constants.js';
+import { GEO, ANIM } from '../../../shared/constants.js';
 import { fxForm } from '../../../shared/protocol.js';
 import { Camera, presetCamera, lerpCamera, easeInOutCubic, pickTile, normRect } from './projection.js';
 import { SnapshotBuffer, frameTime } from './interp.js';
@@ -126,368 +135,46 @@ import { FxSystem, ensureDamageFonts } from './fx.js';
 import { createDragController, pieceTile } from './drag.js';
 import { backdropTextures, shadowTexture, refreshTierChips, silhouetteTexture } from './textures.js';
 import { TILE_H, TIER_COLORS, COLORS } from './style.js';
-import { createAssets, assets as defaultAssets } from '../assets.js';
 import { loadBoardArt } from './boardArt.js';
 import { ImpostorAtlas } from './impostor.js';
-import { loadThree, loadBoardPack, webgl2Available, boardArtListed } from './board3d/load.js';
+import { stepClipBounds } from './spine.js';
+import { loadThree, loadBoardPack, loadScenePack, webgl2Available, boardArtListed } from './board3d/load.js';
 import { BoardScene } from './board3d/scene.js';
-import { AREAS, areaFor, unionAreas } from './board3d/layout.js';
+import { unionAreas } from './board3d/layout.js';
 import { layoutPen, penSignature } from './pen.js';
 import { IDENTITY, bossPrepField, tilesToDisp, leaderStand } from './prepfield.js';
-import { pickOnTile, pickBattle, hitRectAt, hitTiles, pickBody } from './pick.js';
+import { pickOnTile, pickBattle, hitTiles } from './pick.js';
 import { promotionsOf } from './promote.js';
-import { createLoadGovernor, maxAnimInterval } from './loadlevel.js';
+import { ensurePixi } from './app/pixi.js';
+import { pieceDirOf, pickUnitOf } from './app/pick.js';
+import { CAMERA_MS, BOARD3D_STABLE_MS, BOARD3D_RETRY_MS, PEN_CAMERA_MS, RANGE_GROUPS, LEADER_HIT_STYLE, DRAG_HOLD_TILES, CHAIN_KINDS, DROP_PENDING_MS, DEPLOY_REPLAY_MS } from './app/tune.js';
+import { boardPreference, switchableBox, bandFor, fieldRows, boardArea, viewKind, penShown, leaderShown } from './app/view.js';
+import { renderInfo, FORCED_EXIT, showsDeathFx } from './app/info.js';
+import { resolveAssets, makeData, withTimeout, QUALITY_RES, BOARD_RES, releaseGl } from './app/host.js';
+import { t } from '../../../shared/i18n.js';
 
-const VENDOR = { pixi: '/vendor/pixi.min.js', spine: '/vendor/pixi-spine.js' };
-const PIECE_DIRS = new Set(['UP', 'RIGHT', 'DOWN', 'LEFT']);
-/** Stored facing of a prep piece (m.private board pieces carry `dir`; bench pieces have none ⇒ undefined). */
-const pieceDirOf = (piece) => (typeof piece?.dir === 'string' && PIECE_DIRS.has(piece.dir.toUpperCase()) ? piece.dir.toUpperCase() : undefined);
-const CAMERA_MS = 750;
-/** Longest the view's startup waits for its optional parts (fonts, board art, the 3D board) — see createFieldView. */
-const STARTUP_WAIT_MS = 4000;
-/** Touch pinch on the field (see the pointer handlers): the deepest zoom, the pan's reach past the framing, a tap's slop. */
-const USER_ZOOM_MAX = 3;
-const USER_PAN_SLACK = 0.3;
-const TAP_SLOP_PX = 12;
-/**
- * Game seconds the battle is drawn behind the simulation (render/interp.js lookAhead): enough for the whole wind-up of
- * 99% of the attack clips and for Texas' Attack_Start + strike (0.97 s). In GAME time so it holds at every battle /
- * replay speed; at the live 2× it is 0.5 s real (renderLag()).
- */
-export const LOOK_AHEAD = 1.0;
-/** Camera pan to / from the enemy preview pen (configBlackBoard move_time 0.25). */
-export const PEN_CAMERA_MS = 250;
-/** Recovery of a lost 3D board context: delays of the rebuild attempts (ms) and how soon a new loss counts as failure. */
-const BOARD3D_RETRY_MS = [1200, 4000, 12000];
-const BOARD3D_STABLE_MS = 10000;
-/** Highlight groups that show a unit's range: never drawn on bench / temp pads (they are not part of any battle). */
-const RANGE_GROUPS = new Set(['facing', 'range', 'rangeStand', 'select', 'sel', 'selRange']);
-/**
- * The round leader's hit tiles, lit beside an operator's range preview in the Final Assault / Hidden Core prep (see the
- * header; community report #12 "boss受击范围可以像官方原版那样用红色"). [ASSUMED] the red and its strength: the players' request,
- * no source shows the official colour; the range preview stays orange.
- */
-export const LEADER_HIT_STYLE = Object.freeze({ group: 'leaderHit', color: 0xff3b30, fill: 0.3, line: 0.95 });
-/** atk projectile kinds whose first id is the previous bounce target (sim ai.js), not the attacker. */
-const CHAIN_KINDS = new Set(['chain', 'chainHeal']);
-const DROP_PENDING_MS = 1300;
-/**
- * A dragged unit is held with its drawn feet this many tiles below the pointer — the pointer on its body, the model
- * under the finger / mouse (user playtest #4 item 1: as in v2.1; mouse and touch alike). An item plate is centred on it.
- */
-export const DRAG_HOLD_TILES = 0.45;
-
-/**
- * A view as a render/pick.js unit, or null when it cannot be picked (gone, faded out, dead): standing on the display
- * tile it is drawn on, or — `walks` (battle enemies) — by its ground position and its drawn body (feet to head, on
- * screen; a flying one by its body alone).
- */
-function pickUnitOf(v, walks = false, hitArea = null) {
-  // a knocked-out operator lying on its tile waiting to redeploy (b.snap `down`, user playtest #4 item 9) is on that tile
-  // too: a press there selects it; other dead / dying views are gone
-  if (!v || v.destroyed || (v.alive === false && !v.down)) return null;
-  if (Number.isFinite(v.alpha) && v.alpha < 0.05) return null;
-  const sc = v.screen;
-  const shown = sc && sc.s > 0 && !v.culled ? { x: sc.x, top: Number.isFinite(sc.top) ? sc.top : sc.y, feet: sc.y, s: sc.s } : null;
-  const body = walks ? shown : null;
-  const tile = walks ? null : { row: Math.round(v.y), col: Math.round(v.x) };
-  // a huge boss (data `hitArea`): its hit area on the ground and a body box as wide as it are pickable (render/pick.js)
-  const area = walks && !v.flying ? hitRectAt(v.x, v.y, hitArea) : null;
-  if (area && body) body.hw = hitArea.w / 2;
-  // `drawn`: the standing unit's body on screen, for a finger on an empty tile (render/pick.js pickBody)
-  return { tile, x: v.x, y: v.y, fly: walks && !!v.flying, body, drawn: walks ? null : shown, area, depth: v.root && !v.root.destroyed ? v.root.zIndex : 0, ref: v };
-}
-
-let pixiPromise = null;
-
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src;
-    s.async = false;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`failed to load ${src}`));
-    document.head.appendChild(s);
-  });
-}
-
-/** Make sure PIXI and PIXI.spine exist (classic scripts; loaded once). */
-export function ensurePixi() {
-  if (globalThis.PIXI && globalThis.PIXI.spine) return Promise.resolve(globalThis.PIXI);
-  if (!pixiPromise) {
-    pixiPromise = (async () => {
-      if (!globalThis.PIXI) await loadScript(VENDOR.pixi);
-      if (!globalThis.PIXI?.spine) await loadScript(VENDOR.spine);
-      if (!globalThis.PIXI || !globalThis.PIXI.spine) throw new Error('PIXI / pixi-spine unavailable');
-      return globalThis.PIXI;
-    })();
-    pixiPromise.catch(() => { pixiPromise = null; });
-  }
-  return pixiPromise;
-}
-
-const VIEW_KINDS = new Set(['prep', 'normal', 'unite', 'boss', 'bossPrep', 'pen']);
-
-/**
- * The field a camera request actually shows — what render/projection.js presetCamera frames: 'hidden' → 'boss';
- * a 'prep' camera asked for the boss rows (Final Assault prep: rect r1 ≤ 6) → 'bossPrep'; unknown kinds → 'normal'.
- * Drives the built 3D area, the drawn 2D rows and the lit rect, so they always match the camera.
- */
-export function viewKind(kind, opts) {
-  let k = kind === 'hidden' ? 'boss' : kind;
-  if (!VIEW_KINDS.has(k)) k = 'normal';
-  if (k === 'prep' && opts && opts.rect && normRect(opts.rect).r1 <= 6) k = 'bossPrep';
-  return k;
-}
-
-/** 3D areas without the enemy preview pen block (the own field / both normal halves); see `boardArea`. */
-const AREA_NO_PEN = Object.freeze({
-  normal: Object.freeze(AREAS.normal.filter((a) => a.r1 <= 13)),
-  unite: Object.freeze(AREAS.unite.filter((a) => a.r1 <= 13)),
-});
-
-/**
- * 3D area built for a view kind (viewKind): the enemy preview pen (rows 14–18) only for the 'pen' camera — the prep,
- * battle and 联防 cameras show the field alone (user playtest #2 item 6) with its separator rows 6 and 13 (the row-13
- * devices blow into the field: act2 m01's blowers, user playtest #5 item 6; the boss field's row-6 devices are drawn
- * with the boss field only — board3d/layout.js stageDevices); the boss kinds build the boss field.
- */
-export function boardArea(vk) {
-  if (vk === 'pen') return AREAS.normal;
-  if (vk === 'prep' || vk === 'normal') return AREA_NO_PEN.normal.length ? AREA_NO_PEN.normal : AREAS.normal;
-  if (vk === 'unite') return AREA_NO_PEN.unite.length ? AREA_NO_PEN.unite : AREAS.unite;
-  return areaFor(vk);
-}
-
-/**
- * 2D rows drawn for a view kind: the pen rows (14–18) only for the 'pen' camera; the boss field with the separator
- * and the normal rows behind it as scenery.
- */
-export function bandFor(kind) {
-  if (kind === 'boss' || kind === 'hidden' || kind === 'bossPrep') return [0, 13];
-  return kind === 'pen' ? [6, 18] : [6, 13];
-}
-
-/**
- * Active field rows [r0, r1] of a view kind for the 2D board (render/tiles.js `setView` field: drawn rows outside it are
- * dim scenery without devices): the normal / 联防 / prep fields live between the separator walls (rows 6–13, the
- * devices on the row-13 wall included; the row-6 wall's belong to the boss field — tiles.js _stageDevices); the pen
- * camera adds the pen (6–18); the boss field 0–6.
- */
-export function fieldRows(kind) {
-  return kind === 'boss' || kind === 'hidden' || kind === 'bossPrep' ? [0, 6] : kind === 'pen' ? [6, 18] : [6, 13];
-}
-
-/** Are the pen's figures shown for a view kind (a camera flight shows them when either end is the pen)? */
-export const penShown = (vk, prevVk = null) => vk === 'pen' || prevVk === 'pen';
-/**
- * Is the prep's leader on the boss field shown for a view kind (a flight shows it when either end shows it): the own
- * boss-field prep, and a teammate's scouted / a spectated boss field during prep (Match.prepFieldMeta, issue #9).
- */
-export const leaderShown = (vk, prevVk = null) => [vk, prevVk].some((k) => k === 'bossPrep' || k === 'boss' || k === 'hidden');
-
-/**
- * 'die' reason of an operator that enters the battle already knocked out — a 联防 helper's operator down at the end of
- * its own combat, deployed and forced out at once (server/sim/constants.js FORCED_EXIT, user playtest #5 item 2): its
- * view goes straight to the held knocked-down pose (UnitView.die(true)) without the death burst; b.snap `down` keeps it.
- */
-export const FORCED_EXIT = 'forcedExit';
-
-/**
- * Generic death particles for a battle unit's 'die' event: never for stage devices, nor for a summon used up by its
- * own effect (user playtest #2 item 4: 香槟炸弹's blast — sim fx `{ consumed: true, id }` before its 'die' — is its end,
- * not a knock-out), nor for an operator entering the battle knocked out (FORCED_EXIT).
- */
-export const showsDeathFx = (info, consumed = false, reason = null) => !consumed && reason !== FORCED_EXIT && info?.kind !== 'device';
-
-/** Game s an event may be drawn behind the render clock and still be heard ('battleEvents', heardEvents). */
-export const HEARD_LAG = 0.6;
-
-/**
- * The drawn events the sound hears (the view's 'battleEvents' → screens/game.js → audio.handleBattleEvents): a 'spawn'
- * always (the sound's unit map), anything else only when it is drawn on time (stamped ≥ renderT − HEARD_LAG) and was
- * not pushed `quiet`. Quiet tuples are a replay: a field entered mid-battle replays its early buffer (state events and
- * lasting fx — screens/game.js keepEarly) stamped with the entry snapshot's game time, so the render clock draws them
- * at once and the stamp alone cannot tell them from fresh ones — a teammate's field shown again after a catch-up
- * (battle/runner.js CATCHUP_TICKS) would play the deaths, deploys and 漏怪 alarm of the seconds it skipped. Upstream
- * hands audio only that buffer's spawns too.
- * @param {Array} evs the tuples drawn this frame (interp.takeEvents) · @param {number[]} stamps their game times
- * @param {number} renderT · @param {{ has(e): boolean }} [quiet] the tuples pushed quiet · @param {Array} [out]
- */
-export function heardEvents(evs, stamps, renderT, quiet = null, out = []) {
-  out.length = 0;
-  for (let i = 0; i < evs.length; i++) {
-    const e = evs[i];
-    if (e[0] === 'spawn' || (stamps[i] >= renderT - HEARD_LAG && !quiet?.has(e))) out.push(e);
-  }
-  return out;
-}
-
-/**
- * The views' info of a battle unit from its UnitInfo (m.field / fieldMeta `units`, a 'spawn' event; snapshot.js
- * unitInfo), sanitised; null for a malformed entry. `form` — the unit's current model form (an enemy's, content/enemies.js
- * setForm: 转译基底·α's forms, a 逐火 余烬, a leader after its 重生, 掠海漂移体's crawl; a 傀儡师 fighting as its 替身, sim
- * professions.js) — makes a view built mid-battle (a teammate's
- * field watched later, 联防 observers, a reconnect, server-run watchers: no fx of the change is replayed) start on that
- * clip set (render/units.js FORMS); it used to be dropped here, so such views drew the first form (player report #5).
- */
-export function renderInfo(u) {
-  if (!u || typeof u !== 'object' || (typeof u.id !== 'number' && typeof u.id !== 'string')) return null;
-  return {
-    id: u.id, uid: u.uid ?? null, kind: u.kind || 'enemy', side: u.side === 'ally' ? 'ally' : 'enemy', ownerId: u.ownerId ?? null,
-    defId: u.defId ?? null, name: u.name ?? '', tier: u.tier ?? 1, golden: !!u.golden, spine: u.spine ?? u.defId ?? null,
-    avatar: u.avatar ?? u.defId ?? null, x: Number(u.x) || 0, y: Number(u.y) || 0, facing: u.facing === -1 ? -1 : 1,
-    maxHp: Number(u.maxHp) || 1, boss: !!u.boss, motion: u.motion,
-    // deploy direction of allies (UnitInfo.dir, DESIGN §3): the model (Back for UP, mirrored for LEFT) and the
-    // ground wedge follow it; absent = unknown (legacy frames) → derived from `facing`, no wedge
-    dir: typeof u.dir === 'string' ? u.dir : undefined,
-    // the unit's current model form (UnitInfo.form: an enemy's mode, a 傀儡师's 替身): the view starts in it (UnitView reads info.form)
-    form: typeof u.form === 'string' ? u.form : undefined,
-    // DESIGN §16 loadout of an ally (UnitInfo.skillIndex / moduleId): the Spine actor plays that skill's clip, and a
-    // tap hands them to the detail card (a teammate's unit shows its owner's skill / module)
-    skillIndex: Number.isInteger(u.skillIndex) ? u.skillIndex : undefined,
-    moduleId: typeof u.moduleId === 'string' ? u.moduleId : undefined,
-    // where a scouted prep piece stands (Match.prepFieldMeta: 'board' | 'hand' | 'temp'): a tap on a bench / temp
-    // operator opens its card without a range (ui/facing.js unitRange)
-    area: typeof u.area === 'string' ? u.area : undefined,
-    // the ally's equipped item ids (UnitInfo.items, DESIGN §16 / §21.11): the detail card needs them for a teammate's
-    // unit (resolveDetail `unitItems` → the read-only 装备 section and the 变形同构体 pairing chips); the owner's own
-    // unit takes its items from the piece instead, so only other players' boards ever read this field
-    items: Array.isArray(u.items) ? u.items.filter((x) => typeof x === 'string') : undefined,
-  };
-}
-
-/** '2d' | '3d' | 'auto' board preference: `?board=` in the page URL (dev), else the view option. */
-export function boardPreference(opt) {
-  let q = null;
-  try { q = new URLSearchParams(globalThis.location?.search || '').get('board'); } catch { /* no location */ }
-  const v = q || opt;
-  return v === '2d' || v === '3d' ? v : 'auto';
-}
-
-/**
- * A battle device box (render/units.js DeviceView `ctx.createBox()` contract: `{ mesh, update(cam, b), destroy() }`)
- * that follows the board layer: the 3D scene's crate mesh while `board()` returns a BoardScene, else the Pixi box of
- * the 2D board. A board switch mid-battle (lost WebGL context → 2D, or back to 3D) swaps the inner box on the next
- * update instead of leaving the crate on a dead scene. `mesh` is the Pixi mesh (null in 3D: nothing to add to Pixi).
- */
-export function switchableBox({ board, pixi }) {
-  let inner = null, owner;
-  const drop = () => { try { inner?.destroy(); } catch { /* ignore */ } inner = null; owner = undefined; };
-  return {
-    get mesh() { return inner ? inner.mesh || null : null; },
-    get inner() { return inner; },
-    update(cam, b) {
-      const scene = board() || null;
-      if (!inner || owner !== scene || inner.destroyed) {
-        drop();
-        inner = scene ? scene.createDevice() : pixi();
-        owner = scene;
-      }
-      inner?.update(cam, b);
-    },
-    destroy: drop,
-  };
-}
-
-function withTimeout(p, ms) {
-  return Promise.race([p, new Promise((resolve) => setTimeout(resolve, ms))]);
-}
-
-/**
- * The texture of a resource file: invalid until its image loads. A file that fails to load (a host without the game's
- * art, a network error) leaves the texture invalid (its users keep their placeholder) — instead of Pixi's unhandled
- * rejection, which the page would show as an unexpected error.
- */
-function fileTexture(P, url) {
-  const texture = P.Texture.from(url);
-  texture.baseTexture.resource.load().catch(() => {});
-  return texture;
-}
-
-/** Wrap whatever the caller passed as `assets` into the store API of public/js/assets.js. */
-function resolveAssets(a) {
-  if (a && typeof a === 'object' && typeof a.ready === 'function' && typeof a.spineEntry === 'function') return a;
-  if (a && typeof a === 'object' && (a.chars || a.enemies || a.version)) return createAssets({ manifest: a });
-  return defaultAssets;
-}
-
-function makeData(src) {
-  const look = (file, id) => {
-    if (id == null || id === '') return null;
-    try {
-      if (src && typeof src.lookup === 'function') return src.lookup(file, id) || null;
-      const m = src && src[file];
-      if (m instanceof Map) return m.get(id) || null;
-      if (m && typeof m === 'object' && Object.hasOwn(m, id)) return m[id] || null;
-    } catch { /* ignore */ }
-    return null;
-  };
-  return {
-    chess: (id) => look('chess', id), token: (id) => look('tokens', id), item: (id) => look('items', id),
-    enemy: (id) => look('enemies', id), stage: (id) => look('stages', id), bond: (id) => look('bonds', id),
-  };
-}
-
-const QUALITY_RES = { high: 2, medium: 1.5, low: 1 };
-/**
- * Frame-rate cap of the ticker (phone audit P8): a 90 / 120 Hz phone drew 120 fps even in the nearly static prep phase
- * (battery, heat). PIXI's limiter drops whole display frames and compares whole milliseconds, so a cap of exactly 60
- * also skips frames on a 60 Hz display (measured on its Ticker.update: ~57–59 fps with 33 ms gaps); two fps of headroom
- * keep 60 Hz at 60 and 90 / 120 / 144 Hz at ~60. Animation time is unaffected: frameBody takes its dt from performance.now().
- */
-const MAX_FPS = 62;
-/** Pixel-ratio cap of the 3D board canvas per quality (its fill cost is the PBR board, not the sprites). */
-const BOARD_RES = { high: 2, medium: 1.25, low: 1 };
-
-/**
- * Before a renderer is destroyed: free its GL copies of every texture / buffer / geometry / framebuffer it
- * uploaded. Module-level textures (FX atlas, tier chips, backdrop, diamonds, Spine pages, PIXI.Texture.WHITE…)
- * outlive the view; PIXI 7 leaves their per-context GL entries and 'dispose' listeners pointing at the dead
- * renderer, which kept every unmounted view's renderer, canvas and WebGL context reachable.
- */
-export function releaseGl(renderer) {
-  const ts = renderer && renderer.texture;
-  if (ts && Array.isArray(ts.managedTextures) && typeof ts.destroyTexture === 'function') {
-    for (const bt of ts.managedTextures.slice()) { try { ts.destroyTexture(bt, true); } catch { /* ignore */ } }
-    ts.managedTextures.length = 0;
-  }
-  for (const sys of [renderer?.geometry, renderer?.buffer, renderer?.framebuffer]) {
-    try { if (sys && typeof sys.disposeAll === 'function') sys.disposeAll(false); } catch { /* ignore */ }
-  }
-  // shader programs are cached globally by source (PIXI.utils.ProgramCache) with one GLProgram per context
-  const uid = renderer?.CONTEXT_UID, gl = renderer?.gl;
-  const programs = globalThis.PIXI?.utils?.ProgramCache;
-  if (uid != null && programs && typeof programs === 'object') {
-    for (const prog of Object.values(programs)) {
-      const g = prog && prog.glPrograms && prog.glPrograms[uid];
-      if (!g) continue;
-      try { if (gl && g.program) gl.deleteProgram(g.program); } catch { /* ignore */ }
-      delete prog.glPrograms[uid];
-    }
-  }
-}
+export { ensurePixi } from './app/pixi.js';
+export { PEN_CAMERA_MS, LEADER_HIT_STYLE, DRAG_HOLD_TILES, DEPLOY_REPLAY_MS } from './app/tune.js';
+export { viewKind, boardArea, bandFor, fieldRows, penShown, leaderShown, boardPreference, switchableBox } from './app/view.js';
+export { FORCED_EXIT, showsDeathFx, renderInfo } from './app/info.js';
+export { releaseGl } from './app/host.js';
 
 /**
  * Create the battlefield view inside `host` (an element sized by CSS; the canvas fills it).
  * @param {HTMLElement} host
- * @param {{ data?: any, assets?: any, audio?: any, settings?: { damageNumbers?: boolean, quality?: string },
+ * @param {{ data?: any, assets?: any, audio?: any, settings?: { damageNumbers?: boolean, officialDamageNumbers?: boolean, ammoCount?: boolean, quality?: string }, signal?: AbortSignal,
  *           padding?: object|((kind:string, size:{width:number,height:number}) => object),
  *           hud?: {top:number,bottom:number}|((kind:'prep'|'bossPrep', size:{width:number,height:number}, o:{shop:boolean}) => {top:number,bottom:number}|null) }} [opts]
  */
 export async function createFieldView(host, options = {}) {
   if (!host || typeof host.appendChild !== 'function') throw new TypeError('createFieldView: host element required');
   const opts = options && typeof options === 'object' ? options : {};
+  const signal = opts.signal;
+  signal?.throwIfAborted();
   const P = await ensurePixi();
-  // the optional waits below (asset manifest, fonts, board art, the 3D board) share one budget: they only spare the
-  // first frame a late swap — each upgrades in place when it lands — and on a slow phone link their sum (14 s) ran
-  // past ui/fieldHost.js's engine timeout, which then gave the whole match to the flat DOM board (user report
-  // 2026-10-06: "整个棋盘位于中间位置，缩放过小")
-  const waitUntil = performance.now() + STARTUP_WAIT_MS;
-  const waitFor = (ms) => Math.max(0, Math.min(ms, waitUntil - performance.now()));
   const assets = resolveAssets(opts.assets);
   const data = makeData(opts.data);
-  const settings = { damageNumbers: true, quality: 'high', ...(opts.settings || {}) };
+  const settings = { damageNumbers: true, officialDamageNumbers: false, ammoCount: false, quality: 'high', frameRate: 60, ...(opts.settings || {}) };
   // the 3D board (three.js + the official art) loads in parallel with everything else
   const boardPref = boardPreference(opts.board);
   const want3d = boardPref !== '2d' && webgl2Available(boardPref === '3d');
@@ -498,28 +185,46 @@ export async function createFieldView(host, options = {}) {
   // the manifest, and the optional local-art manifest in parallel: unit views pick an enemy's local-client model by it
   // (assets.js spineEntry, DESIGN §13 — 灼热源石虫 / 炽焰源石虫); absent or slow, they draw the web models
   await withTimeout(Promise.all([assets.ready ? assets.ready() : null, assets.local ? assets.local() : null]
-    .map((p) => Promise.resolve(p).catch(() => {}))), waitFor(4000));
+    .map((p) => Promise.resolve(p).catch(() => {}))), 4000);
   // web fonts for the bitmap damage numbers / tier chips (never block long)
-  try { if (document.fonts?.load) await withTimeout(Promise.all([document.fonts.load('700 40px Bender'), document.fonts.load('700 40px Oxanium')]), waitFor(1500)); } catch { /* ignore */ }
+  try { if (document.fonts?.load) await withTimeout(Promise.all([document.fonts.load('700 40px Bender'), document.fonts.load('700 40px Oxanium')]), 1500); } catch { /* ignore */ }
 
   const size = () => ({ width: Math.max(1, host.clientWidth || 1), height: Math.max(1, host.clientHeight || 1) });
+  signal?.throwIfAborted();
   const dpr = () => Math.min(globalThis.devicePixelRatio || 1, QUALITY_RES[settings.quality] || 2);
   const boardDpr = () => Math.min(globalThis.devicePixelRatio || 1, BOARD_RES[settings.quality] || 2);
   const s0 = size();
+  // Construction is synchronous until the complete view can own cancellation. If setup throws,
+  // dispose only the resources acquired by this attempt, never another view's host contents.
+  const setupCleanup = [];
+  let destroyed = false;
+  let view = null;
+  let onAbort;
+  try {
+  // a vertex buffer of its own for every batch flush of a frame (PIXI's own setting on iOS) instead of uploading the one
+  // shared buffer again: the impostor atlas flushes once per redrawn slot (render/impostor.js: each slot is clipped by its
+  // own scissor rect, GitHub #542), and with those flushes the re-uploads stalled Apple GPUs — on an Apple M4 (Chrome,
+  // ANGLE Metal) a 120-unit crowd at 1920 × 1080 ran at 42–58 fps instead of 60 (DPR 1 and 2, by the machine's load);
+  // a buffer per flush costs ≈ 0.3 ms of render CPU there
+  if (P.BatchRenderer && 'canUploadSameBuffer' in P.BatchRenderer) P.BatchRenderer.canUploadSameBuffer = false;
   const app = new P.Application({
     // MSAA only where it pays: dense (DPR ≥ 1.5) screens are sharp enough without it and it would cost 4× the fill
     // transparent: the 3D board canvas shows through (the 2D board paints an opaque backdrop itself)
     width: s0.width, height: s0.height, antialias: opts.antialias ?? (settings.quality === 'high' && (globalThis.devicePixelRatio || 1) < 1.5), backgroundColor: 0x0a0e0d, backgroundAlpha: 0,
     resolution: dpr(), autoDensity: true, powerPreference: 'high-performance',
   });
-  app.ticker.maxFPS = MAX_FPS;
   const canvas = app.view;
+  setupCleanup.push(() => {
+    releaseGl(app.renderer);
+    app.destroy(true, { children: true, texture: false, baseTexture: false });
+  });
+  app.ticker.maxFPS = settings.frameRate === 30 ? 30 : 60;
   canvas.style.display = 'block';
   canvas.style.width = '100%';
   canvas.style.height = '100%';
   canvas.style.touchAction = 'none';
   canvas.style.userSelect = 'none';
-  canvas.setAttribute('aria-label', '战场');
+  canvas.setAttribute('aria-label', t('战场'));
   canvas.style.position = 'relative';
   canvas.style.zIndex = '1';
   host.appendChild(canvas);
@@ -570,23 +275,20 @@ export async function createFieldView(host, options = {}) {
     for (const fn of [...set]) { try { fn(payload); } catch (err) { console.error(`[render] ${name} listener failed`, err); } }
   };
 
-  let destroyed = false;
   let mode = 'idle';          // 'idle' | 'prep' | 'battle'
   let stageRec = null;
-  let cam = presetCamera('prep', { width: s0.width, height: s0.height, padding: defaultPadding('prep', s0) }, { hud: hudBands('prep', s0) });
+  let cam = presetCamera('prep', { width: s0.width, height: s0.height, padding: defaultPadding('prep', s0) }, { hud: hudBands('prep', s0), mobile: opts.mobileCamera?.(s0) });
   let camFrom = null, camTo = null, camT0 = 0, camKind = 'prep', camOpts = {}, camMs = CAMERA_MS;
-  // the player's pinch zoom / pan on a touch screen: an image transform of `userBase` (the camera when the gesture
-  // began) — screen' = z·screen + (ox, oy), i.e. the focal length × z and the principal point moved (the same 2D
-  // transform as projection.js clearHud), so picking, the three.js board and every layer stay consistent. A new
-  // camera request (setCamera, a resize) drops it.
-  let userBase = null, userZ = 1, userOx = 0, userOy = 0;
   let pendingView = null;     // tile band/focus to apply when the camera transition ends
   const views = new Map();    // key → view (prep: 'p:'+uid; battle: unit id)
   let prepPieces = [];        // { uid, piece, area, idx, row, col, key }
+  let prepMapChars = [];      // { unit (board space), display } — read-only, but inspectable
   // the last prep pieces before a battle / scouting board emptied prepPieces: a merge completed between two preps (a band
   // or 机变 grant at ROUND_START, a SETTLE merge) is still recognised by the next setPrep (QA 6b)
   let promoBase = [];
   const promotions = [];      // the last merges cued by setPrep (fx.promote): { uid, id, area, row, col, idx, copies } — dev / tests
+  const landings = [];        // the last prep landings (UnitView.land, PR #416): { uid, why: 'round'|'buy'|'merge'|'board', at } — dev / tests
+  let replayTimer = 0;        // the next turn of the round start's replay (replayDeploys): cleared when prep mode ends and on destroy
   let battleMeta = null;
   let sceneHold = null;       // release function of the Spine cache hold of battle mode (holdScene)
   const infos = new Map();    // battle unit id → UnitInfo
@@ -594,12 +296,7 @@ export async function createFieldView(host, options = {}) {
   // dead units for DIE_ANIM_TIME), which must not bring the view back; a spawn / deploy / live sample clears it
   const gone = new Set();
   const woundUp = new WeakSet(); // atk event tuples whose attack wind-up already started
-  // The battle is drawn LOOK_AHEAD game seconds behind the simulation (local or networked): the look-ahead lets every
-  // operator play its attack as the original does — the whole wind-up (begin clip + the strike frame: up to ~1 game s,
-  // 2× speed) before the hit the sim already resolved — and start a swing only when an attack is really coming (user
-  // report: swings cut in mid-clip, swings at nothing). Sound (battleEvents) and the HUD follow the same clock.
-  const interp = new SnapshotBuffer({ lookAhead: LOOK_AHEAD, rate: 2 });
-  let battlePaused = false;   // solo pause (view.setPaused): the battle picture stands still, the camera and the UI do not
+  const interp = new SnapshotBuffer({ delay: 0.1, rate: 2 });
   const sample = new Map();
   const meleePending = new Map(); // target id → { src, t }
   const consumedIds = new Set();  // battle ids used up by their own effect (fx `consumed`): no death particles
@@ -621,37 +318,43 @@ export async function createFieldView(host, options = {}) {
   let penHidden = true;       // the pen's figures are shown only by the pen camera (setPenHidden)
   let penList = null;
   let ownPen = null;          // the own m.private.nextEnemies (fallback composition of a scouted teammate's pen)
+  let standInList = [];       // the own m.private.standIns (0.2.0 补位): pieces of these chess draw the stand-in
+  let diyPicks = {};          // the own m.private.diy (0.2.0 自选编队): pieces of these DIY slots draw the operator
   let camBeforePen = null;    // { kind, opts } the camera the pen returns to
   let leader = null;          // { key, view, stand, area } the round leader standing on the boss field in the prep (setLeader)
-  let leaderHidden = true;    // shown only by the boss-field cameras (leaderShown)
+  let leaderHidden = true;    // shown only by the boss-field prep camera (leaderShown)
 
   const heightAt = (r, c) => (tiles ? tiles.heightAt(r, c) : 0);
   const ctx = {
     P, layers, assets, settings, fx: null, shadowTex: shadowTexture(),
+    audio: opts.audio || null,   // the prep landings' sound (UnitView.land → audio.deployCue)
     cam: () => cam, heightAt,
     animRate: () => (mode === 'battle' ? interp.rate : 1),
     timeScale: () => (mode === 'battle' ? interp.rate : 1),
-    lookupDef: (info) => (info.side === 'enemy' ? data.enemy(info.defId) : data.chess(info.defId) || data.token(info.defId)),
+    // (a chess fighting as its 补位 stand-in — `standInFor` — reads the stand-in's record: its attack interval)
+    lookupDef: (info) => (info.side === 'enemy' ? data.enemy(info.defId)
+      : (info.standInFor && data.standIn(info.defId)) || (info.diy && data.diy(info.defId, info.diy)) || data.chess(info.defId) || data.token(info.defId)),
     crowded: () => views.size > 90,
     renderer: app.renderer,
     frameNo: () => frameNo,
     impostorInterval: () => impInterval,
+    clipAllowed: () => clipAllowed,
     viewport: () => vp,
     loadLevel: () => loadLevel,
-    // the slowest a Spine model may animate (frames between skeleton updates): ~20 updates a second (render/loadlevel.js)
-    maxAnimInterval: () => maxAnimInterval(governor.periodMs),
     surfaceLayer: (row) => tiles.surfaceLayer(row),
   };
+  // the prep landings' generic sounds ahead of the first round start (audio.js warmLandings: a download would bunch the
+  // replay's first landings together); a wish kept until the first gesture / audible SFX
+  try { ctx.audio?.warmLandings?.(); } catch { /* the sound is optional */ }
   const tiles = new TileField({ ground: layers.ground, overlay: layers.overlay, props: layers.units, anim: layers.anim });
+  setupCleanup.push(() => tiles.destroy());
   const fx = new FxSystem({
     P, layers, cam: () => cam, settings, assets, heightAt, redVignette: bg.red, surfaceLayer: ctx.surfaceLayer,
     timeScale: () => ctx.timeScale(),
     loadLevel: () => loadLevel,
     fieldRect: () => (mode === 'battle' && battleMeta ? battleMeta.rect : null),
-    subProfOf: (defId) => data.chess(defId)?.subProfessionId || null,
-    // a unit the field meta announced but no frame has drawn yet (a field entered mid-battle: its hand-over events come
-    // before the first snapshot builds the views) gets its view now, so its statuses / lasting fx are not lost
-    view: (id) => views.get(id) || battleView(id),
+    subProfOf: (defId, info = null) => ((info && info.standInFor && data.standIn(defId)) || (info && info.diy && data.diy(defId, info.diy)) || data.chess(defId))?.subProfessionId || null,
+    view: (id) => views.get(id) || null,
     screenSize: size,
     fieldTop: () => {
       const R = camRect();
@@ -663,15 +366,17 @@ export async function createFieldView(host, options = {}) {
   // battle devices (crates / turrets as sim units): the official crate mesh in the 3D scene, else a Pixi box
   ctx.createBox = () => switchableBox({ board: () => board3d, pixi: () => tiles.createBox() });
   const impostors = new ImpostorAtlas(app.renderer);
+  setupCleanup.push(() => fx.destroy());
+  setupCleanup.push(() => impostors.destroy());
   ctx.impostors = impostors;
   tiles.setView(bandFor('prep'), camRect(), fieldRows('prep'));
   // the real board art of the local client (optional): wait briefly so the first frame already uses it; a late
   // arrival swaps the atlas in place
-  const artPromise = loadBoardArt(assets).then((art) => {
+  const artPromise = (opts.boardArt === false ? Promise.resolve(null) : loadBoardArt(assets)).then((art) => {
     if (art && !destroyed) { tiles.setArt(art); tiles.project(cam, true); }
     return art;
   }, () => null);
-  await withTimeout(artPromise, waitFor(2500));
+  await withTimeout(artPromise, 2500);
 
   // ---- 3D board layer (render/board3d, DESIGN §15) -----------------------------------------------------------
   let board3d = null;          // BoardScene while the 3D board is on
@@ -679,6 +384,15 @@ export async function createFieldView(host, options = {}) {
   let board3dError = null;
   // lost-context recovery: the THREE module + art pack of the last 3D board, the pending retry, failures so far
   const recover = { THREE: null, pack: null, timer: 0, tries: 0, since: 0, off: false, count: 0 };
+  /** The stage's official scene, once loaded (the procedural board shows meanwhile and when there is none). */
+  function useOfficialScene(st) {
+    if (opts.officialScenes === false) return;
+    const id = st && typeof st.id === 'string' ? st.id : '';
+    if (!id || !board3d) return;
+    loadScenePack(assets, id).then((scene) => {
+      if (scene && !destroyed && board3d && stageRec && stageRec.id === id) board3d.setScenePack(id, scene);
+    }).catch(() => {});
+  }
   function enable3d(THREE, pack) {
     if (destroyed || board3d || !THREE || !pack) return false;
     recover.THREE = THREE; recover.pack = pack;
@@ -697,8 +411,8 @@ export async function createFieldView(host, options = {}) {
       board3d = b;
       tiles.setExternal(true);
       backdrop.visible = false;
-      b.setArea(boardArea(viewKind(camKind, camOpts)));
-      if (stageRec) b.setStage(stageRec);
+      b.setArea(boardArea(viewKind(camKind, camOpts), battleMeta?.rect));
+      if (stageRec) { b.setStage(stageRec); useOfficialScene(stageRec); }
       b.setFocus(camRect());
       b.setBattleRect(mode === 'battle' && battleMeta ? battleMeta.rect : null);
       tiles.project(cam, true);
@@ -750,7 +464,7 @@ export async function createFieldView(host, options = {}) {
   }
   if (want3d) {
     const ready = Promise.all([threePromise, packPromise]).then(([THREE, pack]) => (THREE && pack ? enable3d(THREE, pack) : false), () => false);
-    await withTimeout(ready, waitFor(6000));
+    await withTimeout(ready, 6000);
   }
   // the official soft shadow sprite replaces the procedural one once loaded (may already be cached; asked again when the
   // manifest arrives late)
@@ -759,14 +473,16 @@ export async function createFieldView(host, options = {}) {
     const shadowUrl = !shadowAsked && assets.ui ? assets.ui('battle/sprite_shadow') : null;
     if (!shadowUrl) return;
     shadowAsked = true;
-    const t = fileTexture(P, shadowUrl);
-    const use = () => {
-      if (destroyed) return;
-      ctx.shadowTex = t;
-      for (const v of views.values()) if (v.shadow && !v.destroyed) v.shadow.texture = t;
-      for (const v of penViews.values()) if (v.shadow && !v.destroyed) v.shadow.texture = t;
-    };
-    if (t.baseTexture.valid) use(); else t.baseTexture.once('loaded', use);
+    try {
+      const t = P.Texture.from(shadowUrl);
+      const use = () => {
+        if (destroyed) return;
+        ctx.shadowTex = t;
+        for (const v of views.values()) if (v.shadow && !v.destroyed) v.shadow.texture = t;
+        for (const v of penViews.values()) if (v.shadow && !v.destroyed) v.shadow.texture = t;
+      };
+      if (t.baseTexture.valid) use(); else t.baseTexture.once('loaded', use);
+    } catch { /* optional */ }
   }
   loadShadow();
   ensureDamageFonts();
@@ -798,7 +514,8 @@ export async function createFieldView(host, options = {}) {
     if (k === 'pen') return { r0: 14, r1: 18, c0: 7, c1: 13 };
     // prep lights the bench (hand row 7 / temp row 8) with the field, like the official prep view
     if (camOpts.rect) { const r = normRect(camOpts.rect); return k === 'prep' ? { ...r, r0: Math.min(r.r0, GEO.HAND_ROW) } : r; }
-    if (k === 'bossPrep') return camOpts.side === 'R' ? { r0: 0, r1: 5, c0: 10, c1: 20 } : { r0: 0, r1: 5, c0: 0, c1: 10 };
+    // the boss round's prep lights the whole boss field: the pair partner's half is shown with its pieces (item 51)
+    if (k === 'bossPrep') return { ...GEO.BOSS_RECT };
     return k === 'boss' ? { ...GEO.BOSS_RECT } : k === 'unite' ? { ...GEO.UNITE_RECT } : k === 'prep' ? { r0: 7, r1: 12, c0: 0, c1: 10 } : { ...GEO.NORMAL_RECT };
   }
 
@@ -813,7 +530,10 @@ export async function createFieldView(host, options = {}) {
     // shop's HUD band (re-evaluated on resize: camOpts keep the flag)
     const vk = viewKind(kind, o); // (a 'prep' camera on the boss rows = the Final Assault prep)
     return presetCamera(k, { width: sz.width, height: sz.height, padding: o.padding || defaultPadding(k, sz) }, {
-      rect, side: o.side, half: !!o.half, shop: o.shop, fit: !!o.fit, config: stageRec?.config || null,
+      rect, side: o.side, half: !!o.half, shop: o.shop, fit: !!o.fit, margin: o.margin, headroom: o.headroom,
+      minTilePx: o.minTilePx, maxTilePx: o.maxTilePx,
+      alignTop: o.alignTop, benchInset: o.benchInset, benchHeadroom: o.benchHeadroom, benchHudTop: o.benchHudTop,
+      mobile: opts.mobileCamera?.(sz), config: stageRec?.config || null,
       hud: hudBands(vk, sz, { shop: o.shop !== false }),
     });
   }
@@ -836,19 +556,18 @@ export async function createFieldView(host, options = {}) {
     }
     camKind = nextKind;
     camOpts = { ...o };
-    userBase = null; userZ = 1; userOx = userOy = 0;
     // the field actually shown (a 'prep' camera on the boss rows is the Final Assault prep: boss field built / drawn)
     const vk = viewKind(camKind, camOpts);
     if (vk === 'prep') setPrepField(IDENTITY);
     else if (vk === 'bossPrep') setPrepField(bossPrepField(camOpts.side === 'R' ? 'R' : 'L'));
     const target = targetCamera(camKind, camOpts);
-    const band = bandFor(vk);
-    const field = fieldRows(vk);
+    const band = bandFor(vk, battleMeta?.rect);
+    const field = fieldRows(vk, battleMeta?.rect);
     const focus = camRect();
     board3d?.setFocus(focus);
     camMs = Number.isFinite(o.ms) && o.ms >= 0 ? o.ms : (vk === 'pen' || prevView === 'pen' ? PEN_CAMERA_MS : CAMERA_MS);
     if (o.instant || camMs === 0 || mode === 'idle' && !camTo) {
-      board3d?.setArea(boardArea(vk));
+      board3d?.setArea(boardArea(vk, battleMeta?.rect));
       cam = target; camFrom = camTo = null;
       tiles.setView(band, focus, field);
       setPenHidden(!penShown(vk));
@@ -860,10 +579,10 @@ export async function createFieldView(host, options = {}) {
       camT0 = performance.now();
       // keep both fields drawn (and lit) while the camera flies between them
       tiles.setView([Math.min(prevBand[0], band[0]), Math.max(prevBand[1], band[1])], focus, [Math.min(prevField[0], field[0]), Math.max(prevField[1], field[1])]);
-      board3d?.setArea(unionAreas(boardArea(prevView), boardArea(vk)));
+      board3d?.setArea(unionAreas(boardArea(prevView, battleMeta?.rect), boardArea(vk, battleMeta?.rect)));
       setPenHidden(!penShown(vk, prevView));
       setLeaderHidden(!leaderShown(vk, prevView));
-      pendingView = { band, focus, field, area: boardArea(vk), pen: penShown(vk), leader: leaderShown(vk) };
+      pendingView = { band, focus, field, area: boardArea(vk, battleMeta?.rect), pen: penShown(vk), leader: leaderShown(vk) };
     }
     return true;
   }
@@ -935,7 +654,7 @@ export async function createFieldView(host, options = {}) {
     stageRec = st;
     tiles.setStage(st);
     tiles.setBattleRect(mode === 'battle' && battleMeta ? battleMeta.rect : null);
-    if (board3d) { board3d.setStage(st); board3d.setBattleRect(mode === 'battle' && battleMeta ? battleMeta.rect : null); }
+    if (board3d) { board3d.setStage(st); board3d.setBattleRect(mode === 'battle' && battleMeta ? battleMeta.rect : null); useOfficialScene(st); }
     tiles.project(cam, true);
     // a pen laid out before the stage arrived (setPrep / a scouting board first) used the default zones and the old
     // tile heights: lay it out again on this stage
@@ -974,11 +693,20 @@ export async function createFieldView(host, options = {}) {
       const rec = data.token(piece.id);
       return { kind: 'token', side: 'ally', defId: piece.id, spine: rec?.assets?.spine || piece.id, avatar: rec?.assets?.avatar || piece.id, tier: piece.tier || 1, golden: false, dir };
     }
-    const rec = data.chess(piece.id);
+    const chess = data.chess(piece.id);
+    // 0.2.0 补位: a piece of a chess the player does not own (m.private.standIns) is its stand-in's model, in the hand,
+    // the 临时整备区 and on the board alike (the owner's recall of the official mode, 2026-10-06)
+    const si = chess && standInList.includes(chess.baseId || chess.chessId) ? data.standIn(piece.id) : null;
+    // 0.2.0 自选编队: a DIY slot the player filled is its operator, on the board and on the bench alike
+    const pick = chess && chess.isDiy ? diyPicks[chess.baseId || chess.chessId] : null;
+    const dr = pick ? data.diy(piece.id, pick) : null;
+    const rec = si || dr || chess;
     return {
       kind: 'op', side: 'ally', defId: piece.id,
       spine: rec?.assets?.spine || rec?.charId || null, avatar: rec?.assets?.avatar || rec?.charId || null,
-      tier: rec?.tier || piece.tier || 1, golden: !!(piece.golden || rec?.isGolden), dir,
+      tier: chess?.tier || piece.tier || 1, golden: !!(piece.golden || chess?.isGolden), dir,
+      ...(si ? { standInFor: si.standInFor } : null),
+      ...(dr ? { diy: { charId: pick.charId, skillIndex: pick.skillIndex ?? null, uniEquipId: pick.uniEquipId ?? null } } : null),
     };
   }
 
@@ -991,22 +719,10 @@ export async function createFieldView(host, options = {}) {
   }
   /** The tile under a canvas point in BOARD space (null off-grid; an impossible tile off the player's half). */
   function pickBoardTile(x, y) {
-    return boardTileOf(pickTile(cam, x, y, heightAt, tiles.levels));
-  }
-  /** A display tile in BOARD space (the prep field transform undone; an impossible tile off the player's half). */
-  function boardTileOf(t) {
+    const t = pickTile(cam, x, y, heightAt, tiles.levels);
     if (!t || prepXf === IDENTITY) return t;
     const b = prepXf.toBoard(t.row, t.col);
     return b ? { ...t, row: b.row, col: b.col } : { row: -1, col: -1, x: t.x, y: t.y };
-  }
-  /**
-   * Whether the board layer on screen draws display tile (row, col): the 3D island's built tiles (board3d/layout.js
-   * classifyStage `drawn`: this view's areas — the own field r6–13 × c0–10 in prep and battle — and the ring around
-   * them), else the 2D TileField's (tiles.js parseStage `drawn`: the view's rows, the dim margin included).
-   */
-  function tileDrawn(row, col) {
-    const g = board3d?.board?.grid || tiles.grid;
-    return !!g?.[row]?.[col]?.drawn;
   }
 
   function slotWorld(p) {
@@ -1038,6 +754,8 @@ export async function createFieldView(host, options = {}) {
       });
     };
     const src = ps && typeof ps === 'object' ? ps : {};
+    standInList = Array.isArray(src.standIns) ? src.standIns.filter((x) => typeof x === 'string') : [];
+    diyPicks = src.diy && typeof src.diy === 'object' ? src.diy : {};
     ownPen = Array.isArray(src.nextEnemies) ? src.nextEnemies : null;
     setPenList(ownPen);
     addList(src.hand, 'hand');
@@ -1045,6 +763,9 @@ export async function createFieldView(host, options = {}) {
     addList(src.board, 'board');
     const seen = new Set();
     const prevBoard = new Set(prepPieces.filter((p) => p.area === 'board').map((p) => p.uid));
+    // where each piece stood in the last state of this prep (nothing after a battle rebuilt the scene): a piece this state
+    // puts on a board tile it was not on lands (PR #416)
+    const prevAt = new Map(prepPieces.map((p) => [p.uid, p]));
     // merges since the last state (render/promote.js): new elite uid → where its consumed copies stood (their views
     // still exist until the sweep below) — the elite gets the promotion cue instead of the deploy flash
     const promoFrom = new Map();
@@ -1065,7 +786,8 @@ export async function createFieldView(host, options = {}) {
       const key = 'p:' + e.uid;
       e.key = key;
       const info = pieceInfo(e.piece, e.area);
-      const sig = `${info.kind}|${info.defId}|${info.golden ? 1 : 0}`;
+      // (the model is part of it: a piece whose body changes — a merge, an own 补位 / 自选 setting arriving — is rebuilt)
+      const sig = `${info.kind}|${info.defId}|${info.golden ? 1 : 0}|${info.spine || ''}`;
       let v = views.get(key);
       if (v && v._sig !== sig) { dropView(key); v = null; }
       const w = slotWorld(e);
@@ -1078,13 +800,18 @@ export async function createFieldView(host, options = {}) {
         v.setWorld(w.x, w.y, w.z);
         views.set(key, v);
         if (promoFrom.has(e.uid)) {
-          // a merge's elite: on the tile of the deployed copy it replaced, or on its bench slot
-          if (e.area === 'board') v.onDeploy?.();
+          // a merge's elite: on the tile of the deployed copy it replaced, or on its bench slot — it lands there (PR #416)
+          landPiece(v, 'merge');
           fx.promote(v, promoFrom.get(e.uid).filter((f) => Math.abs(f.x - w.x) + Math.abs(f.y - w.y) > 1e-3));
           promotions.push({ uid: e.uid, id: e.piece.id, area: e.area, row: e.row ?? null, col: e.col ?? null, idx: e.idx ?? null, copies: promoFrom.get(e.uid).length });
           if (promotions.length > 20) promotions.shift();
-        } else if (e.area === 'board' && prevBoard.size && !prevBoard.has(e.uid)) { v.onDeploy?.(); fx.deploy(v); }
-        else if (before.length && (e.area === 'hand' || e.area === 'temp') && !before.some((g) => g.uid === e.uid)) fx.deploy(v);
+        } else if (e.area === 'board' && prevBoard.size && !prevBoard.has(e.uid)) { landPiece(v, 'board'); fx.deploy(v); }
+        else if (before.length && (e.area === 'hand' || e.area === 'temp') && !before.some((g) => g.uid === e.uid)) {
+          // an operator that just arrived on the bench — bought, a reward, a grant — lands there (PR #416); a summon that comes
+          // with its owner's placement does not, nor does an item
+          if (e.piece.kind === 'chess') landPiece(v, 'buy');
+          fx.deploy(v);
+        }
       } else {
         const prevHome = v._home;
         const moved = !prevHome || prevHome.x !== w.x || prevHome.y !== w.y || prevHome.z !== w.z;
@@ -1096,8 +823,13 @@ export async function createFieldView(host, options = {}) {
           pending.delete(key);
           if (moved || Math.abs(v.x - w.x) + Math.abs(v.y - w.y) > 1e-3) v._tween = { fx: v.x, fy: v.y, fz: v.z, tx: w.x, ty: w.y, tz: w.z, t: 0 };
           v.lift = 0;
-          if (e.area === 'board' && !prevBoard.has(e.uid) && v.onDeploy) { v.onDeploy(); fx.deploy(v); }
+          if (e.area === 'board' && !prevBoard.has(e.uid) && v.onDeploy) fx.deploy(v);
         }
+        // a piece this state puts on a board tile it was not on — from the bench, from another tile, a swap — lands (PR #416),
+        // also while its drop is still held on that tile (the direction step pins it there, so `moved` is false); turned in
+        // place, retreated or moved on the bench it does not
+        const was = prevAt.get(e.uid);
+        if (was && e.area === 'board' && (was.area !== 'board' || was.row !== e.row || was.col !== e.col) && !(dragState && dragState.key === key)) landPiece(v, 'board');
       }
       v._home = w;
       v.dimmed = false;
@@ -1109,10 +841,94 @@ export async function createFieldView(host, options = {}) {
       if (e.area === 'board' && info.dir && !held.has(e.uid) && typeof v.setDir === 'function') v.setDir(info.dir);
     }
     for (const k of [...views.keys()]) if (String(k).startsWith('p:') && !seen.has(Number(String(k).slice(2)))) dropView(k);
+    // The 外勤医疗 reserve medic is visible before battle and can be inspected, but is not a movable board piece.
+    // Keep its original board-space record for the detail card/range; only the rendered view is transformed to the
+    // displayed boss half. The partner's units already use field coordinates and are not own prep map characters.
+    prepMapChars = Array.isArray(src.prepMapChars) ? src.prepMapChars.map((u) => {
+      if (!u || !Number.isInteger(u.uid) || !Number.isInteger(u.x) || !Number.isInteger(u.y)) return null;
+      const p = prepXf.toDisp(u.y, u.x);
+      const dir = prepXf.dirToDisp(u.dir);
+      return { unit: u, display: { ...u, x: p.col, y: p.row, dir, facing: dir === 'LEFT' ? -1 : 1 } };
+    }).filter(Boolean) : [];
+    const mate = prepXf.kind === 'bossPrep' && src.bossMate && Array.isArray(src.bossMate.units) ? src.bossMate.units : [];
+    syncMates([...prepMapChars.map((e) => e.display), ...mate]);
     prepPieces = list.filter((e) => e.key && views.has(e.key));
     if (dragState && !views.has(dragState.key)) { drag.reset(); endDragVisual(false); }
     holdScene(false); // the prep pieces reference their models now (a battle's hold ends here)
     return true;
+  }
+
+  /** Land a prep piece (UnitView.land, PR #416) and note it (`landings`, dev / tests); false when the view refused. */
+  function landPiece(v, why) {
+    if (!v || typeof v.land !== 'function' || !v.land()) return false;
+    landings.push({ uid: v.uid ?? null, why, at: performance.now() });
+    if (landings.length > 40) landings.shift();
+    return true;
+  }
+
+  /**
+   * The round start's replay (see the header; PR #416): the listed pieces of the own board land one after another in the
+   * order given (deployment order, ui/gameLogic deployOrder), each turn DEPLOY_REPLAY_MS after the one before (a chain of
+   * timeouts, so a busy frame never squeezes two together). A piece gone, rebuilt, not idle or already landing when its
+   * turn comes is passed over (UnitView.land), and none lands while the tab is hidden (no frame shows it; the suspended
+   * audio would play the sound on return). A new sequence replaces one still running; prep mode ending and destroy()
+   * cancel it.
+   * @param {number[]} uids
+   * @param {number} [gap] ms between two pieces
+   * @returns {number} how many of `uids` the board holds now — 0 outside prep mode or before setPrep built them
+   */
+  function replayDeploys(uids, gap = DEPLOY_REPLAY_MS) {
+    if (destroyed || mode !== 'prep' || !Array.isArray(uids)) return 0;
+    const step = Number.isFinite(gap) && gap >= 0 ? gap : DEPLOY_REPLAY_MS;
+    const queue = [];
+    for (const uid of uids) {
+      const v = Number.isInteger(uid) ? views.get('p:' + uid) : null;
+      if (v && !v.destroyed && typeof v.land === 'function' && !queue.some((q) => q.v === v)) queue.push({ uid, v });
+    }
+    if (!queue.length) return 0;
+    cancelReplay();
+    let i = 0;
+    const turn = () => {
+      replayTimer = 0;
+      if (destroyed || mode !== 'prep') return;
+      const { uid, v } = queue[i++];
+      if (!globalThis.document?.hidden && views.get('p:' + uid) === v) landPiece(v, 'round');
+      if (i < queue.length) replayTimer = setTimeout(turn, step);
+    };
+    replayTimer = setTimeout(turn, 0);
+    return queue.length;
+  }
+
+  function cancelReplay() {
+    if (replayTimer) clearTimeout(replayTimer);
+    replayTimer = 0;
+  }
+
+  /**
+   * The reserve medic and a boss pair's partner pieces: read-only 'm:<uid>' views. These are not movable prep pieces;
+   * only the owner's prepMapChars may be picked for inspection. Rebuild when body, tile or facing changes.
+   */
+  function syncMates(units) {
+    const keep = new Set();
+    for (const u of units) {
+      const info = u && Number.isInteger(u.uid) ? renderInfo({ ...u, id: `m:${u.uid}` }) : null;
+      if (!info) continue;
+      keep.add(info.id);
+      const sig = `${info.defId}|${info.golden ? 1 : 0}|${info.spine || ''}|${info.x},${info.y}|${info.dir || ''}|${(info.items || []).join(',')}`;
+      let v = views.get(info.id);
+      if (v && v._sig !== sig) { dropView(info.id); v = null; }
+      if (v) continue;
+      v = new UnitView(ctx, { ...info, maxHp: 1 }, { prep: true });
+      v._sig = sig;
+      v.setWorld(info.x, info.y, heightAt(info.y, info.x));
+      if (info.dir && typeof v.setDir === 'function') v.setDir(info.dir);
+      v._showFacing = true;
+      if (v.setItems && Array.isArray(info.items) && info.items.length) {
+        v.setItems(info.items.map((it) => { const r = data.item(it); return assets.itemIcon ? assets.itemIcon(r ? { trapId: r.trapId, iconId: r.iconId } : it) : null; }));
+      }
+      views.set(info.id, v);
+    }
+    for (const k of [...views.keys()]) if (String(k).startsWith('m:') && !keep.has(k)) dropView(k);
   }
 
   /**
@@ -1132,6 +948,7 @@ export async function createFieldView(host, options = {}) {
   function enterPrepMode() {
     mode = 'prep';
     held.clear();
+    cancelReplay();
     clearViews();
     infos.clear();
     gone.clear();
@@ -1272,11 +1089,6 @@ export async function createFieldView(host, options = {}) {
   }
 
   /** The prep piece under a canvas point: the one on the tile under it (render/pick.js; board, bench and temp rows). */
-  /** A press of a finger is being resolved (render/pick.js pickBody: an empty tile picks the body drawn over it). */
-  let touchPress = false;
-  /** The standing units as pickBody candidates (their drawn bodies). */
-  const drawnBodies = (units) => units.filter((u) => u.drawn).map((u) => ({ ...u, body: u.drawn }));
-
   function pieceAt(x, y) {
     if (mode !== 'prep') return null;
     const units = [];
@@ -1284,9 +1096,20 @@ export async function createFieldView(host, options = {}) {
       const u = pickUnitOf(views.get(e.key));
       if (u) { u.entry = e; units.push(u); }
     }
-    const best = pickOnTile(units, groundTile(x, y))?.entry || (touchPress ? pickBody(drawnBodies(units), x, y)?.entry : null);
+    const best = pickOnTile(units, groundTile(x, y))?.entry;
     if (!best) return null;
     return { uid: best.uid, kind: best.piece.kind, id: best.piece.id, area: best.area, idx: best.idx, row: best.row, col: best.col, piece: best.piece, draggable: true };
+  }
+
+  /** The owner's read-only preparation map character under a canvas point (never a drag target). */
+  function mapCharAt(x, y) {
+    if (mode !== 'prep') return null;
+    const units = [];
+    for (const e of prepMapChars) {
+      const u = pickUnitOf(views.get(`m:${e.unit.uid}`));
+      if (u) { u.unit = e.unit; units.push(u); }
+    }
+    return pickOnTile(units, groundTile(x, y))?.unit || null;
   }
 
   const drag = createDragController({
@@ -1438,13 +1261,14 @@ export async function createFieldView(host, options = {}) {
   function battleUnitAt(x, y) {
     const units = [];
     for (const v of views.values()) {
+      if (v._inventory) continue;
       if (!v.info || v.info.kind === 'device') continue;
       const enemy = v.info.side !== 'ally';
       // a huge boss: its hit area (data/enemies.json `hitArea`, the sim's hit rectangle) is pickable too
       const u = pickUnitOf(v, enemy, enemy ? data.enemy(v.info.defId)?.hitArea ?? null : null);
       if (u) units.push(u);
     }
-    const hit = pickBattle(units, groundTile(x, y), x, y) || (touchPress ? pickBody(drawnBodies(units), x, y) : null);
+    const hit = pickBattle(units, groundTile(x, y), x, y);
     return hit ? hit.ref : null;
   }
 
@@ -1456,137 +1280,47 @@ export async function createFieldView(host, options = {}) {
    * PREP the board draws the boss field's own rows (stage 2–5 as board 9–12), and the screen maps board → stage once more
    * with `gameLogic.fieldTile` — reporting the DRAWN tile here would be converted twice and explain the wrong tile
    * (review on #185).
-   * A BATTLE field (a fight, a teammate's scouted board, a spectated one, a 联防 field) draws the stage's own rows and
-   * reports the drawn tile: `prepXf` is not reset when the camera leaves the boss-field prep (setCamera only sets it for
-   * 'prep' / 'bossPrep'), so a boss round's battle — or a teammate's boss field scouted from the own boss-field prep —
-   * would otherwise convert a stage tile as if it were a prep board tile.
-   * A mouse explains the tile on press; a finger at its release, when it stayed a tap (`touchTap` below): the first finger
-   * of a pinch and a one-finger swipe explain nothing.
-   * Only a tile the board on screen DRAWS explains itself (`tileDrawn`, checked on the drawn tile before the board-space
-   * conversion): the picking grid is the whole 19×21 stage, and every stage has a 传送入口 at (8,11), right of the temp
-   * row — on the 3D board that is the empty background beside the island, where a press opened a card about nothing
-   * visible (review of this fork's merge of #185; the teammate's half, cols 11–20, likewise). The 2D board draws those
-   * tiles as its dim margin, so there they still explain themselves.
    */
   function emitTileClick(ev, e) {
-    const d = groundTile(ev.x, ev.y);
-    if (!d || !tileDrawn(d.row, d.col)) return;          // off the grid, or a tile this view does not draw
-    const t = mode === 'battle' ? d : boardTileOf(d);
+    const t = pickBoardTile(ev.x, ev.y);
     if (!t || !(t.row >= 0) || !(t.col >= 0)) return;    // outside the board this field draws
     emit('tileClick', { row: t.row, col: t.col, button: e.button, clientX: e.clientX, clientY: e.clientY });
-  }
-
-  // ---- touch: pinch zoom / two-finger pan (user report: on a phone the pieces were too small to tap) -------------
-  // One finger keeps every existing gesture (tap, long press, drag). A second finger on the field starts a pinch of that
-  // pair of fingers: an ongoing piece drag is cancelled (the piece goes home); a third finger is ignored, the pinch ends
-  // when one of its two lifts, and no finger counts again — no new pinch either — until all have lifted. Zoom
-  // USER_ZOOM_MAX× at most, never below the camera's own framing; the pan may pull the board up to USER_PAN_SLACK of
-  // the viewport past its framing (out from under the HUD). In battle a touch picks a unit on release (a tap), so the
-  // first finger of a pinch selects nothing; a finger on the empty prep ground explains its tile at release the same way
-  // (the prep press itself stays drag-first: a piece, the boss leader or a pen figure under the finger takes it at once).
-  const touches = new Map();  // pointerId → canvas point, fingers on the field
-  let pinch = null;           // { a, b (its two pointerIds), d0, mx0, my0, z0, ox0, oy0 } while both are down
-  let gestured = false;       // a pinch happened: ignore the fingers until all have lifted
-  // a touch waiting for its release, in the mode it went down in: a battle press (battlePress — a unit, the leader / a pen
-  // figure, else the tile) or a press on the empty prep ground (emitTileClick)
-  let touchTap = null;        // { pointerId, x, y, mode, e }
-  const holdTap = (e, ev) => { touchTap = { pointerId: e.pointerId, x: ev.x, y: ev.y, mode, e: { button: e.button, clientX: e.clientX, clientY: e.clientY } }; };
-
-  function userCam() {
-    const c = userBase.clone();
-    c.scale = userBase.scale * userZ;
-    c.cx = userZ * userBase.cx + userOx;
-    c.cy = userZ * userBase.cy + userOy;
-    return c.update();
-  }
-
-  /** Distance and midpoint of the pinch's two fingers (pointerIds `a`, `b`). */
-  function fingers(a, b) {
-    const p = touches.get(a), q = touches.get(b);
-    return { d: Math.max(1, Math.hypot(q.x - p.x, q.y - p.y)), mx: (p.x + q.x) / 2, my: (p.y + q.y) / 2 };
-  }
-
-  function startPinch(a, b) {
-    drag.pointerCancel(null);  // a piece being pressed / dragged goes home (pieceDragEnd → endDragVisual)
-    touchTap = null;           // the first finger was no tap: it picks nothing and explains no tile
-    if (camTo) stepCamera(camT0 + camMs + 1); // a camera still flying lands first
-    if (!userBase) { userBase = cam; userZ = 1; userOx = userOy = 0; }
-    const f = fingers(a, b);
-    pinch = { a, b, d0: f.d, mx0: f.mx, my0: f.my, z0: userZ, ox0: userOx, oy0: userOy };
-    gestured = true;
-  }
-
-  function movePinch() {
-    if (!pinch || !userBase || camTo || !touches.has(pinch.a) || !touches.has(pinch.b)) return;
-    const f = fingers(pinch.a, pinch.b);
-    const W = vp.width, H = vp.height;
-    const z = Math.max(1, Math.min(USER_ZOOM_MAX, pinch.z0 * f.d / pinch.d0));
-    // the base-camera point under the fingers' first midpoint stays under their midpoint
-    const sx = (pinch.mx0 - pinch.ox0) / pinch.z0, sy = (pinch.my0 - pinch.oy0) / pinch.z0;
-    const slX = W * USER_PAN_SLACK, slY = H * USER_PAN_SLACK;
-    userZ = z;
-    userOx = Math.max(W - z * W - slX, Math.min(slX, f.mx - z * sx));
-    userOy = Math.max(H - z * H - slY, Math.min(slY, f.my - z * sy));
-    cam = userCam();
-  }
-
-  /**
-   * A press on the battle view (a mouse's press, a finger's tap at its release): a unit opens its card, else a scouting
-   * board's leader or pen figure under the point; nothing there → the ground itself explains its tile (emitTileClick).
-   */
-  function battlePress(ev, e) {
-    const v = battleUnitAt(ev.x, ev.y);
-    if (v) {
-      const info = infos.get(v.id) || v.info;
-      const payload = { unitId: v.id, uid: info?.uid ?? null, unit: info, button: e.button, detail: e.button === 2, clientX: e.clientX, clientY: e.clientY };
-      emit('pieceClick', payload);
-      if (e.button === 2) emit('pieceDetail', payload);
-      return;
-    }
-    // a scouting board: the round's leader on its boss field, the pen's figures; nothing there → the ground itself
-    const pv = (leader ? leaderAt(ev.x, ev.y) : null) || (penViews.size ? penUnitAt(ev.x, ev.y) : null);
-    if (pv) emitPenClick(pv, e);
-    else emitTileClick(ev, e);
   }
 
   const onPointerDown = (e) => {
     if (destroyed) return;
     const ev = evPayload(e);
-    if (e.pointerType === 'touch') {
-      touches.set(e.pointerId, { x: ev.x, y: ev.y });
-      if (gestured) return;          // a pinch ran: no finger counts (no new pinch) until all have lifted
-      if (touches.size >= 2) {
-        const [a, b] = touches.keys(); // the finger already down and this one
-        startPinch(a, b);
+    if (mode === 'battle') {
+      const v = battleUnitAt(ev.x, ev.y);
+      if (v) {
+        const info = infos.get(v.id) || v.info;
+        const payload = { unitId: v.id, uid: info?.uid ?? null, unit: info, button: e.button, detail: e.button === 2, clientX: e.clientX, clientY: e.clientY };
+        emit('pieceClick', payload);
+        if (e.button === 2) emit('pieceDetail', payload);
         return;
       }
-    }
-    if (mode === 'battle') {
-      if (e.pointerType === 'touch') { holdTap(e, ev); return; }
-      battlePress(ev, e);
+      const pv = penViews.size ? penUnitAt(ev.x, ev.y) : null;
+      if (pv) emitPenClick(pv, e);
+      else emitTileClick(ev, e);
       return;
     }
-    touchPress = e.pointerType === 'touch';
-    let pressed;
-    try { pressed = drag.pointerDown(ev); } finally { touchPress = false; }
-    if (pressed) { try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } return; }
+    if (drag.pointerDown(ev)) { try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } return; }
+    const mapChar = mapCharAt(ev.x, ev.y);
+    if (mapChar) {
+      emit('pieceClick', { unit: mapChar, unitId: null, uid: mapChar.uid, prepMapChar: true,
+        button: e.button, detail: e.button === 2, clientX: e.clientX, clientY: e.clientY });
+      return;
+    }
     if (mode === 'prep') { const lv = leaderAt(ev.x, ev.y); if (lv) { emitPenClick(lv, e); return; } }
     if (penViews.size && mode === 'prep') {
       const pv = penUnitAt(ev.x, ev.y);
       if (pv) { emitPenClick(pv, e); return; }
     }
-    // nothing took the press: the ground itself — a finger explains the tile at its release, if it stays a tap
-    if (e.pointerType === 'touch') holdTap(e, ev);
-    else emitTileClick(ev, e);
+    emitTileClick(ev, e);
   };
   const onPointerMove = (e) => {
     if (destroyed) return;
     const ev = evPayload(e);
-    if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
-      touches.set(e.pointerId, { x: ev.x, y: ev.y });
-      if (gestured) { if (pinch && (e.pointerId === pinch.a || e.pointerId === pinch.b)) movePinch(); return; }
-      if (touchTap && touchTap.pointerId === e.pointerId && Math.hypot(ev.x - touchTap.x, ev.y - touchTap.y) > TAP_SLOP_PX) touchTap = null;
-    }
     if (mode === 'battle') {
       if (e.pointerType === 'touch') return;
       const v = battleUnitAt(ev.x, ev.y);
@@ -1599,40 +1333,8 @@ export async function createFieldView(host, options = {}) {
     }
     drag.pointerMove(ev);
   };
-  /** A finger lifted (or was cancelled): true when it belonged to a pinch and must not reach the other handlers. */
-  function liftTouch(e) {
-    if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return false;
-    touches.delete(e.pointerId);
-    if (pinch && (e.pointerId === pinch.a || e.pointerId === pinch.b)) pinch = null;
-    const was = gestured;
-    if (!touches.size) gestured = false;
-    return was;
-  }
-  const onPointerUp = (e) => {
-    if (!destroyed && !liftTouch(e)) {
-      const up = evPayload(e);
-      const t = touchTap && touchTap.pointerId === e.pointerId ? touchTap : null;
-      if (t) touchTap = null;
-      // a tap: released within TAP_SLOP_PX of where it went down (the last move may not have come as a pointermove), in
-      // the mode it went down in (a field that switched to / from battle meanwhile takes no stale tap)
-      const tap = !!t && t.mode === mode && Math.hypot(up.x - t.x, up.y - t.y) <= TAP_SLOP_PX;
-      if (mode === 'battle') {
-        if (tap) {
-          touchPress = true;
-          try { battlePress({ x: t.x, y: t.y }, t.e); } finally { touchPress = false; }
-        }
-      } else {
-        drag.pointerUp(up);
-        if (tap) emitTileClick({ x: t.x, y: t.y }, t.e);   // the empty prep ground (nothing took the press)
-      }
-    }
-    try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-  };
-  const onPointerCancel = (e) => {
-    if (destroyed) return;
-    if (touchTap && touchTap.pointerId === e.pointerId) touchTap = null;
-    if (!liftTouch(e)) drag.pointerCancel(evPayload(e));
-  };
+  const onPointerUp = (e) => { if (!destroyed && mode !== 'battle') drag.pointerUp(evPayload(e)); try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ } };
+  const onPointerCancel = (e) => { if (!destroyed) drag.pointerCancel(evPayload(e)); };
   const onPointerLeave = (e) => { if (!destroyed && !drag.dragging) drag.pointerLeave(evPayload(e)); if (hoverUnit) { hoverUnit = null; emit('pieceHover', { uid: null, unitId: null }); } };
   const onContext = (e) => e.preventDefault();
   // A finger is handled through the pointer events above only. The compatibility mouse events + click of a tap come
@@ -1676,9 +1378,11 @@ export async function createFieldView(host, options = {}) {
     holdScene(true); // before the prep views go: the cache is never "quiet" across the switch
     drag.reset();
     endDragVisual(false);
+    cancelReplay();  // the round start's replay is a prep-board thing: none of it reaches a battle (or a scouted board)
     clearViews();
     if (prepPieces.length) promoBase = prepPieces;
     prepPieces = [];
+    prepMapChars = [];
     infos.clear();
     gone.clear();
     interp.reset();
@@ -1695,9 +1399,9 @@ export async function createFieldView(host, options = {}) {
     // own preview, bounties excluded); a real battle empties the pen (the enemies are about to spawn)
     if (battleMeta.prep) setPenList(Array.isArray(meta.nextEnemies) ? meta.nextEnemies : (ownPen || []).filter((x) => x && x.source !== 'bounty' && x.source !== 'effect'));
     else setPenList(null);
-    if (meta.stageId && (!stageRec || stageRec.id !== meta.stageId)) {
+    if (meta.stageId && (!stageRec || stageRec.id !== meta.stageId || isTrioUnite(meta.kind, rect) !== !!stageRec.trioUnite)) {
       const st = data.stage(meta.stageId);
-      if (st) setStage(st);
+      if (st) setStage(isTrioUnite(meta.kind, rect) ? trioUniteStage(st) : st);
     }
     tiles.setBattleRect(rect);
     board3d?.setBattleRect(rect);
@@ -1741,22 +1445,18 @@ export async function createFieldView(host, options = {}) {
     return v;
   }
 
-  function pushSnapshot(snap) {
+  function pushSnapshot(snap, options) {
     if (destroyed || mode !== 'battle') return false;
     if (battleMeta?.fieldId && snap && snap.fieldId && snap.fieldId !== battleMeta.fieldId) return false;
-    return interp.push(snap, performance.now() / 1000);
+    return interp.push(snap, performance.now() / 1000, options);
   }
 
-  /** Tuples pushed `quiet` (a replay): drawn, never heard but the spawns (heardEvents). Weak: drawn ones just go. */
-  const quietEv = new WeakSet();
   function pushEvents(ev) {
     if (destroyed || mode !== 'battle') return 0;
     let list = ev, t;
     if (ev && !Array.isArray(ev) && typeof ev === 'object') {
       if (battleMeta?.fieldId && ev.fieldId && ev.fieldId !== battleMeta.fieldId) return 0;
       list = ev.ev; t = frameTime(ev);
-      // a replay (screens/game.js: a field entered late) — drawn like any frame, heard only for its spawns (heardEvents)
-      if (ev.quiet === true && Array.isArray(list)) for (const e of list) if (Array.isArray(e)) quietEv.add(e);
     }
     if (!Array.isArray(list)) return 0;
     // spawn infos are needed as soon as possible (a snapshot may reference the unit first); a placeholder view made
@@ -1769,44 +1469,30 @@ export async function createFieldView(host, options = {}) {
     return interp.pushEvents(list, performance.now() / 1000, t);
   }
 
-  // attack wind-ups: an 'atk' still queued in the buffer (up to the scan window ahead of the render clock, which trails
-  // the newest snapshot by LOOK_AHEAD game s) starts its Spine clip early enough for the strike frame to land when the
-  // event is rendered — asked every frame until a swing is started for that very attack (the event's time is its
-  // identity). Every unit also learns how far ahead its next attack is (Infinity: none in the look-ahead) and how far the
-  // look-ahead reaches (newest − render clock): an attack loop ends when no attack follows (render/spine.js).
+  // attack wind-ups: an 'atk' still queued in the buffer starts its Spine clip early enough for the strike frame to
+  // land when the event is rendered (the look-ahead is the interpolation delay, ~0.2 game s)
   function windUpAttacks(renderT) {
     upcomingT = renderT;
-    nextAtk.clear();
-    interp.forEachUpcoming(renderT, renderT + Math.max(1.5, LOOK_AHEAD + 0.5), onUpcoming);
-    const horizon = Number.isFinite(interp.newestT) ? Math.max(0, interp.newestT - renderT) : 0;
-    for (const [id, v] of views) if (v.setUpcoming) v.setUpcoming(nextAtk.get(id) ?? Infinity, horizon);
+    interp.forEachUpcoming(renderT, renderT + 1.5, onUpcoming);
   }
   let upcomingT = 0;
-  const nextAtk = new Map(); // unit id → game s to its next queued attack
   function onUpcoming(e, t) {
-    if (e[0] !== 'atk' || CHAIN_KINDS.has(e[3])) return;
-    if (!nextAtk.has(e[1])) nextAtk.set(e[1], t - upcomingT);
-    if (woundUp.has(e)) return;
+    if (e[0] !== 'atk' || woundUp.has(e) || CHAIN_KINDS.has(e[3])) return;
     const v = views.get(e[1]);
     if (!v || !v.windUp) return;
-    if (v.windUp(t - upcomingT, views.get(e[2]) || null, t, e[3])) woundUp.add(e);
+    if (v.windUp(t - upcomingT, e[3])) woundUp.add(e);
   }
 
-  const EVS = [], EVT = [], HEARD = [];
+  const EVS = [];
   /** State events handed out more than 1.5 game s late (a stall, a hidden tab, a field entered late) → how late. */
   const LATE = new Map();
   function processEvents(renderT) {
-    EVS.length = 0; EVT.length = 0;
+    EVS.length = 0;
     LATE.clear();
-    interp.takeEvents(renderT, EVS, renderT - 1.5, EVT, LATE);
+    interp.takeEvents(renderT, EVS, renderT - 1.5, LATE);
     for (const e of EVS) {
       try { handleEvent(e, renderT); } catch (err) { if (!handleEvent.warned) { handleEvent.warned = true; console.warn('[render] event failed', e, err); } }
     }
-    // the events as they are shown, for the sound (screens/game.js → audio): stale ones and a replay (a field entered
-    // mid-battle replays its state events, pushed quiet) are silent, spawns always pass (the unit map) — heardEvents
-    if (!EVS.length || !listeners.get('battleEvents')?.size) return;
-    heardEvents(EVS, EVT, renderT, quietEv, HEARD);
-    if (HEARD.length) emit('battleEvents', HEARD.slice());
   }
 
   function handleEvent(e, now) {
@@ -1816,13 +1502,15 @@ export async function createFieldView(host, options = {}) {
         if (!info) break;
         gone.delete(info.id);
         const v = battleView(info.id);
-        if (v && info.side === 'enemy' && !e[2] && renderT0Battle != null && now - renderT0Battle > 0.2) fx.ring(info.x, info.y, 0, 0.1, 0.7, 0xff5a4a, 0.4);
+        if (v && info.side === 'enemy' && renderT0Battle != null && now - renderT0Battle > 0.2) fx.ring(info.x, info.y, 0, 0.1, 0.7, 0xff5a4a, 0.4);
         break;
       }
       case 'deploy': {
         gone.delete(e[1]);
+        const info = infos.get(e[1]);
+        if (info && typeof e[2] === 'string') info.dir = e[2];
         const v = battleView(e[1]);
-        if (v) { v.onDeploy?.(); if (v.info?.kind !== 'device') fx.deploy(v); }
+        if (v) { if (typeof e[2] === 'string') v.setDir?.(e[2]); v.onDeploy?.(); if (v.info?.kind !== 'device') fx.deploy(v); }
         break;
       }
       case 'atk': {
@@ -1841,11 +1529,13 @@ export async function createFieldView(host, options = {}) {
         const m = meleePending.get(v.id);
         let src = null;
         if (m && now - m.t < 0.35) { src = m.src; meleePending.delete(v.id); fx._slashAt = src.id; }
-        fx.damage(v, amt, e[3], src);
+        fx.damage(v, amt, e[3], src, e[4]);
         break;
       }
       case 'heal': { const v = views.get(e[1]); if (v) fx.heal(v, Number(e[2]) || 0); break; }
-      case 'skill': { const v = views.get(e[1]) || battleView(e[1]); if (v) { v.setSkill?.(!!e[2]); fx.skill(v, !!e[2]); } break; }
+      case 'skill': { const v = views.get(e[1]); if (v) { v.setSkill?.(!!e[2]); fx.skill(v, !!e[2]); } break; }
+      // the skill slot an enemy ability casts (PR #275): the view swaps to that slot's clip (a multi-skill boss's Skill_01..04)
+      case 'cast': { const v = views.get(e[1]); if (v) v.setSkillSlot?.(e[2] | 0); break; }
       case 'die': {
         const v = views.get(e[1]);
         const used = consumedIds.delete(e[1]);
@@ -1862,7 +1552,7 @@ export async function createFieldView(host, options = {}) {
         fx.leak();
         break;
       }
-      case 'status': { const v = views.get(e[1]) || battleView(e[1]); if (v) { v.onStatus?.(e[2], !!e[3]); fx.status(v, e[2], !!e[3], e[4] === 'late'); } break; }
+      case 'status': { const v = views.get(e[1]); if (v) v.onStatus?.(e[2], !!e[3]); break; }
       case 'fx': {
         if (e[4] && typeof e[4] === 'object' && e[4].consumed && e[4].id != null) {
           consumedIds.add(e[4].id);
@@ -1894,7 +1584,9 @@ export async function createFieldView(host, options = {}) {
         if (cur && now - cur.t < 0.8) { cur.n += n; break; }
         layerPops.set(k, { t: now, n });
         const url = assets.bondIcon ? assets.bondIcon(bondId) : null;
-        fx.pop(url ? fileTexture(P, url) : null, `+${n}`, 0xffffff, layerPops.size);
+        let tex = null;
+        if (url) { try { tex = P.Texture.from(url); } catch { tex = null; } }
+        fx.pop(tex, `+${n}`, 0xffffff, layerPops.size);
         break;
       }
       case 'bounty': {
@@ -1931,8 +1623,7 @@ export async function createFieldView(host, options = {}) {
       }
       if (!v) v = battleView(id) || createUnknown(id, s);
       if (!v) continue;
-      // (first drawn while the battle picture is paused: shown at once — a fade needs the frozen clock)
-      if (!v._seen) { v._seen = true; v.fadeIn = battlePaused ? 1 : 0; }
+      if (!v._seen) { v._seen = true; v.fadeIn = 0; }
       if (v.alive || v.info?.kind === 'device') v.sync(s, renderT);
       else if (v.dying > 0) { v.x = s.x; v.y = s.y; }
       else if (s.anim !== ANIM.DIE && s.hp > 0) { v.revive?.(); v.sync(s, renderT); }
@@ -1961,6 +1652,7 @@ export async function createFieldView(host, options = {}) {
     }
     const now = performance.now();
     for (const [id, v] of views) {
+      if (v._inventory) continue;
       if (v.down && v._downSeq !== downSeq) v.setDown(null, renderT);
       if (sample.has(id) || v.down) continue;
       if (v._seen) {
@@ -1988,22 +1680,27 @@ export async function createFieldView(host, options = {}) {
   let impInterval = 0;
   let vp = { width: s0.width, height: s0.height };   // viewport (CSS px) of this frame: unit culling
   let culledCount = 0;
-  // Adaptive load level 0–3 (render/loadlevel.js): measured against the display's own frame period — estimated from
-  // the animation-frame timestamps (the ticker's elapsedMS, vsync aligned; the callback start time jitters) — or a
-  // frame's own CPU time.
+  // Adaptive load level 0–3: a device that cannot hold the frame rate with the current work switches crowds to
+  // impostors earlier and animates small / far units at a lower rate (units.js); it steps back after a calm spell.
   let loadLevel = 0;
-  const governor = createLoadGovernor({ onChange: (lvl) => { loadLevel = lvl; impInterval = pickImpostorInterval(); } });
+  const adaptiveLoad = createAdaptiveLoad();
   function adaptLoad(dtRaw) {
-    if (!(dtRaw > 0) || dtRaw > 0.25 || globalThis.document?.hidden) return;
-    const tickMs = Number(app.ticker?.elapsedMS);
-    governor.step(dtRaw, tickMs > 0 ? tickMs : dtRaw * 1000, frameMs, cpuMs, views.size + penViews.size > 8);
+    const busy = views.size + penViews.size > 8;
+    const next = adaptiveLoad.sample(dtRaw, busy, !!globalThis.document?.hidden, settings.frameRate === 30 ? 30 : 60);
+    frameMs = adaptiveLoad.frameMs;
+    if (next !== loadLevel) { loadLevel = next; impInterval = pickImpostorInterval(); }
   }
   // Crowded fields render skeletons through staggered RenderTexture impostors (units.js): the interval grows with
   // the number of Spine units so the per-frame vertex work stays roughly constant (hysteresis: re-evaluated
   // every 30 frames). Prep and ordinary fields keep full-rate direct rendering.
-  // Spine clipping masks stay on: the battle chibis blink by switching the eye-cut clip of their eyes (32 operators),
-  // and without it the eyeballs showed over the closed eyelids (user report 2026-10). Clipped skeletons draw through
-  // the impostor atlas's clip pages (units.js), which keeps their stencil passes out of the main pass.
+  // Spine clipping masks (only eyeball clips on the current roster, invisible at chibi scale) each cost a stencil
+  // render-pass break (~2–5 ms of GPU on tiled GPUs): kept only for a lone clipped skeleton at high quality
+  let clipAllowed = true;
+  function pickClipping() {
+    let n = 0;
+    for (const v of views.values()) if (v.actor && v.actor.clipped && v.alive !== false) n++;
+    return settings.quality === 'high' && n <= 1;
+  }
   function pickImpostorInterval() {
     let n = 0;
     for (const v of views.values()) if (v.actor && v.spineReady) n++;
@@ -2021,7 +1718,7 @@ export async function createFieldView(host, options = {}) {
   function frameBody(now) {
     frameNo++;
     if (frameNo % 30 === 1) {
-      impInterval = pickImpostorInterval();
+      impInterval = pickImpostorInterval(); clipAllowed = pickClipping();
       culledCount = 0;
       for (const v of views.values()) if (v.culled) culledCount++;
       for (const v of penViews.values()) if (v.culled) culledCount++;
@@ -2029,10 +1726,8 @@ export async function createFieldView(host, options = {}) {
     const dtRaw = (now - lastNow) / 1000;
     lastNow = now;
     const dt = Math.min(0.1, Math.max(0, dtRaw));
-    const bdt = battlePaused && mode === 'battle' ? 0 : dt; // the battle's frame time (units, effects, tiles): 0 while paused
-    if (dtRaw < 0.25) frameMs = frameMs * 0.9 + dtRaw * 1000 * 0.1;
-    fps = 1000 / Math.max(1, frameMs);
     adaptLoad(dtRaw);
+    fps = 1000 / Math.max(1, frameMs);
     vp.width = Math.max(1, host.clientWidth || 1); vp.height = Math.max(1, host.clientHeight || 1);
     clock += dt;
     if ((globalThis.devicePixelRatio || 1) !== lastDpr) { lastDpr = globalThis.devicePixelRatio || 1; resize(); }
@@ -2068,13 +1763,14 @@ export async function createFieldView(host, options = {}) {
           v.x = tw.fx + (tw.tx - tw.fx) * k; v.y = tw.fy + (tw.ty - tw.fy) * k; v.z = tw.fz + (tw.tz - tw.fz) * k;
           if (tw.t >= 1) v._tween = null;
         }
-        v.update(bdt, cam, clock);
+        v.update(dt, cam, clock);
         if (v.remove) { dropView(key); if (mode === 'battle') gone.add(key); }
       }
       if (!penHidden) for (const v of penViews.values()) v.update(dt, cam, clock);
       if (leader && !leaderHidden) leader.view.update(dt, cam, clock);
-      tiles.update(bdt);
-      fx.update(bdt);
+      tiles.update(dt);
+      fx.update(dt);
+      stepClipBounds();
       impostors.flush();
     } catch (err) {
       if (!frame.warned) { frame.warned = true; console.error('[render] frame failed', err); }
@@ -2095,11 +1791,11 @@ export async function createFieldView(host, options = {}) {
     const sz = size();
     const res = dpr();
     if (app.renderer.resolution !== res) app.renderer.resolution = res;
+    for (const model of views.values()) if (model.versusOutline) model.versusOutline.resolution = res;
     app.renderer.resize(sz.width, sz.height);
     board3d?.resize(sz.width, sz.height, boardDpr());
     layoutBackdrop();
     const target = targetCamera(camKind, camOpts);
-    userBase = null; userZ = 1; userOx = userOy = 0;
     if (camTo) camTo = target; else cam = target;
     tiles.project(cam, true);
   }
@@ -2118,16 +1814,17 @@ export async function createFieldView(host, options = {}) {
   // failed (assets.js onChange): every view re-resolves what it could not draw (UnitView.retryAssets) and the prep pieces
   // re-read their item icons. The tab shown again: a manifest still missing is asked for again and views without a model
   // load it again at once (their bounded retries never run while hidden: no frames).
-  function onAssets() {
+  function onAssets(what) {
     if (destroyed) return;
     loadShadow();
     loadMountains();
     if (mode === 'prep' && lastPrep) setPrep(lastPrep.ps, lastPrep.o);
-    for (const v of views.values()) v.retryAssets?.();
-    for (const v of penViews.values()) v.retryAssets?.();
-    leader?.view.retryAssets?.();
+    for (const v of views.values()) v.retryAssets?.(what === 'cosmetics');
+    for (const v of penViews.values()) v.retryAssets?.(what === 'cosmetics');
+    leader?.view.retryAssets?.(what === 'cosmetics');
   }
   const offAssets = typeof assets.onChange === 'function' ? assets.onChange(onAssets) : null;
+  setupCleanup.push(() => offAssets?.());
   const onVisible = () => {
     if (destroyed || globalThis.document?.visibilityState !== 'visible') return;
     if (assets.loaded === false && typeof assets.ready === 'function') assets.ready();
@@ -2136,42 +1833,64 @@ export async function createFieldView(host, options = {}) {
     leader?.view.retryAssets?.();
   };
   globalThis.document?.addEventListener?.('visibilitychange', onVisible);
+  setupCleanup.push(() => globalThis.document?.removeEventListener?.('visibilitychange', onVisible));
 
   // ---- public API ---------------------------------------------------------------------------------------------
 
-  const view = {
+  view = {
     setStage,
     setCamera,
     setPrep,
+    /** Idle inventory figures on the existing bench pads, without replacing the live battle feed. */
+    setBattleBench(entries) {
+      if (destroyed || mode !== 'battle') return false;
+      const keep = new Set();
+      for (const pc of entries || []) {
+        const key = `b:${pc.uid}`, rec = pc.kind === 'enemy' ? data.enemy(pc.id) : null;
+        const info = pc.kind === 'enemy' ? { kind: 'enemy', side: 'enemy', defId: pc.id, spine: rec?.spine || pc.id,
+          avatar: rec?.iconId || pc.id, tier: pc.tier || 1, motion: rec?.stats?.motion } : pieceInfo(pc, 'hand');
+        const signature = `${info.kind}|${info.defId}|${info.golden ? 1 : 0}`;
+        let v = views.get(key);
+        if (v && v._sig !== signature) { dropView(key); v = null; }
+        if (!v) {
+          const full = { ...info, id: key, uid: pc.uid, x: pc.col, y: pc.row, facing: 1, maxHp: 1 };
+          v = info.kind === 'item' ? new ItemView(ctx, full) : new UnitView(ctx, full, { prep: true });
+          v._sig = signature; v._inventory = true; views.set(key, v);
+        }
+        v.setWorld(pc.col, pc.row, TILE_H.bench);
+        v.setIcon?.(info.icon);
+        v.setItems?.((pc.items || []).map(id => { const r = data.item(id); return assets.itemIcon(r ? { trapId: r.trapId, iconId: r.iconId } : id); }));
+        v.setCount?.(0);
+        keep.add(key);
+      }
+      for (const key of views.keys()) if (String(key).startsWith('b:') && !keep.has(key)) dropView(key);
+      return true;
+    },
+    replayDeploys,
     /** Enemy preview pen: a list in m.private.nextEnemies shape, or null to empty it (setPrep does this itself). */
     setPen(list) { if (destroyed) return false; setPenList(Array.isArray(list) ? list : null); return true; },
     enterBattle,
     pushSnapshot,
     pushEvents,
-    /**
-     * Real seconds the battle is drawn behind the frames it receives (the HUD and sound follow it): LOOK_AHEAD game s at
-     * the current game speed, 0.5 s at the live 2×.
-     */
-    renderLag() { return interp.delayReal; },
-    /**
-     * Solo pause (screens/game.js m.public.paused): freezes the battle picture — the render clock, unit animation,
-     * effects and tiles — and resumes it where it stood, like the original's pause (sim and picture stop together). It
-     * must not look like a stalled stream to the render clock (render/interp.js setPaused). The camera, the backdrop
-     * and the prep / pen views keep running. Survives enterBattle().
-     */
-    setPaused(on) {
-      battlePaused = !!on;
-      interp.setPaused(battlePaused, performance.now() / 1000);
-      return battlePaused;
+    updateBattleItems(units) {
+      if (destroyed || mode !== 'battle') return false;
+      for (const unit of units || []) {
+        const info = infos.get(unit.id), v = views.get(unit.id);
+        if (info) info.items = unit.items || [];
+        if (v?.info) v.info.items = unit.items || [];
+        v?.setItems?.((unit.items || []).map(id => { const r = data.item(id); return assets.itemIcon(r ? { trapId: r.trapId, iconId: r.iconId } : id); }));
+      }
+      return true;
     },
     /**
      * Client-side combat glue (DESIGN §14): battle frames come from the local simulation (public/js/battle/runner.js)
-     * every animation frame instead of the network; the render clock trails them by LOOK_AHEAD game s like a networked
-     * feed (the attack look-ahead) and runs at the battle's game speed. `{ on: false }` restores the network settings.
+     * every animation frame instead of the network, so the render clock trails them by ~2 frames (not the 100 ms
+     * jitter buffer) and runs at the battle's game speed. `{ on: false }` restores the network settings.
      */
     setLocalFeed(o) {
       const on = !!(o && o.on);
       const speed = Number(o && o.speed) > 0 ? Number(o.speed) : 2;
+      interp.delay = on ? 0.034 : 0.1;
       interp.defaultRate = on ? Math.min(20, speed) : 2;
       interp.maxRate = on ? Math.max(8, speed * 1.5) : 8;
       return true;
@@ -2195,7 +1914,8 @@ export async function createFieldView(host, options = {}) {
     pieceScreenRect(uid) {
       let v = views.get('p:' + uid);
       if (!v) for (const x of views.values()) if (x.uid === uid || x.info?.uid === uid || x.id === uid) { v = x; break; }
-      if (!v || v.destroyed) return null;
+      // a view built this frame is placed by its first update: before that its screen record is still (0, 0)
+      if (!v || v.destroyed || !v.placed) return null;
       const b = v.bounds();
       const r = canvas.getBoundingClientRect();
       const left = r.left + b.x, top = r.top + b.y;
@@ -2205,6 +1925,18 @@ export async function createFieldView(host, options = {}) {
      * Screen geometry of a BOARD-space tile (in the Final Assault prep: where that board tile is drawn on the boss
      * field). `mirror` = the prep field is mirrored (the right-hand player): a screen-right swipe is board LEFT.
      */
+    unitAt(clientX, clientY) {
+      if (destroyed || mode !== 'battle') return null;
+      const r = canvas.getBoundingClientRect();
+      const v = battleUnitAt(clientX - r.left, clientY - r.top);
+      return v?.info || null;
+    },
+    tileAt(clientX, clientY) {
+      if (destroyed || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+      const r = canvas.getBoundingClientRect();
+      if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) return null;
+      return pickBoardTile(clientX - r.left, clientY - r.top);
+    },
     tileScreen(row, col) {
       if (destroyed || !Number.isInteger(row) || !Number.isInteger(col)) return null;
       const d = mode === 'prep' ? prepXf.toDisp(row, col) : { row, col };
@@ -2250,7 +1982,10 @@ export async function createFieldView(host, options = {}) {
       if (!s || typeof s !== 'object') return;
       const q = settings.quality;
       if (typeof s.damageNumbers === 'boolean') settings.damageNumbers = s.damageNumbers;
+      if (typeof s.officialDamageNumbers === 'boolean') settings.officialDamageNumbers = s.officialDamageNumbers;
+      if (typeof s.ammoCount === 'boolean') settings.ammoCount = s.ammoCount;   // the units read it every frame (ctx.settings)
       if (s.quality === 'high' || s.quality === 'medium' || s.quality === 'low') settings.quality = s.quality;
+      if (s.frameRate === 30 || s.frameRate === 60) { settings.frameRate = s.frameRate; app.ticker.maxFPS = s.frameRate; }
       if (q !== settings.quality) { board3d?.setQuality?.(settings.quality); resize(); }
     },
     resize,
@@ -2267,6 +2002,7 @@ export async function createFieldView(host, options = {}) {
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      signal?.removeEventListener('abort', onAbort);
       try { ro?.disconnect(); } catch { /* ignore */ }
       try { offAssets?.(); } catch { /* ignore */ }
       globalThis.document?.removeEventListener?.('visibilitychange', onVisible);
@@ -2282,6 +2018,7 @@ export async function createFieldView(host, options = {}) {
       app.ticker.remove(preRender);
       app.ticker.remove(postRender);
       clearTimeout(recover.timer);
+      cancelReplay();
       drag.reset();
       for (const k of [...views.keys()]) dropView(k);
       clearPen();
@@ -2309,11 +2046,22 @@ export async function createFieldView(host, options = {}) {
     /** Dev hooks (demo / tests). */
     debug: {
       app, get cam() { return cam; }, get board3d() { return board3d; }, tiles, views, penViews, get leader() { return leader; }, interp, fx, ctx, drag, get camKind() { return viewKind(camKind, camOpts); },
-      get lag() { return interp.lag; }, lookAhead: LOOK_AHEAD, get paused() { return battlePaused; },
-      promotions,
+      promotions, landings, get replaying() { return !!replayTimer; },
       // picking (render/pick.js) at canvas px: the prep piece / battle view / pen view there, the ground tile under it
-      pick: { pieceAt, battleUnitAt, penUnitAt, groundTile },
+      pick: { pieceAt, mapCharAt, battleUnitAt, penUnitAt, groundTile },
     },
   };
+  setupCleanup.length = 0;
+  onAbort = () => view.destroy();
+  signal?.addEventListener('abort', onAbort, { once: true });
+  signal?.throwIfAborted();
   return view;
+  } catch (err) {
+    if (view) view.destroy();
+    else {
+      destroyed = true;
+      for (const dispose of setupCleanup.reverse()) { try { dispose(); } catch { /* continue cleanup */ } }
+    }
+    throw err;
+  }
 }

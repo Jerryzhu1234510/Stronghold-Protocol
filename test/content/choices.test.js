@@ -23,8 +23,11 @@ function dataWith(modeId, round, family, { tactic = null, bounty = null, cards =
   const ch = DATA.choices;
   const sch = ch.schedule[modeId];
   const r = { ...sch.rounds[String(round)], families: [{ family, weight: 1 }], ...extra };
+  // Earlier balanced draws must not grant the effect this isolated fixture is about to test.
+  const earlier = Object.fromEntries(Object.entries(sch.rounds).map(([n,node]) => [n,
+    Number(n) < round ? { ...node, families:[{family:'supply',weight:1}] } : node]));
   if (cards) r.cards = cards;
-  const out = { ...DATA, choices: { ...ch, schedule: { ...ch.schedule, [modeId]: { ...sch, rounds: { ...sch.rounds, [String(round)]: r } } }, cards: { ...ch.cards } } };
+  const out = { ...DATA, choices: { ...ch, schedule: { ...ch.schedule, [modeId]: { ...sch, rounds: { ...earlier, [String(round)]: r } } }, cards: { ...ch.cards } } };
   if (tactic) out.choices.cards.tactic = ch.cards.tactic.filter((c) => tactic.includes(c.effectId));
   // the listed bounty cards are offered by this draft even when the real one would not (战术特训 comes from 法术教鞭
   // only — choices.json `draft`, user playtest #6 item 4; each card belongs to one kind of official draft —

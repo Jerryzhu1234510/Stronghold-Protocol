@@ -50,6 +50,35 @@ export function installCompat(g = globalThis) {
   });
   def(g, 'structuredClone', function structuredClone(value) { return cloneValue(value, new Map()); });
   def(g, 'queueMicrotask', function queueMicrotask(fn) { Promise.resolve().then(fn).catch((err) => setTimeout(() => { throw err; })); });
+  const P = g.Promise || Promise;
+  def(P, 'allSettled', function allSettled(values) {
+    return P.all(Array.from(values, value => P.resolve(value).then(
+      result => ({ status: 'fulfilled', value: result }),
+      reason => ({ status: 'rejected', reason }),
+    )));
+  });
+  if (g.AbortController) def(g.AbortSignal, 'timeout', function timeout(ms) {
+    if (!Number.isSafeInteger(ms) || ms < 0) throw new RangeError('Invalid timeout');
+    const controller = new g.AbortController();
+    (g.setTimeout || setTimeout)(() => controller.abort(), ms);
+    return controller.signal;
+  });
+  if (g.crypto?.getRandomValues) def(g.crypto, 'randomUUID', function randomUUID() {
+    const bytes = g.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  });
+  for (const ctor of [g.Element, g.Document, g.DocumentFragment]) {
+    if (!ctor) continue;
+    def(ctor.prototype, 'replaceChildren', function replaceChildren(...children) {
+      const fragment = (this.ownerDocument || this).createDocumentFragment();
+      for (const child of children) fragment.appendChild(child instanceof g.Node ? child : (this.ownerDocument || this).createTextNode(String(child)));
+      while (this.firstChild) this.removeChild(this.firstChild);
+      this.appendChild(fragment);
+    });
+  }
   return added;
 }
 

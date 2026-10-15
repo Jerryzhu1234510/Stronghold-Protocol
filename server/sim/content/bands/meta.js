@@ -1,3 +1,4 @@
+import { addDuckGuest } from './enhancedDuck.js';
 // server/sim/content/bands/meta.js — prep side of the 40 strategies (bands, data/bands.json).
 //
 // Every band handler is assembled from the band's buffs by their official buff key (numbers from bb / bbStr, never
@@ -12,7 +13,8 @@
 //   give_coin_in_round {round,coin}                    老鲤     income of round `round` = coin (R1/R2 0, R3 15)
 //   prep_start_gain_chess_from_pool_in_round {round}   老鲤     round start of `round`: 1 chess of pool
 //   band_coin_cost_gain_random_char_by_shop_level      绮良     every coin_cnt funds spent → count random chess ≤ shop level
-//   up_shop_next_refresh_must_present_bond_char        佩佩     level-up to a level of lvlist → +1 free refresh (price 0) that prefers <bond>
+//   up_shop_next_refresh_must_present_bond_char        佩佩     level-up to a level of lvlist → the next manual refresh (its usual
+//                                                               price) prefers <bond>
 //   gain_bond_char_per_round {round,preround,bond}     哈洛德   rounds round, round+preround, …: a <bond> chess (≤ shop level, else any tier)
 //   first_buy_in_round_char_price_change {price,bond}  休露丝   first <bond> chess of the round costs `price` (bought in the
 //                                                               shop: onBuy — a free pick / grant never uses it up)
@@ -56,7 +58,10 @@ function grant(ctx, id, opts = {}) {
 }
 
 /** Indices of unsold chess slots of the shop. */
-const chessSlots = (ctx) => ctx.shopSlots().map((s, i) => (s && s.kind === 'chess' && !s.sold ? i : -1)).filter((i) => i >= 0);
+const chessSlots = (ctx) => ctx.shopSlots().map((s, i) => {
+  const rec = s?.kind === 'chess' ? ctx.gd.chess(s.id) : null;
+  return rec && !rec.isDiy && !rec.isSupport && !String(s.id).startsWith('chess_support_') && !s.sold ? i : -1;
+}).filter((i) => i >= 0);
 
 /** Up to `n` distinct item ids of an equip pool. */
 function rollItems(ctx, poolId, n) {
@@ -184,12 +189,15 @@ K.band_coin_cost_gain_random_char_by_shop_level = (ps) => ({
   },
 });
 
+// 佩佩 博学多通 "升级调度中心至2、4和6级后，获得1次特殊刷新：此次刷新出现的干员优先为<萨尔贡>干员": the special refresh is the
+// player's next manual refresh, paid as usual — the text gives no 免费 (德克萨斯's trait says 「获得1次免费刷新」 for a free
+// one), and the community report of 2026-10-06 「佩佩策略的特殊刷新也是要花钱的，不是免费」. Until 0.2.0 a free refresh came
+// with it (blackboard `price` 0 read as its price) [ASSUMED: `cnt` / `price` 0 change nothing].
 K.up_shop_next_refresh_must_present_bond_char = (ps) => ({
   onLevelUp(ctx, ev) {
     const p = ps[0];
     if (!list(p.lvlist).map(Number).includes(ev.level)) return;
     ctx.incCounter('band:pepe:special', 1);
-    if (int(p.price, 0) === 0) ctx.grantFreeRefresh(1);
   },
   onRefresh(ctx) {
     if (ctx.counter('band:pepe:special') <= 0) return;
@@ -369,7 +377,9 @@ K.preparation_start_add_special_goods_every_n_round = (ps) => ({
 // share taken over that half [ASSUMED: "你和队友遭遇的敌人" — the enemies heading for the player's own protection point;
 // each official client simulates its own battle, docs/research/08 appendix A]. The originals never exist, so none of
 // their death / kill / leak effects happen. Reaching the protection point costs 1 LP ("但进入保护目标点将减少1点目标生命值":
-// the enemies' data lpr, tools/build-data.mjs).
+// the enemies' data lpr, tools/build-data.mjs). The swaps carry the spawn tag 'duck': their 隐匿 (流泪小子) comes back no
+// sooner than 1 s after a block ends, not the official 0 s (content/enemies/helpers.js DUCK_STEALTH_RESTORE — the owner's
+// decision of 2026-10-07, a deliberate deviation).
 
 export const DUCK_BAND = 'band_ducklord';
 /** "击倒这些敌人者获得1资金奖励" (the blackboard's `count` is 1 too). */
@@ -454,6 +464,7 @@ export function duckReplace(ctx, spawns, p, ownerPlayerId, { routes = null, side
   return out;
 }
 
+const enhancedDuck = { onBattleStart: addDuckGuest };
 const duckGlobal = {
   onBattleStart(ctx, ev) {
     if (!ev || !DUCK_KINDS.has(ev.kind) || !Array.isArray(ev.spawns)) return;
@@ -461,7 +472,8 @@ const duckGlobal = {
     if (!p || ctx.round < int(p.round, 1)) return;
     const held = ctx.bandId() === DUCK_BAND || ctx.teammates().some((t) => t.bandId() === DUCK_BAND);
     if (!held) return;
-    duckReplace(ctx, ev.spawns, p, ctx.playerId, { routes: ev.routes, side: ev.side });
+    const cloneCount = ctx.cloneBandCount?.(DUCK_BAND) || 0;
+    duckReplace(ctx, ev.spawns, cloneCount ? { ...p, min: 0, max: cloneCount } : p, ctx.playerId, { routes: ev.routes, side: ev.side });
   },
 };
 
@@ -498,4 +510,5 @@ export function registerMeta(registry) {
     if (h) registry.band(id, h);
   }
   registry.global('bands_ducklord', duckGlobal);
+  registry.global('bands_ducklord_enhanced', enhancedDuck);
 }

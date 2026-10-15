@@ -16,7 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const read = (p) => readFileSync(path.join(ROOT, p), 'utf8');
+const read = (p) => readFileSync(path.join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
 
 const { GLYPHS, gearPath, GIcon } = await import('../../public/js/ui/gameComponents.js');
 const { hudBands, HUD_REM } = await import('../../public/js/ui/fieldHost.js');
@@ -105,12 +105,11 @@ describe('8: the settings gear is a clean, regular icon', () => {
 const remAt = (w, h) => Math.max(40, Math.min(w / 19.2, h / 10.8, 240));
 
 /** Run `fn` with a stubbed DOM: the root font size, and the HUD layer's top (safe-area inset). */
-function withDom(rem, hudTop, fn, classes = [], cornerTop = null) {
+function withDom(rem, hudTop, fn) {
   const g = globalThis;
   const saved = { document: g.document, getComputedStyle: g.getComputedStyle };
   g.getComputedStyle = () => ({ fontSize: `${rem}px` });
-  const rects = { '.gm__hud': { top: hudTop, height: 0 }, '.gm__corner': cornerTop == null ? null : { top: cornerTop, height: 40 } };
-  g.document = { documentElement: { classList: { contains: (c) => classes.includes(c) } }, querySelector: (s) => (rects[s] ? { getBoundingClientRect: () => rects[s] } : null) };
+  g.document = { documentElement: {}, querySelector: (s) => (s === '.gm__hud' ? { getBoundingClientRect: () => ({ top: hudTop }) } : null) };
   try { return fn(); } finally { g.document = saved.document; g.getComputedStyle = saved.getComputedStyle; }
 }
 
@@ -138,32 +137,25 @@ describe('9: the prep camera keeps the bench clear of the shop bar on phones in 
       for (const k of ['normal', 'unite', 'boss', 'hidden', 'pen']) assert.equal(hudBands(k, { width: 844, height: 390 }), null, k);
       for (const k of ['prep', 'bossPrep']) {
         const b = hudBands(k, { width: 844, height: 390 });
-        assert.ok(Math.abs(b.top - 86.4) < 1e-9 && Math.abs(b.bottom - 108.6) < 1e-9, `${k} ${JSON.stringify(b)}`);
+        assert.ok(Math.abs(b.top - 86.4) < 1e-9 && Math.abs(b.bottom - 156.6) < 1e-9, `${k} ${JSON.stringify(b)}`);
       }
     });
     withDom(100, 0, () => assert.deepEqual(hudBands('prep', { width: 1920, height: 1080 }), { top: 216, bottom: 267 }));
     withDom(40, 12, () => assert.ok(Math.abs(hudBands('prep', { width: 844, height: 390 }).top - 98.4) < 1e-9, 'top inset'));
-    withDom(40, 0, () => assert.deepEqual(hudBands('prep', { width: 640, height: 200 }), { top: 80, bottom: 80 }), 'clamped at 40 % of the height');
-  });
-
-  test('touch screens, shop bar shown: the bands carry minZoom 1 — the board is never zoomed out below the official framing', () => {
-    const coarse = ['sp-touch', 'sp-coarse'];
-    const mouse = withDom(40, 0, () => hudBands('prep', { width: 780, height: 300 }, {}));
-    const touch = withDom(40, 0, () => hudBands('prep', { width: 780, height: 300 }, {}), coarse);
-    assert.equal(mouse.minZoom, undefined, 'a mouse: no floor');
-    assert.deepEqual(touch, { ...mouse, minZoom: 1 }, 'the same bands plus the floor');
-    // folded: the shop-collapsed camera keeps the whole board in view (public issue #5), no floor
-    const folded = withDom(40, 0, () => hudBands('prep', { width: 780, height: 300 }, { shop: false }), coarse);
-    assert.equal(folded.minZoom, undefined, 'folded: no floor');
-    assert.equal(withDom(40, 0, () => hudBands('normal', { width: 780, height: 300 }), coarse), null, 'only the prep cameras');
+    withDom(40, 0, () => {
+      const bands = hudBands('prep', { width: 640, height: 200 });
+      assert.equal(bands.top, 80); assert.equal(bands.bottom, 100);
+      assert.ok(Math.abs(bands.benchBottom - 108.6) < 1e-9);
+    }, 'top capped at 40%, measured mobile shop capped at 50%');
   });
 
   test('wiring: the game hands hudBands to the view, the view to the prep cameras', () => {
-    assert.match(read('public/js/ui/fieldHost.js'), /padding: hudPadding, hud: hudBands \}/);
+    assert.match(read('public/js/ui/fieldHost.js'), /padding: hudPadding, hud: hudBands,/);
+    assert.match(read('public/js/ui/fieldHost.js'), /mobileCamera: isMobileCamera/);
     const app = read('public/js/render/app.js');
     // (the folded shop's band since public issue #5: test/ui/issue5-fold-camera.test.js)
     assert.match(app, /hud: hudBands\(vk, sz, \{ shop: o\.shop !== false \}\),/);
-    assert.match(app, /presetCamera\('prep', \{ width: s0\.width, height: s0\.height, padding: defaultPadding\('prep', s0\) \}, \{ hud: hudBands\('prep', s0\) \}\)/);
+    assert.match(app, /presetCamera\('prep', \{ width: s0\.width, height: s0\.height, padding: defaultPadding\('prep', s0\) \}, \{ hud: hudBands\('prep', s0\), mobile: opts\.mobileCamera\?\.\(s0\) \}\)/);
   });
 
   // phones in landscape (CSS px) incl. the user's Android: its 2772×1272 px screenshot shows the page right of a 141 px

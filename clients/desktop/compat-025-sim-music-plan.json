@@ -1,0 +1,65 @@
+{
+  "format": 1,
+  "origin": "https://weishuxieyiwangye.cn:8443",
+  "files": {
+    "/js/browser/sim.js": {
+      "sha256": "ee932606d0c16b15ac03ae5a42e1d9b35f16404a002424edbc15273555572504",
+      "bytes": 1201148,
+      "edits": [
+        {
+          "offset": 1166772,
+          "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&s==='freeze'&&e?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,e,r?.source);}catch{}}"
+        },
+        {
+          "offset": 1164673,
+          "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(s==='freeze'&&e&&typeof e.findBuff==='function'){__spDesktopFreezeBefore=!!e.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+        },
+        {
+          "offset": 917802,
+          "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+        },
+        {
+          "offset": 917510,
+          "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(t,e);}catch{}try{"
+        }
+      ],
+      "transformedSha256": "862adf64528411ae9f4d80f9dfd64c383964a2ce9b173635d2a2eb430cdf2bd0",
+      "freezeMethods": 1,
+      "windScopes": 1
+    },
+    "/sim/battle/status.js": {
+      "sha256": "24f32f3a26259c9d0384aef87f54142e88457813425bb244b9ff3938661e97a1",
+      "bytes": 19243,
+      "edits": [
+        {
+          "offset": 13053,
+          "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&key==='freeze'&&target?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,target,opts?.source);}catch{}}"
+        },
+        {
+          "offset": 7696,
+          "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(key==='freeze'&&target&&typeof target.findBuff==='function'){__spDesktopFreezeBefore=!!target.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+        }
+      ],
+      "transformedSha256": "9a65f33c65b29ee31acd118b979a4b8f6ae84f6521cabc0b931341ce94b70b5b",
+      "freezeMethods": 1,
+      "windScopes": 0
+    },
+    "/sim/content/devices.js": {
+      "sha256": "5236d94ba820886755eb2a64ec859928fa9afed19ff08316f01fbf7a82b499de",
+      "bytes": 30384,
+      "edits": [
+        {
+          "offset": 8571,
+          "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+        },
+        {
+          "offset": 8055,
+          "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(battle,playerId);}catch{}try{"
+        }
+      ],
+      "transformedSha256": "109bf521888a8c31a88677ef329eb9fa9489740979bd095f828edff3382a2941",
+      "freezeMethods": 0,
+      "windScopes": 1
+    }
+  }
+}

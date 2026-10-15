@@ -23,6 +23,8 @@ describe('render engine in headless Chrome', { skip }, () => {
     const puppeteer = (await import('puppeteer-core')).default;
     const { startServer } = await import('../../server/index.js');
     srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
+    // the content-hash index first: every page then loads the served manifest's /assets/~<hash>/… URLs (ASSETS.md)
+    await srv.assetIndex?.whenReady();
     browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-first-run'] });
     mkdirSync(OUT, { recursive: true });
   });
@@ -72,6 +74,136 @@ describe('render engine in headless Chrome', { skip }, () => {
       }
     });
   }
+
+  test('Spine models load through the served manifest\'s content-hashed URLs, cached immutably (host bandwidth layer 1)', async (t) => {
+    if (!srv.assetIndex) { t.skip('SP_ASSET_INDEX=0: no content hashes'); return; }
+    const page = await browser.newPage();
+    const spine = [];
+    const problems = [];
+    page.on('response', (r) => {
+      const u = new URL(r.url());
+      if (/\.(skel|atlas)$/.test(u.pathname) || (/\/spine\//.test(u.pathname) && /\.png$/.test(u.pathname))) spine.push({ path: u.pathname, status: r.status(), cache: r.headers()['cache-control'] });
+      if (r.status() >= 400) problems.push(`HTTP ${r.status()} ${r.url()}`);
+    });
+    page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
+    try {
+      await page.setViewport({ width: 1600, height: 900 });
+      await page.goto(`http://127.0.0.1:${srv.port}/dev/render-demo.html?scene=normal-m01&t=18&panel=0`);
+      await page.waitForFunction('window.__demo && (window.__demo.ready || window.__demo.error)', { timeout: 30000 });
+      await wait(3500);
+      const st = await page.evaluate(() => window.__demo.stats());
+      assert.ok(st.units > 0);
+      assert.equal(st.spine.failed, 0, 'no Spine load failures');
+      assert.ok(spine.length >= 6, `Spine files requested: ${spine.length}`);
+      for (const s of spine) {
+        assert.match(s.path, /^\/assets\/~[0-9a-f]{16}\//, `${s.path}: a content-hashed URL`);
+        assert.equal(s.status, 200, s.path);
+        assert.equal(s.cache, 'public, max-age=31536000, immutable', `${s.path}: skeleton, atlas and pages share the model hash`);
+      }
+      // the atlas pixi-spine derived from each skeleton came under the skeleton's segment
+      for (const sk of spine.filter((s) => s.path.endsWith('.skel'))) {
+        assert.ok(spine.some((s) => s.path === sk.path.replace(/\.skel$/, '.atlas')), `${sk.path}: its atlas`);
+      }
+      assert.deepEqual(problems, []);
+    } finally { await page.close(); }
+  });
+
+  test('Swire coins from a real snapshot remain separate from the elemental gauge', async () => {
+    const { makeBattle } = await import('../helpers/battleHarness.js');
+    const h = makeBattle({ autoFinish: false, units: [{ uid: 1, chessId: 'chess_char_3_04_a', row: 10, col: 4, skillIndex: 1 }] });
+    h.step(); const u = h.unit(1); u.mem.coins = 1;
+    h.b.dealDamage(null, u, { type: 'element', element: 'burn', amount: 300 });
+    const { page, problems } = await open('scene=prep&panel=0', 1600, 900);
+    try {
+      await page.evaluate(({ meta, snap }) => {
+        window.__demo.pause(); const v = window.__demo.view;
+        v.enterBattle(meta); v.pushSnapshot(snap);
+      }, { meta: h.b.fieldMeta(), snap: h.b.snapshot() });
+      await page.waitForFunction(id => window.__demo.view.debug.views.get(id)?.coinHud?.root.visible, {}, u.id);
+      const bounds = await page.evaluate(id => {
+        const v = window.__demo.view.debug.views.get(id), coins = v.coinHud.root.getBounds(), elem = v._elBar.root.getBounds();
+        return { label: v.coinHud.text.text, coinBottom: coins.bottom, elementTop: elem.top };
+      }, u.id);
+      assert.equal(bounds.label, `1/${u.skill.bb.sp}`);
+      assert.ok(bounds.coinBottom <= bounds.elementTop, JSON.stringify(bounds));
+      await page.screenshot({ path: path.join(OUT, 'swire-coins-element.png') });
+      assert.deepEqual(problems, []);
+    } finally { await page.close(); }
+  });
+
+  test('外勤医疗 reserve medic opens its detail from normal and right boss preparation without being draggable', async () => {
+    const { page, problems } = await open('scene=prep&panel=0', 1600, 900);
+    const first = await page.evaluate(() => {
+      const v = window.__demo.view;
+      const st = JSON.parse(JSON.stringify(window.__demo.scene.state));
+      st.prepMapChars = [{ id: -1, uid: -1, kind: 'token', side: 'ally', ownerId: 'p_0',
+        defId: 'char_605_cmedic', name: '预备干员-医疗', spine: 'char_605_cmedic', avatar: 'char_605_cmedic',
+        area: 'board', x: 2, y: 10, dir: 'RIGHT', facing: 1, maxHp: 1202 }];
+      window.__touchPrepChar = st.prepMapChars[0];
+      v.setPrep(st, { editable: true });
+      const medic = v.debug.views.get('m:-1');
+      const p = v.tileScreen(10, 2), rect = v.debug.app.view.getBoundingClientRect();
+      let clicked = null;
+      const off = v.on('pieceClick', (e) => { clicked = e; });
+      v.debug.app.view.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 61, clientX: p.x, clientY: p.y }));
+      off();
+      const out = { exists: !!medic, id: medic?.info.defId, x: medic?.x, y: medic?.y,
+        draggable: !!v.debug.pick.pieceAt(p.x - rect.left, p.y - rect.top),
+        clicked: clicked ? { uid: clicked.uid, id: clicked.unit?.defId, row: clicked.unit?.y, col: clicked.unit?.x,
+          prepMapChar: clicked.prepMapChar } : null };
+      return out;
+    });
+    await wait(500);
+    await page.screenshot({ path: path.join(OUT, 'touch-prep-normal.png') });
+    const boss = await page.evaluate(() => {
+      const v = window.__demo.view;
+      v.setCamera('bossPrep', { side: 'R', instant: true });
+      const mirrored = v.debug.views.get('m:-1');
+      const p = v.tileScreen(10, 2);
+      let clicked = null;
+      const off = v.on('pieceClick', (e) => { clicked = e; });
+      v.debug.app.view.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 62, clientX: p.x, clientY: p.y }));
+      off();
+      return { view: [mirrored?.x, mirrored?.y, mirrored?.dir],
+        clicked: clicked ? [clicked.unit?.y, clicked.unit?.x, clicked.unit?.dir, clicked.prepMapChar] : null };
+    });
+    await wait(500);
+    await page.screenshot({ path: path.join(OUT, 'touch-prep-boss-right.png') });
+    const removed = await page.evaluate(() => {
+      const v = window.__demo.view;
+      const st = JSON.parse(JSON.stringify(window.__demo.scene.state));
+      st.prepMapChars = [];
+      v.setPrep(st, { editable: true });
+      const p = v.tileScreen(10, 2), rect = v.debug.app.view.getBoundingClientRect();
+      return !v.debug.views.has('m:-1') && !v.debug.pick.mapCharAt(p.x - rect.left, p.y - rect.top);
+    });
+    const fallback = await page.evaluate(async () => {
+      const { createFallbackView } = await import('/js/ui/fallbackField.js');
+      const host = document.createElement('div');
+      host.style.cssText = 'position:absolute;width:800px;height:600px';
+      document.body.appendChild(host);
+      const ff = createFallbackView(host, { data: { get: () => null, lookup: () => null } });
+      ff.setPrep({ board: [], hand: [], temp: [], prepMapChars: [window.__touchPrepChar] }, { editable: true });
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const el = host.querySelector('.ff-piece--map-char');
+      let clicked = null;
+      const off = ff.on('pieceClick', (e) => { clicked = e; });
+      el?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 63 }));
+      off();
+      const out = { exists: !!el, name: el?.title, pointerEvents: el ? getComputedStyle(el).pointerEvents : null,
+        movableId: el?.dataset.uid ?? null, clicked: clicked ? [clicked.unit?.defId, clicked.prepMapChar] : null };
+      ff.destroy(); host.remove();
+      return out;
+    });
+    await page.close();
+    assert.deepEqual(problems, []);
+    assert.deepEqual(first, { exists: true, id: 'char_605_cmedic', x: 2, y: 10,
+      draggable: false, clicked: { uid: -1, id: 'char_605_cmedic', row: 10, col: 2, prepMapChar: true } });
+    assert.deepEqual(boss, { view: [18, 3, 'LEFT'], clicked: [10, 2, 'RIGHT', true] });
+    assert.equal(removed, true);
+    assert.deepEqual(fallback, { exists: true, name: '预备干员-医疗', pointerEvents: 'auto', movableId: null,
+      clicked: ['char_605_cmedic', true] });
+  });
 
   test('fx gallery: every sim fx kind, projectile and status renders without errors; board art in use', async () => {
     const { page, problems } = await open('scene=fx&panel=0', 1280, 720);
@@ -301,42 +433,6 @@ describe('render engine in headless Chrome', { skip }, () => {
     assert.ok(gone > first && seen[gone][0] > 35, `removed after the leak at 35 (at ${seen[gone]?.[0]})`);
     const back = seen.slice(gone).filter(([, has]) => has);
     assert.deepEqual(back, [], 'not resurrected by the snapshots that still list it');
-  });
-
-  test('a field entered mid-battle: its early buffer pushed quiet is drawn, only its spawns reach battleEvents; live frames do', async () => {
-    // screens/game.js enter effect: pushEvents({ ev: early, gt: earlySnap.gt, quiet: true }) then pushSnapshot(earlySnap);
-    // without `quiet` the replay's 'leak' / 'die' looked fresh to the sound (render/app.js heardEvents)
-    const { page, problems } = await open('scene=prep&panel=0', 1280, 720);
-    const res = await page.evaluate(async () => {
-      const { createFieldView } = await import('/js/render/app.js');
-      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-      const run = async (quiet) => {
-        const host = document.createElement('div');
-        host.style.cssText = 'position:fixed;left:0;top:0;width:640px;height:360px;z-index:9';
-        document.body.appendChild(host);
-        const v = await createFieldView(host, { data: null, assets: null });
-        const heard = [];
-        v.on('battleEvents', (evs) => { for (const e of evs) heard.push(e[0]); });
-        v.enterBattle({ fieldId: 'n:x', kind: 'normal', units: [] });
-        const early = [['spawn', { id: 41, side: 'enemy', kind: 'enemy', defId: 'enemy_1007_slime', x: 9, y: 11, maxHp: 100 }], ['leak', 42], ['die', 43, 'killed']];
-        v.pushEvents({ fieldId: 'n:x', ev: early, gt: 30, quiet });
-        v.pushSnapshot({ fieldId: 'n:x', gt: 30, units: [[41, 9, 11, 100, 100, 0, 0, 0, 0]] });
-        await sleep(400);
-        const entry = heard.slice();
-        v.pushEvents({ fieldId: 'n:x', ev: [['leak', 41]], gt: 30.3 });
-        for (const gt of [30.1, 30.2, 30.3, 30.4]) v.pushSnapshot({ fieldId: 'n:x', gt, units: [[41, 9, 11, 100, 100, 0, 0, 0, 0]] });
-        await sleep(1200);
-        v.destroy();
-        host.remove();
-        return { entry, after: heard.slice(entry.length) };
-      };
-      return { quiet: await run(true), loud: await run(undefined) };
-    });
-    await page.close();
-    assert.deepEqual(problems.filter((p) => !/\[render\]/.test(p)), []);
-    assert.deepEqual(res.quiet.entry, ['spawn'], 'the replay: only its spawn is heard');
-    assert.deepEqual(res.quiet.after, ['leak'], 'a live leak after the entry is heard');
-    assert.deepEqual(res.loud.entry, ['spawn', 'leak', 'die'], 'the same replay not pushed quiet looks fresh by its stamp');
   });
 
   test('prep scouting board (prep:true + one gt:0 snapshot) stays visible and static', async () => {

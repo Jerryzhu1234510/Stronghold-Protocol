@@ -1,0 +1,65 @@
+{
+  "format": 1,
+  "id": "rain-love-dj-boss-bgm",
+  "name": "雨爱DJ · Boss战音乐",
+  "version": "1.0.0",
+  "server": "8443",
+  "description": "Boss战（最终攻势、隐秘核心）自动播放DJ.Lee版《雨爱》，随Boss战循环，结束后由游戏切回当前阶段音乐。适配0.2.5全部10种Boss及通用Boss音乐。只在本机生效，沿用游戏BGM音量。音频由用户提供。独立于生命归零Mod。",
+  "files": [
+    {
+      "target": "/assets/audio/bgm/m_bat_abyssalhunters_loop.mp3",
+      "path": "audio/rain-love-dj.mp3",
+      "originalSha256": "fad166c20d9f6530b4a14fe95905611bb5668b2ed46256a0e8a5aa01222e420a"
+    },
+    {
+      "target": "/assets/audio/bgm/m_bat_ancestor_loop.mp3",
+      "path": "audio/rain-love-dj.mp3",
+      "originalSha256": "7463e8975105e893aa82cb74cc9a068d5b2f331e986232ef5dbaa0e1c1247ff6"
+    },
+    {
+      "target": "/assets/audio/bgm/m_bat_prtsstage1_loop.mp3",
+      "path": "audio/rain-love-dj.mp3",
+      "originalSha256": "3d6150a959116d78405a54b8499ca18c8b7b23edb96781a5d8b1683d75a3747b"
+    },
+    {
+      "target": "/assets/audio/bgm/m_bat_rglk1phantomcastle_loop.mp3",
+      "path": "audio/rain-love-dj.mp3",
+      "originalSha256": "b83491b3ca802295eba105e307258e0874b20d1c164abcccb3e415d2bf4bf2df"
+    },
+    {
+      "target": "/assets/audio/bgm/m_bat_rouge3boss1_loop.mp3",
+      "path": "audio/rain-love-dj.mp3",
+      "originalSha256": "244ebd7985415404fd376029779bd393d970f45f58c60e0cbca22c0b42586924"
+    },
+    {
+      "target": "/assets/audio/bgm/m_bat_vtlionk_loop.mp3",
+      "path": "audio/rain-love-dj.mp3",
+      "originalSha256": "4071f245dd950371deb2a5ea01fbe903ae370004c69ba6dba833b873ed0c6ec1"
+    },
+    {
+      "target": "/assets/audio/bgm/m_bat_abyssalhunters_intro.mp3",
+      "path": "audio/intro-silence.wav",
+      "originalSha256": "c30569ed3f403c0ea32179f935c786d7b411bedb97c4e89e8f2d4e53e6d606e3"
+    },
+    {
+      "target": "/assets/audio/bgm/m_bat_prtsstage1_intro.mp3",
+      "path": "audio/intro-silence.wav",
+      "originalSha256": "5fefe22293adb638db42fae3c4ecc3526d3028c3e626221cb57e40525a1740d3"
+    },
+    {
+      "target": "/assets/audio/bgm/m_bat_rglk1phantomcastle_intro.mp3",
+      "path": "audio/intro-silence.wav",
+      "originalSha256": "c339e5f7c75cec15b4514cc37ccd95c162a37144a78024f4ac19608bc23a1133"
+    },
+    {
+      "target": "/assets/audio/bgm/m_bat_rouge3boss1_intro.mp3",
+      "path": "audio/intro-silence.wav",
+      "originalSha256": "7f8c0fbff85760501dae1fc0673472d3007040a381ad3065852fb5194b65d572"
+    },
+    {
+      "target": "/assets/audio/bgm/m_bat_vtlionk_intro.mp3",
+      "path": "audio/intro-silence.wav",
+      "originalSha256": "4b51f97546b5ba9cc2f58e1cb2e3e9eb790784e9ef2f66760446bf8e5f90e1e9"
+    }
+  ]
+}

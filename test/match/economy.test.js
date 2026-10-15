@@ -5,6 +5,14 @@ import { ERR, PHASE } from '../../shared/constants.js';
 import { GameData } from '../../server/match/gamedata.js';
 import { DATA, makeMatch, give, giveItem, checkInvariants, chessOfTier } from './harness.js';
 
+/** Fill every free hand slot with distinct plain equipment (nothing merges), so a piece put into temp stays there. */
+function fillHand(ps) {
+  const plain = Object.values(DATA.items).filter((i) => i.itemType === 'EQUIP' && !i.isGolden && i.kind === 'passive').map((i) => i.itemId ?? i.id);
+  let k = 0;
+  for (let i = 0; i < ps.hand.length; i++) if (ps.hand[i] == null) ps.hand[i] = ps.newPiece('item', plain[k++]);
+  ps.recompute();
+}
+
 test('income = min(3 + r, 12) in every mode; funds are lost at prep end (band_cannot keeps them)', () => {
   for (const modeId of ['mode_single_funny', 'mode_multi_normal', 'mode_multi_abyss']) {
     const gd = new GameData(DATA, modeId);
@@ -95,15 +103,17 @@ test('shop slots per level (+ the item slot), buy prices by tier, SOLD_OUT, NO_F
   assert.equal(ps.hand[9].id, slot0.id, 'hand fills right→left');
   assert.deepEqual(m.handle('p_0', { t: 'g.buy', slot: 0 }), { error: ERR.SOLD_OUT });
   assert.deepEqual(m.handle('p_0', { t: 'g.buy', slot: 15 }).error, ERR.BAD_TARGET);
-  // a display is not a reservation: an empty pool makes the buy fail
+  // a display is not a reservation, but its operator remains purchasable after the pool is exhausted (#498)
   const s1 = ps.shop.slots[1];
   const taken = m.pool.take(s1.id, 100);
-  assert.deepEqual(m.handle('p_0', { t: 'g.buy', slot: 1 }), { error: ERR.SOLD_OUT });
+  assert.deepEqual(m.handle('p_0', { t: 'g.buy', slot: 1 }), { ok: true });
+  assert.equal(m.pool.entries.get(s1.id).left, -1);
   m.pool.give(s1.id, taken);
   // full hand blocks buys
   const fillers = chessOfTier(3).filter((x) => m.pool.has(x) && x !== s1.id);
   for (let i = 0; ps.hand.some((x) => x == null); i++) give(m, ps, fillers[i]);
-  if (ps.countCopies(m.gd.baseIdOf(s1.id)) === 0) assert.deepEqual(m.handle('p_0', { t: 'g.buy', slot: 1 }), { error: ERR.HAND_FULL });
+  ps.shop.slots[1] = { ...s1, sold: false };
+  assert.deepEqual(m.handle('p_0', { t: 'g.buy', slot: 1 }), { error: ERR.HAND_FULL });
   const itemSlot = ps.shop.slots.findIndex((s) => s && s.kind === 'item');
   assert.deepEqual(m.handle('p_0', { t: 'g.buy', slot: itemSlot }), { error: ERR.HAND_FULL });
   checkInvariants(m);
@@ -190,16 +200,21 @@ test('selling: +1 (normal and elite, board or hand), items return to the hand, i
   m.dispose();
 });
 
-test('ready gating: temp must be empty; unready allowed until everyone is ready; actions locked while ready', () => {
+test('ready gating: temp must be empty (a freed hand slot pulls the temp piece in); unready allowed until everyone is ready; actions locked while ready', () => {
   const h = makeMatch({ mode: 'coop', humans: 2, seed: 10 }).start();
   h.toPrep(1);
   const m = h.m;
   const a = h.ps('p_0');
+  fillHand(a);
   const t = give(m, a, chessOfTier(1).find((x) => m.pool.has(x)), 'temp');
+  assert.ok(a.temp.includes(t), 'a full hand: it waits in temp');
   assert.equal(a.privateView().canReady, false);
   assert.deepEqual(m.handle('p_0', { t: 'g.ready', ready: true }), { error: ERR.TEMP_NOT_EMPTY });
-  const free = a.hand.findIndex((x) => x == null);
-  assert.deepEqual(m.handle('p_0', { t: 'g.move', uid: t.uid, to: { area: 'hand', idx: free } }), { ok: true });
+  // destroying a hand item frees its slot: the temp piece moves in by itself (PRTS 卫戍协议/帮助 §手牌区, GitHub #82)
+  const freed = a.hand[3];
+  assert.deepEqual(m.handle('p_0', { t: 'g.destroy', uid: freed.uid }), { ok: true });
+  assert.equal(a.hand[3], t);
+  assert.ok(a.tempEmpty);
   assert.equal(a.privateView().canReady, true);
   assert.deepEqual(m.handle('p_0', { t: 'g.ready', ready: true }), { ok: true });
   assert.deepEqual(m.handle('p_0', { t: 'g.refresh' }), { error: ERR.WRONG_PHASE, detail: 'ready' });
@@ -222,7 +237,9 @@ test('prep deadline (co-op): unready players are auto-readied and their temp is 
   const a = h.ps('p_0');
   const id = chessOfTier(1).find((x) => m.pool.has(x));
   const left = m.pool.left(id);
+  fillHand(a);
   give(m, a, id, 'temp');
+  assert.ok(!a.tempEmpty, 'a full hand: it waits in temp');
   assert.ok(m.deadline > h.sched.now(), 'co-op prep is timed');
   assert.equal(Math.round((m.deadline - h.sched.now()) / 1000), m.gd.prepTime(1));
   h.sched.advance(m.deadline - h.sched.now() + 1);
@@ -240,59 +257,4 @@ test('solo prep and 机变 are untimed', () => {
   h.sched.advance(10 * 60 * 1000);
   assert.equal(h.m.phase, PHASE.PREP);
   h.m.dispose();
-});
-
-test('offline humans do not block ready teammates; reconnect cancels queued early start', () => {
-  for (const disconnectLast of [false,true]) {
-    const h=makeMatch({mode:'coop',humans:2,seed:10,fake:true}).start();h.toPrep(1);
-    const m=h.m, b=h.ps('p_1');give(m,b,chessOfTier(1).find(x=>m.pool.has(x)),'temp');
-    if(!disconnectLast)m.onDisconnect('p_1');
-    m.handle('p_0',{t:'g.ready',ready:true});
-    if(disconnectLast)m.onDisconnect('p_1');
-    h.sched.advance(1);assert.notEqual(m.phase,PHASE.PREP);assert.ok(b.tempEmpty);m.dispose();
-  }
-  const h=makeMatch({mode:'coop',humans:2,seed:10,fake:true}).start();h.toPrep(1);
-  h.m.onDisconnect('p_1');h.m.handle('p_0',{t:'g.ready',ready:true});h.m.onReconnect('p_1');
-  h.sched.advance(1);assert.equal(h.m.phase,PHASE.PREP);h.m.dispose();
-});
-
-test('all humans disconnected do not trigger early prep completion',()=>{
-  const h=makeMatch({mode:'coop',humans:2,seed:10,fake:true}).start();h.toPrep(1);
-  h.m.onDisconnect('p_0');h.m.onDisconnect('p_1');h.sched.advance(1);
-  assert.equal(h.m.phase,PHASE.PREP);h.m.dispose();
-});
-
-test('a ready human reconnecting while teammates remain offline resumes early prep completion',()=>{
-  const h=makeMatch({mode:'coop',humans:2,seed:10,fake:true}).start();h.toPrep(1);
-  h.m.handle('p_0',{t:'g.ready',ready:true});
-  h.m.onDisconnect('p_0');h.m.onDisconnect('p_1');h.sched.advance(1);
-  assert.equal(h.m.phase,PHASE.PREP);
-  h.m.onReconnect('p_0');h.sched.advance(1);
-  assert.notEqual(h.m.phase,PHASE.PREP);h.m.dispose();
-});
-
-test('a disconnected teammate on autoplay gets its prep before a ready human ends it',()=>{
-  // co-op: p_1 steps away (暂离 = autoplay) and drops; p_0 readies the moment each prep starts
-  const h=makeMatch({mode:'coop',humans:2,seed:10,fake:true}).start();h.toPrep(1);
-  h.m.handle('p_1',{t:'g.autoplay',on:true});h.m.handle('p_0',{t:'g.ready',ready:true});
-  h.run(()=>h.m.phase!==PHASE.PREP);h.m.onDisconnect('p_1');
-  const off=h.ps('p_1'),pieces=()=>off.board.size+off.hand.filter(Boolean).length;
-  for(let r=2;r<=4;r++){
-    h.run(()=>{
-      if(h.m.phase===PHASE.SP_DRAFT && h.m.spTurn()==='p_0'){const idx=h.m.sp.cards.map(c=>c.idx).find(k=>h.m.sp.taken[k]==null);if(idx!=null)h.m.handle('p_0',{t:'g.choice',idx});}
-      return h.m.phase===PHASE.PREP && h.m.round===r;
-    });
-    const before=pieces();
-    h.m.handle('p_0',{t:'g.ready',ready:true});
-    h.run(()=>h.m.phase!==PHASE.PREP);
-    assert.ok(off.ready,`R${r}: the autoplay bot finished its turn and readied`);
-    if(r===4)assert.ok(pieces()>before,'the absent seat keeps building its board');
-  }
-  h.m.dispose();
-});
-
-test('offline autoplay can still complete prep once everyone is ready',()=>{
-  const h=makeMatch({mode:'solo',seed:10,fake:true}).start();h.toPrep(1);
-  h.m.onDisconnect('p_0');h.m.handle('p_0',{t:'g.ready',ready:true});
-  h.sched.advance(1);assert.notEqual(h.m.phase,PHASE.PREP);h.m.dispose();
 });

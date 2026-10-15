@@ -2,11 +2,10 @@
 // animation frames: pacing (60 ticks per real second at 2×, ≤ 8 per frame), the b.snap / b.ev feed and the field meta,
 // b.progress / b.result when authoritative (valid protocol frames, the same result as the server's simulation),
 // fast-forward to `elapsed`, b.end (forced / takeover), the hidden-tab pump, the boss pool sync, phase clearing, the live
-// leak count of normal fields (state().leaks, user playtest #3 item 2), the own battle's settlement() and 'ownDone' (the
-// settlement voice line, DESIGN §21.30).
+// leak count of normal fields (state().leaks, user playtest #3 item 2).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBattleRunner, ticksPerFrameCap } from '../../public/js/battle/runner.js';
+import { createBattleRunner, ticksPerFrameCap, FRAME_SIM_MS } from '../../public/js/battle/runner.js';
 import { createStore, initialState } from '../../public/js/store.js';
 import * as specMod from '../../server/sim/spec.js';
 import { DataSource } from '../../server/sim/simdata.js';
@@ -14,11 +13,64 @@ import { validateC2S } from '../../shared/protocol.js';
 import { validateClientResult, runHeadless } from '../../server/match/fields.js';
 import { PHASE } from '../../shared/constants.js';
 import { DATA, makeMatch } from './harness.js';
-import { appendReplayReport } from '../../server/match/recorder.js';
-import { createReplayRunner } from '../../public/js/battle/replay-runner.js';
-import { settlementVoice } from '../../public/js/audio.js';
 
 const DS = new DataSource(DATA, null);
+
+test('expensive reconnect catch-up yields without dropping ticks or changing the authoritative result', async () => {
+  const start = realStart(7310), r = rig({ tickCost: 1 });
+  r.net.emit('b.start', start);
+  await r.settle();
+  const e = r.runner._entries.get(start.battleId);
+  r.advance(2000, 2000);
+  assert.equal(e.battle.tickCount, FRAME_SIM_MS, 'a 120-tick backlog does not block for 120 ms');
+  assert.equal(r.runner.stats().maxFrameMs, FRAME_SIM_MS);
+  assert.ok(r.runner.stats().budgetYields > 0);
+  // Do not advance wall time: finish precisely the existing backlog across animation frames.
+  await r.settle();
+  assert.equal(e.battle.tickCount, 120, 'all owed ticks eventually run, without moving the field clock');
+  for (let i = 0; i < 400 && !e.done; i++) r.advance(1000, 50);
+  await r.settle();
+  assert.ok(e.done);
+  const reports = r.net.sent.filter(x => x.t === 'b.result');
+  assert.equal(reports.length, 1);
+  const server = runHeadless(specMod.createBattleFromSpec(start.spec, DS, { recordEvents: false }), { players: start.spec.players.map(p => p.playerId) }).result;
+  const local = validateClientResult(start.spec, reports[0].result, {});
+  const expected = validateClientResult(start.spec, specMod.compactResult(server), {});
+  assert.ok(local.ok && expected.ok);
+  assert.equal(specMod.resultDigest(local.result).hash, specMod.resultDigest(expected.result).hash);
+  r.runner.dispose();
+});
+
+test('own authority and watched replica share the frame budget and both eventually catch up', async () => {
+  const start = realStart(7311), r = rig({ tickCost: 1 });
+  r.net.emit('b.start', start);
+  await r.settle();
+  const watched = { ...start, battleId: start.battleId + ':watch', fieldId: 'n:watch', spec: { ...start.spec, fieldId: 'n:watch' }, authoritative: false, watch: true };
+  r.net.emit('b.start', watched);
+  await r.settle();
+  const before = r.measured;
+  r.advance(2000, 2000);
+  assert.equal(r.measured - before, FRAME_SIM_MS, 'two fields do not each spend a full frame budget');
+  for (const e of r.runner._entries.values()) assert.equal(e.battle.tickCount, FRAME_SIM_MS / 2);
+  await r.settle();
+  for (const e of r.runner._entries.values()) assert.equal(e.battle.tickCount, 120);
+  assert.equal(r.net.sent.filter(x => x.t === 'b.progress' && x.battleId === watched.battleId).length, 0);
+  r.runner.dispose();
+});
+
+test('expensive initial silent catch-up yields before the 600-tick ceiling', async () => {
+  const r = rig({ tickCost: 1 });
+  r.net.emit('b.start', { ...realStart(7312), elapsed: 30, authoritative: false, watch: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(r.measured, FRAME_SIM_MS);
+  assert.equal(r.feed.fields.length, 0, 'loading until caught up');
+  await r.settle(); await r.settle();
+  assert.equal(r.feed.fields.length, 1);
+  const e = [...r.runner._entries.values()][0];
+  assert.equal(e.battle.tickCount, 900);
+  assert.equal(r.net.sent.length, 0);
+  r.runner.dispose();
+});
 
 function fakeNet() {
   const handlers = new Map();
@@ -32,8 +84,9 @@ function fakeNet() {
   return n;
 }
 
-function rig({ hidden = false, ...deps } = {}) {
+function rig({ hidden = false, tickCost = 0 } = {}) {
   let t = 1000;
+  let measured = 0;
   const frames = [];
   const intervals = [];
   const doc = { hidden, addEventListener() {} };
@@ -42,13 +95,17 @@ function rig({ hidden = false, ...deps } = {}) {
   const runner = createBattleRunner({
     net, store, doc,
     now: () => t,
+    measureNow: () => measured,
     raf: (fn) => { frames.push(fn); return frames.length; },
     caf: () => {},
     setInterval: (fn) => { intervals.push(fn); return intervals.length; },
     clearInterval: () => {},
-    loadSim: async () => ({ spec: specMod, ds: DS }),
+    loadSim: async () => ({ spec: { ...specMod, createBattleFromSpec(...args) {
+      const b = specMod.createBattleFromSpec(...args), step = b.step.bind(b);
+      b.step = () => { measured += tickCost; return step(); };
+      return b;
+    } }, ds: DS }),
     logger: { error() {}, warn() {}, info() {}, debug() {} },
-    ...deps,
   });
   const feed = { snaps: [], evs: [], fields: [] };
   runner.on('snap', (s) => feed.snaps.push(s));
@@ -57,6 +114,7 @@ function rig({ hidden = false, ...deps } = {}) {
   const r = {
     runner, net, store, doc, feed,
     get t() { return t; },
+    get measured() { return measured; },
     /** advance the clock by `ms` in animation frames of `step` ms (or pump intervals when hidden) */
     advance(ms, step = 1000 / 60) {
       const end = t + ms;
@@ -84,6 +142,27 @@ function realStart(seed = 7301) {
   h.m.dispose();
   return msg;
 }
+
+test('damage report follows the viewed field and retains a frozen result through prep until next battle', async () => {
+  const start=realStart(7388),r=rig();
+  r.store.patch('match',{public:{phase:'COMBAT'}});
+  r.net.emit('b.start',start); await r.settle();
+  const e=r.runner._entries.get(start.battleId), ownerId=e.members[0];
+  for(let i=0;i<400&&!e.done;i++) r.advance(1000,50);
+  await r.settle(); assert.ok(e.done);
+  const report=r.runner.damageReport(ownerId);
+  assert.ok(report.done); assert.equal(report.round,start.spec.round);
+  assert.equal(report.total,e.battle.allyUnits.filter(u=>u.ownerId===ownerId).reduce((n,u)=>n+(u.stats?.dmg||0),0));
+  r.store.patch('match',{public:{phase:'PREP'}});
+  assert.equal(r.runner._entries.size,0);
+  assert.deepEqual(r.runner.damageReport(ownerId),report,'frozen counters survive disposal of the completed sim');
+  r.store.patch('match',{public:{phase:'COMBAT'}});
+  r.net.emit('b.start',{...start,battleId:start.battleId+':next'});await r.settle();
+  assert.equal(r.runner.damageReport(ownerId).done,false,'next field replaces previous settled status');
+  r.store.patch('match',{public:{phase:'RESULT'}});
+  assert.equal(r.runner.damageReport(ownerId),null,'no stale match data leaks into next session');
+  r.runner.dispose();
+});
 
 test('authoritative battle: 2× pacing, ≤ max(8, 4·speed) ticks per frame, b.snap / b.ev feed, field meta in the store, progress ~1 Hz, the server-identical result', async () => {
   const start = realStart();
@@ -130,21 +209,6 @@ test('authoritative battle: 2× pacing, ≤ max(8, 4·speed) ticks per frame, b.
   assert.ok(a.ok && b.ok);
   assert.equal(specMod.resultDigest(a.result).hash, specMod.resultDigest(b.result).hash, 'the browser result equals the server simulation');
   r.runner.dispose();
-});
-
-test('account battle recording reproduces the exact terminal battle and tick-indexed forced end',async()=>{
-  const start=realStart(7441),r=rig();r.net.accountMode=true;
-  r.net.emit('b.start',start);await r.settle();r.advance(3500);
-  r.net.emit('b.end',{battleId:start.battleId,reason:'forced'});await r.settle();
-  const field={authority:start.spec.players[0].playerId},live=r.runner._entries.get(start.battleId).battle;
-  for(const msg of r.net.sent.filter(x=>x.replay))assert.equal(appendReplayReport(field,field.authority,msg.replay),true);
-  let replayBattle;
-  const replay=createReplayRunner({engine:{createBattle:spec=>(replayBattle=specMod.createBattleFromSpec(spec,DS))}});
-  replay.select({source:'client',spec:start.spec,...field.replayTrace});replay.play();
-  for(let i=0;i<100 && replay.state().playing;i++)replay.advance(0.5);
-  assert.deepEqual(specMod.compactResult(replayBattle.result()),specMod.compactResult(live.result()));
-  assert.deepEqual(replayBattle.snapshot(),live.snapshot());
-  replay.dispose();r.runner.dispose();
 });
 
 test('fast-forward to `elapsed` before showing; display replicas never report; b.end takeover demotes; hidden tab keeps an authoritative battle going', async () => {
@@ -239,145 +303,7 @@ test('boss field: the local pool follows b.pool (server hp − unacknowledged lo
   assert.equal(typeof last.leaks, 'number');
   r.net.emit('b.pool', { hp: pool.maxHp * 0.5, max: pool.maxHp, teamLp: 20, acked: { [start.fieldId]: pool.cum } });
   assert.ok(Math.abs(pool.hp - pool.maxHp * 0.5) < 1e-6, 'server hp when everything is acknowledged');
-  // settlement() (the settlement voice line, DESIGN §21.30): the server ends every boss field (Match _endFinal) —
-  // 'cleared' when the pool was emptied (here by another field: the local pool still stands), the boss went down
-  const pid = start.spec.players[0].playerId;
-  assert.equal(r.runner.settlement(start.battleId, pid), null, 'still running');
-  r.net.emit('b.end', { battleId: start.battleId, fieldId: start.fieldId, reason: 'cleared' });
-  await r.settle();
-  assert.ok(e.done);
-  assert.equal(e.battle.reason, 'forced', 'the local battle only knows forced / timeout');
-  assert.ok(e.battle.result().bossHpLeft > 0, 'the local pool was not empty');
-  const st = r.runner.settlement(start.battleId, pid);
-  assert.deepEqual([st.boss, st.bossDown], [true, true], "the server's 'cleared'");
   r.runner.dispose();
-  // 'forced' (the team LP ran out) with the pool standing: the boss survived
-  const r2 = rig();
-  r2.net.emit('b.start', start);
-  await r2.settle();
-  r2.advance(1000);
-  r2.net.emit('b.end', { battleId: start.battleId, fieldId: start.fieldId, reason: 'forced' });
-  await r2.settle();
-  const st2 = r2.runner.settlement(start.battleId, pid);
-  assert.deepEqual([st2.boss, st2.bossDown], [true, false]);
-  r2.runner.dispose();
-});
-
-test("settlement() (the settlement voice line, DESIGN §21.30): the own finished battle's numbers and chess-id unitsEnd; null while running, for another player, an unknown battle; 'ownDone' once when it finishes", async () => {
-  const start = realStart(7309);
-  const pid = start.spec.players[0].playerId;
-  const r = rig();
-  const done = [];
-  r.runner.on('ownDone', (m) => done.push(m));
-  r.net.emit('b.start', start);
-  await r.settle();
-  const e = r.runner._entries.get(start.battleId);
-  r.advance(1000);
-  assert.equal(r.runner.settlement(start.battleId, pid), null, 'still running');
-  assert.deepEqual(done, []);
-  for (let i = 0; i < 400 && !e.done; i++) r.advance(1000, 50);
-  assert.ok(e.done, 'finished');
-  await r.settle();
-  const res = e.battle.result();
-  const pp = res.perPlayer[pid];
-  const st = r.runner.settlement(start.battleId, pid);
-  assert.deepEqual(st, {
-    perfect: pp.perfect,
-    leaked: pp.leaked.filter((l) => l.counted !== false).length,
-    killed: pp.killed,
-    total: pp.total,
-    unitsEnd: pp.unitsEnd.map((u) => ({ defId: u.defId, alive: u.alive })),
-    boss: false,
-    bossDown: null,
-  });
-  assert.ok(st.total > 0 && st.unitsEnd.length > 0);
-  assert.ok(st.unitsEnd.every((u) => /^chess_/.test(u.defId)), 'chess ids: the game screen maps them to the operator (charOf)');
-  // what the game screen's sayResult makes of it (upstream 9d56342): chess id → charId through the chess record, one of
-  // THIS battle's operators that has the line, survivors first; without charOf no chess id ever speaks
-  const charOf = (id) => DATA.chess[id]?.charId ?? null;
-  const voiced = DATA.assets?.audio?.voice?.cn || {};
-  const canSpeak = (c, role) => typeof voiced[c]?.[role] === 'string';
-  const v = settlementVoice(st, { charOf, canSpeak, random: () => 0 });
-  const role = st.perfect ? 'win3' : st.total > 0 && st.killed <= 0 ? 'fail' : st.leaked > 0 ? 'win' : 'win3';
-  const can = st.unitsEnd.map((u) => ({ id: charOf(u.defId), alive: u.alive })).filter((o) => o.id && canSpeak(o.id, role));
-  const pool = can.some((o) => o.alive) ? can.filter((o) => o.alive) : can;
-  assert.ok(pool.length, 'this board fields voiced operators');
-  assert.deepEqual(v, { charId: pool[0].id, role });
-  assert.equal(settlementVoice(st, { random: () => 0 }), null, 'chess ids need charOf');
-  assert.deepEqual(done, [{ battleId: start.battleId, fieldId: start.fieldId, late: false }], "'ownDone' once, as it finished");
-  assert.equal(r.runner.settlement('nope', pid), null, 'unknown battle');
-  assert.equal(r.runner.settlement(start.battleId, 'someone_else'), null, 'no part in it');
-  assert.equal(r.runner.settlement(start.battleId, null), null);
-  assert.equal(r.runner.settlement(null, pid), null);
-  // a resend of the finished battle (resync) neither says it again
-  r.net.emit('b.start', { ...start, authoritative: true, elapsed: 3 });
-  await r.settle();
-  assert.equal(done.length, 1);
-  // the next prep drops the round's battles
-  r.store.patch('match', { public: { phase: 'PREP' } });
-  assert.equal(r.runner.settlement(start.battleId, pid), null, 'dropped with the round');
-  r.runner.dispose();
-});
-
-test("settlement() / 'ownDone': a replica of the own field works (and a handover does not say it twice); a teammate's display replica gives nothing; one over before it was shown is `late`; a boss-kind field reads the server's b.end reason", async () => {
-  const start = realStart(7310);
-  const pid = start.spec.players[0].playerId;
-  // the own field simulated as a display replica (the server took it over: reconnect after a takeover)
-  const r = rig();
-  const done = [];
-  r.runner.on('ownDone', (m) => done.push(m));
-  r.net.emit('b.start', { ...start, authoritative: false, watch: false });
-  await r.settle();
-  const e = r.runner._entries.get(start.battleId);
-  for (let i = 0; i < 400 && !e.done; i++) r.advance(1000, 50);
-  assert.ok(e.done);
-  assert.equal(r.net.sent.length, 0, 'a replica never reports');
-  const st = r.runner.settlement(start.battleId, pid);
-  assert.ok(st && st.total > 0 && st.unitsEnd.length > 0, 'non-authoritative own battle');
-  assert.deepEqual(done, [{ battleId: start.battleId, fieldId: start.fieldId, late: false }]);
-  // the server hands the finished field over to this client (its partner left): finished() runs again, the line does not
-  r.net.emit('b.start', { ...start, authoritative: true, watch: false, elapsed: 60 });
-  await r.settle();
-  assert.equal(r.net.sent.filter((x) => x.t === 'b.result').length, 1, 'the handover reports the result');
-  assert.equal(done.length, 1, "'ownDone' once per battle");
-  r.runner.dispose();
-
-  // a teammate's field watched after the own battle (a display replica): never
-  const r2 = rig();
-  const done2 = [];
-  r2.runner.on('ownDone', (m) => done2.push(m));
-  r2.net.emit('b.start', { ...start, authoritative: false, watch: true });
-  await r2.settle();
-  const e2 = r2.runner._entries.get(start.battleId);
-  for (let i = 0; i < 400 && !e2.done; i++) r2.advance(1000, 50);
-  assert.ok(e2.done);
-  assert.equal(r2.runner.settlement(start.battleId, pid), null, 'a display replica');
-  assert.deepEqual(done2, []);
-  r2.runner.dispose();
-
-  // the own battle was already over when it reached this client (a reload after its end): `late`, its numbers still read
-  const r3 = rig();
-  const done3 = [];
-  r3.runner.on('ownDone', (m) => done3.push(m));
-  r3.net.emit('b.start', { ...start, authoritative: false, watch: false, elapsed: 400 });
-  await r3.settle();
-  assert.ok(r3.runner._entries.get(start.battleId).done, 'finished in the catch-up');
-  assert.deepEqual(done3, [{ battleId: start.battleId, fieldId: start.fieldId, late: true }]);
-  assert.ok(r3.runner.settlement(start.battleId, pid));
-  r3.runner.dispose();
-
-  // a boss-kind field (bossLike): bossDown follows the server's b.end — 'cleared' (the pool emptied) / 'forced'
-  for (const [reason, down] of [['cleared', true], ['forced', false]]) {
-    const r4 = rig();
-    r4.net.emit('b.start', { ...start, kind: 'boss', fieldId: 'b1', battleId: `${start.battleId}-${reason}` });
-    await r4.settle();
-    r4.advance(1500);
-    r4.net.emit('b.end', { battleId: `${start.battleId}-${reason}`, fieldId: 'b1', reason });
-    await r4.settle();
-    const s4 = r4.runner.settlement(`${start.battleId}-${reason}`, pid);
-    assert.deepEqual([s4.boss, s4.bossDown], [true, down], reason);
-    r4.runner.dispose();
-  }
 });
 
 /** A fake net whose b.result requests follow a script: 'ok' | 'lost' (DISCONNECTED) | 'offline' | 'timeout' | 'refused'. */
@@ -393,11 +319,9 @@ function scriptResults(r, script) {
   };
 }
 
-test('a b.result goes out right behind a final b.progress; one lost with the socket or not sent (offline) goes out again on the next session and on an authoritative b.start of the finished battle; a refusal is final', async () => {
+test('a b.result lost with the socket is sent again when the session resumes and on an authoritative b.start of the finished battle; a refusal is final', async () => {
   const start = realStart(7305);
   const results = (r) => r.net.sent.filter((x) => x.t === 'b.result');
-  const behindProgress = (r, msg) => r.net.sent[r.net.sent.indexOf(msg) - 1]?.t === 'b.progress';
-  const forcedEnd = { battleId: start.battleId, fieldId: start.fieldId, reason: 'forced' };
   const warn = console.warn;
   console.warn = () => {};
   try {
@@ -407,30 +331,27 @@ test('a b.result goes out right behind a final b.progress; one lost with the soc
     r.net.emit('b.start', start);
     await r.settle();
     r.advance(1500);
-    r.net.emit('b.end', forcedEnd);
+    r.net.emit('b.end', { battleId: start.battleId, fieldId: start.fieldId, reason: 'forced' });
     await r.settle();
     const e = r.runner._entries.get(start.battleId);
     assert.equal(results(r).length, 1);
-    assert.ok(behindProgress(r, results(r)[0]));
     assert.equal(e.delivery, 'undelivered');
+    r.net.emit('status', { status: 'reconnecting' });
+    await r.settle();
+    assert.equal(results(r).length, 1, 'not while reconnecting');
     r.net.emit('status', { status: 'online' });
     await r.settle();
-    assert.equal(results(r).length, 1, 'a status event (every pong) is no new session');
-    r.net.emit('welcome', {});
-    await r.settle();
-    assert.equal(results(r).length, 2, 're-sent on the next session');
-    assert.ok(behindProgress(r, results(r)[1]));
+    assert.equal(results(r).length, 2, 're-sent on resume');
     assert.deepEqual(results(r)[1].result, results(r)[0].result, 'the same result');
     assert.equal(results(r)[1].battleId, start.battleId);
     assert.equal(e.delivery, 'delivered');
-    r.net.emit('welcome', {});
+    r.net.emit('status', { status: 'online' });
     await r.settle();
-    assert.equal(results(r).length, 2, 'a delivered result is not sent again on the next session');
+    assert.equal(results(r).length, 2, 'a delivered result is not sent again on resume');
     // the server resyncs the finished field as still waiting for its authority's result: sent again
     r.net.emit('b.start', { ...start, authoritative: true, elapsed: 3 });
     await r.settle();
     assert.equal(results(r).length, 3);
-    assert.ok(behindProgress(r, results(r)[2]));
     assert.equal(r.runner._entries.get(start.battleId), e, 'no rebuild');
     // a display resend does not
     r.net.emit('b.start', { ...start, authoritative: false, watch: false, elapsed: 3 });
@@ -438,49 +359,31 @@ test('a b.result goes out right behind a final b.progress; one lost with the soc
     assert.equal(results(r).length, 3);
     r.runner.dispose();
 
-    // two timeouts (retried once) → undelivered, out again on the next session
+    // two timeouts (retried once) → undelivered; OFFLINE → undelivered; both go out on resume
     const r2 = rig();
     scriptResults(r2, ['timeout', 'timeout']);
     r2.net.emit('b.start', start);
     await r2.settle();
-    r2.net.emit('b.end', forcedEnd);
+    r2.net.emit('b.end', { battleId: start.battleId, fieldId: start.fieldId, reason: 'forced' });
     await r2.settle();
     assert.equal(results(r2).length, 2, 'one retry on a timeout');
-    assert.ok(behindProgress(r2, results(r2)[1]));
     assert.equal(r2.runner._entries.get(start.battleId).delivery, 'undelivered');
-    r2.net.emit('welcome', {});
+    r2.net.emit('status', { status: 'online' });
     await r2.settle();
     assert.equal(results(r2).length, 3);
     r2.runner.dispose();
 
-    // offline when the battle ends (send() fails): the result is not even requested (a request queued while offline
-    // would reach the server ahead of the next session's reports) — it goes out on the next session
+    // the server answered with a refusal (stale battle, match over): never sent again
     const r3 = rig();
+    scriptResults(r3, ['refused']);
     r3.net.emit('b.start', start);
     await r3.settle();
-    const send = r3.net.send;
-    r3.net.send = () => false;
-    r3.net.emit('b.end', forcedEnd);
+    r3.net.emit('b.end', { battleId: start.battleId, fieldId: start.fieldId, reason: 'forced' });
     await r3.settle();
-    assert.equal(results(r3).length, 0);
-    r3.net.send = send;
-    r3.net.emit('welcome', {});
+    r3.net.emit('status', { status: 'online' });
     await r3.settle();
     assert.equal(results(r3).length, 1);
-    assert.ok(behindProgress(r3, results(r3)[0]));
     r3.runner.dispose();
-
-    // the server answered with a refusal (stale battle, match over): never sent again
-    const r4 = rig();
-    scriptResults(r4, ['refused']);
-    r4.net.emit('b.start', start);
-    await r4.settle();
-    r4.net.emit('b.end', forcedEnd);
-    await r4.settle();
-    r4.net.emit('welcome', {});
-    await r4.settle();
-    assert.equal(results(r4).length, 1);
-    r4.runner.dispose();
   } finally {
     console.warn = warn;
   }
@@ -647,37 +550,4 @@ test('live unit stats (user playtest #4 item 7): unitStats(id) reads the battle 
   assert.equal(r.runner.unitStats(ally.id), null, 'nothing on screen after the battles were dropped');
   assert.equal(r.runner.unitIdOf(ally.uid, ally.ownerId), null);
   r.runner.dispose();
-});
-
-test("a battle on older rules runs on that version's engine; an engine that cannot run live battles leaves the page's own rules", async () => {
-  const start = realStart();
-  const loads = [];
-  let engineBattles = 0;
-  const engineSpec = { ...specMod, createBattleFromSpec: (...a) => { engineBattles++; return specMod.createBattleFromSpec(...a); } };
-  const failing = new Set(['flaky']);
-  const r = rig({
-    rulesVersion: 'own',
-    loadEngine: async (version) => {
-      loads.push(version);
-      if (version === 'archived-before') throw Object.assign(new Error('cannot run live battles'), { code: 'ENGINE_NOT_LIVE' });
-      if (failing.delete(version)) throw new TypeError('Failed to fetch');
-      return { spec: engineSpec, ds: DS };
-    },
-  });
-  const begin = async (rulesVersion, n) => {
-    r.net.emit('b.start', { ...start, battleId: `${start.battleId}-${n}`, rulesVersion });
-    await r.settle();
-  };
-  await begin('own', 1);
-  assert.deepEqual([loads, engineBattles, r.feed.fields.length], [[], 0, 1], "its own rules: the page's simulation");
-  await begin('older', 2);
-  await begin('older', 3);
-  assert.deepEqual([loads, engineBattles, r.feed.fields.length], [['older'], 2, 3], 'older rules: that engine, loaded once');
-  await begin('archived-before', 4);
-  await begin('archived-before', 5);
-  assert.deepEqual([loads.slice(1), engineBattles, r.feed.fields.length], [['archived-before'], 2, 5], "no live engine: the page's rules, asked once");
-  await begin('flaky', 6);
-  assert.equal(r.feed.fields.length, 5, 'a failed load starts nothing (the server takes the field over)');
-  await begin('flaky', 7);
-  assert.deepEqual([loads.slice(2), engineBattles, r.feed.fields.length], [['flaky', 'flaky'], 3, 6], 'and the next battle loads it again');
 });

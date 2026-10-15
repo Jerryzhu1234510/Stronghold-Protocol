@@ -19,7 +19,6 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { MAX_SEATS, DEFAULT_SEATS } from '../shared/constants.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -37,7 +36,7 @@ function walk(dir, ext, out = []) {
   return out;
 }
 
-/** URL path served by the server → file on disk (mirrors server/index.js mounts). */
+/** URL path served by the server → file on disk (mirrors the server/http/static.js mounts). */
 function urlPathToFile(urlPath) {
   const clean = decodeURIComponent(urlPath.split(/[?#]/)[0]);
   if (clean.startsWith('/shared/')) return path.join(ROOT, clean);
@@ -436,7 +435,7 @@ describe('net.js', () => {
     assert.ok(ws().last('ping'), 'latency probe before hello');
     net.setName('  凯尔希  ');
     const hello = ws().last('hello');
-    assert.deepEqual({ ...hello, rid: 0 }, { t: 'hello', rid: 0, name: '凯尔希', version: PROTOCOL_VERSION, token: 'tok-1' });
+    assert.deepEqual({ ...hello, rid: 0 }, { t: 'hello', rid: 0, name: '凯尔希', version: PROTOCOL_VERSION, stateDelta: true, token: 'tok-1' });
     assert.equal(net.status, 'handshaking');
     ws().recv({ t: 'welcome', rid: hello.rid, playerId: 'p_1', token: 't', name: '凯尔希', serverNow: Date.now() });
     assert.equal(net.status, 'online');
@@ -831,8 +830,8 @@ describe('identity (reconnect-token selection across tabs)', () => {
     id.saveToken('');
     id.saveToken('x'.repeat(65));
     assert.equal(id.getToken(), null, 'invalid tokens ignored');
-    for (let i = 0; i < MAX_SEATS + 1; i++) id.saveToken(`t${i}`);
-    assert.equal(recent(local).length, MAX_SEATS, 'recent list capped (one browser may hold every seat of a room)');
+    for (let i = 0; i < 9; i++) id.saveToken(`t${i}`);
+    assert.equal(recent(local).length, 4, 'recent list capped');
     local.setItem('sp.tokens', '{broken');
     id.saveToken('ok');
     assert.deepEqual(recent(local), ['ok'], 'corrupt list replaced');
@@ -945,8 +944,7 @@ describe('data.js', () => {
 
 describe('screen helpers', () => {
   test('title: sanitizeName / isValidName / findUiAsset', async () => {
-    const { findUiAsset } = await mod('screens/title.js');
-    const { sanitizeName, isValidName, normalizeName } = await mod('names.js');
+    const { sanitizeName, isValidName, findUiAsset } = await mod('screens/title.js');
     assert.equal(sanitizeName('  凯尔希  '), '凯尔希');
     assert.equal(sanitizeName('a\u0000b\u200bc\u202ed'), 'abcd');
     assert.equal(sanitizeName('a   b'), 'a b');
@@ -955,12 +953,10 @@ describe('screen helpers', () => {
     const cut = sanitizeName(emoji);
     assert.ok(cut.length <= 12 && !/[\ud800-\udbff]$/.test(cut), 'no dangling surrogate');
     const server = await import(pathToFileURL(path.join(ROOT, 'server/net.js')).href);
-    for (const raw of ['e\u0301', '\ud800x', '\udc00', 'a \u200b b', '\u00a0\u3000A\u3000B', 'a\u2028b', '😀'.repeat(7), ' x '.repeat(9),
-      'x\u00ad\u0308', '\u1100\u200b\u1161']) {
+    for (const raw of ['e\u0301', '\ud800x', '\udc00', 'a \u200b b', '\u00a0\u3000A\u3000B', 'a\u2028b', '😀'.repeat(7), ' x '.repeat(9)]) {
       const c = sanitizeName(raw);
       assert.ok(c.length <= 12, 'protocol limit (UTF-16 units)');
       assert.equal(server.sanitizeName(c) ?? '', c, `server keeps the client-sanitized ${JSON.stringify(raw)} unchanged`);
-      assert.equal(normalizeName(raw), server.normalizeName(raw), `normalized as the server does: ${JSON.stringify(raw)}`);
     }
     assert.equal(sanitizeName(null), '');
     assert.equal(isValidName('   '), false);
@@ -977,29 +973,6 @@ describe('screen helpers', () => {
     assert.match(source, /import \{ SettingsModal \} from '\.\.\/ui\/settings\.js'/);
     assert.match(source, /class="title-settings fsbtn tapx"/, 'title screen includes the settings control');
     assert.match(source, /<\$\{SettingsModal\} open=\$\{settingsOpen\}/, 'settings control opens the shared modal');
-  });
-
-  test('title connection row: 玩法说明 · 资源管理 · ⚙ · ⛶, and ⚙ / ⛶ split the touch area between them', () => {
-    const source = readFileSync(path.join(PUBLIC, 'js/screens/title.js'), 'utf8');
-    const row = source.slice(source.indexOf('<div class="title-conn">'));
-    const at = (re) => { const m = re.exec(row); assert.ok(m, `title-conn has ${re}`); return m.index; };
-    const guide = at(/<\$\{GuideButton\} class="title-guide"/);
-    const res = at(/<\$\{ResourceButton\} class="title-res"/);
-    const gear = at(/class="title-settings fsbtn tapx"/);
-    const fs = at(/<\$\{FullscreenButton\} class="title-fs"/);
-    assert.ok(guide < res && res < gear && gear < fs, 'the fork’s 资源管理 and #183’s ⚙ both stay, text buttons first');
-    // ⛶'s centred 44 px area covered half of the 16 px ⚙ on a phone (a tap on ⚙ toggled fullscreen)
-    const css = readFileSync(path.join(PUBLIC, 'css/devices.css'), 'utf8');
-    assert.match(css, /\.sp-coarse \.title-conn :is\(\.title-settings, \.title-fs\)::before \{ width: calc\(100% \+ \.16rem\); \}/);
-    assert.match(css, /\.title-fs, \.title-settings \{ width: \.4rem; height: \.4rem; margin-left: \.06rem; \}/, '.16rem apart: gap .1rem + margin .06rem');
-    const titleCss = readFileSync(path.join(PUBLIC, 'css/screens/title.css'), 'utf8');
-    assert.match(titleCss, /\.title-conn__state, \.title-conn__tools \{[^}]*gap: \.1rem;/);
-    // 玩法说明 · 资源管理 · ⚙ · ⛶ (Cloudflare) do not fit next to the state: the tools wrap as a whole onto their own line
-    // instead of the row squeezing the state text onto two lines and ⚙ / ⛶ out of square (test/ui/title-conn.e2e.test.js)
-    const tools = row.slice(row.indexOf('<span class="title-conn__tools">'));
-    assert.ok(row.indexOf('class="title-conn__state"') >= 0 && row.indexOf('class="title-conn__state"') < row.indexOf('title-conn__tools'));
-    for (const re of [/class="title-guide"/, /class="title-res"/, /class="title-settings /, /class="title-fs"/]) assert.match(tools, re);
-    assert.match(titleCss, /\.title-conn \{[^}]*flex-wrap: wrap;/);
   });
 
   test('lobby: normalizeCode / parseRoomParam / difficultyInfo', async () => {
@@ -1103,46 +1076,9 @@ describe('screen helpers', () => {
     assert.match(inviteLink('ABCD'), /\?room=ABCD$/);
   });
 
-  test('room: the seat cards follow the room capacity (room.state.capacity, 4–8; 5–8 a remake extension)', async () => {
-    const { normalizeSeats, roomFacts, roomCapacity } = await mod('screens/room.js');
-    const seat = (i, extra = {}) => ({ seat: i, playerId: `p${i}`, name: `P${i}`, isBot: false, ready: true, connected: true, ...extra });
-    // a 4-seat room is today's room: 4 cards
-    assert.equal(roomCapacity({ mode: 'coop', capacity: DEFAULT_SEATS, seats: [seat(0), null, null, null] }), DEFAULT_SEATS);
-    assert.equal(normalizeSeats({ mode: 'coop', capacity: 4, seats: [seat(0), null, null, null] }).length, 4);
-    assert.equal(roomCapacity({ mode: 'coop' }), DEFAULT_SEATS, 'nothing known ⇒ the default room');
-    // an 8-seat room: 8 cards, the 8th seat (index 7) addressable
-    const big = { code: 'ABCD', hostId: 'p0', mode: 'coop', difficulty: 'FUNNY', capacity: MAX_SEATS,
-      seats: [seat(0), null, seat(2, { ready: false }), null, null, null, null, seat(7, { playerId: 'ai_7', isBot: true })] };
-    assert.equal(MAX_SEATS, 8);
-    const seats = normalizeSeats(big);
-    assert.equal(seats.length, 8);
-    assert.equal(seats[7].seat, 7);
-    const f = roomFacts(big, 'p0');
-    assert.equal(f.capacity, 8);
-    assert.equal(f.emptySeats, 5);
-    assert.equal(f.humans.length, 2);
-    assert.equal(f.canStart, false, 'P3 is not ready');
-    // capacity wins over the list's length; a server without `capacity`: the list's length (a 5-seat room)
-    assert.equal(normalizeSeats({ mode: 'coop', capacity: 6, seats: [seat(0)] }).length, 6);
-    assert.equal(normalizeSeats({ mode: 'coop', seats: [seat(0), null, null, null, null] }).length, 5);
-    // out-of-range values are clamped to DEFAULT_SEATS..MAX_SEATS; solo is always one seat
-    assert.equal(roomCapacity({ mode: 'coop', capacity: 2 }), DEFAULT_SEATS);
-    assert.equal(roomCapacity({ mode: 'coop', capacity: 99 }), MAX_SEATS);
-    assert.equal(roomCapacity({ mode: 'solo', capacity: 8, seats: [seat(0)] }), 1);
-    assert.equal(normalizeSeats({ mode: 'solo', capacity: 1, seats: [seat(0)] }).length, 1);
-    // the room screen: a 5–8-seat room wraps its cards into two rows; the host picks 4–8 seats next to the difficulty
-    const src = readFileSync(path.join(PUBLIC, 'js/screens/room.js'), 'utf8');
-    assert.match(src, /seats--wide/);
-    assert.match(src, /net\.request\('room\.setCapacity', \{ capacity \}\)/);
-    const css = readFileSync(path.join(PUBLIC, 'css/screens/room.css'), 'utf8');
-    assert.match(css, /\.seats--wide \{ grid-template-rows: repeat\(2, /, 'two rows of four');
-    assert.match(css, /\.seats \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 3\.8rem\)\);[^}]*grid-template-rows: minmax\(0, 6rem\);/,
-      'a 4-seat room keeps its one row of 4 cards');
-  });
-
   test('room: spectator seats (community report #26) — isSpectating; roomFacts never counts a spectator as a player', async () => {
     const { roomFacts } = await mod('screens/room.js');
-    const { isSpectating, isSpectator } = await mod('store.js');
+    const { isSpectating } = await mod('store.js');
     const room = {
       code: 'ABCD', hostId: 'h', mode: 'coop', difficulty: 'HARD',
       seats: [{ seat: 0, playerId: 'h', name: 'Host', isBot: false, ready: false, connected: true }, null, null, null],
@@ -1153,11 +1089,6 @@ describe('screen helpers', () => {
     assert.equal(isSpectating({ ...room, spectators: undefined }, 's'), false, 'a room.state without the list');
     assert.equal(isSpectating(room, null), false);
     assert.equal(isSpectating(null, 's'), false);
-    // either kind of spectator: a seat (the Node server) or the room Worker's public-match spectator
-    assert.equal(isSpectator(room, 's'), true, 'a spectator seat');
-    assert.equal(isSpectator(room, 'h'), false);
-    assert.equal(isSpectator({ ...room, spectators: [], spectating: true }, 'v'), true, "the room Worker's public-match spectator");
-    assert.equal(isSpectator(null, 's'), false);
     const f = roomFacts(room, 's');
     assert.equal(f.spectating, true);
     assert.equal(f.mine, null);
@@ -1168,18 +1099,6 @@ describe('screen helpers', () => {
     assert.equal(hf.canStart, true, 'a spectator never blocks the start');
     assert.equal(hf.spectating, false);
     assert.deepEqual(roomFacts({ ...room, spectators: 'bad' }, 'h').spectators, []);
-  });
-
-  test('components: PlayerName keeps the #NNNN of a display name out of the ellipsis', async () => {
-    const { PlayerName } = await mod('ui/components.js');
-    const { nameParts } = await import(pathToFileURL(path.join(ROOT, 'shared/account-protocol.js')).href);
-    assert.deepEqual(nameParts('十二个字的博士代号测试名#5284'), { nickname: '十二个字的博士代号测试名', tag: '#5284' });
-    for (const name of ['Amiya', 'AI · 华法琳', '博士']) assert.deepEqual(nameParts(name), { nickname: name, tag: '' });
-    assert.equal(PlayerName({ name: 'Amiya' }), 'Amiya', 'a name without a discriminator is plain text');
-    const shown = PlayerName({ name: '晴猫#1145' });
-    assert.equal(shown.props.class, 'pname');
-    assert.deepEqual(shown.props.children.map((part) => [part.props.class, part.props.children]),
-      [['pname__nick', '晴猫'], ['pname__tag', '#1145']]);
   });
 
   test('components: roman / doctorNo / secondsLeft', async () => {
@@ -1241,11 +1160,11 @@ function cssRules(src) {
 describe('multi-device & browser compatibility (static)', () => {
   const index = readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
 
-  test('index.html: landscape viewport without page zoom, notch-aware, devices.css last, boot diagnostics', () => {
+  test('index.html: landscape viewport without page zoom, notch-aware, device and room overrides last, boot diagnostics', () => {
     const vp = index.match(/<meta name="viewport" content="([^"]+)"/)?.[1] || '';
     for (const k of ['width=device-width', 'initial-scale=1', 'maximum-scale=1', 'user-scalable=no', 'viewport-fit=cover']) assert.ok(vp.includes(k), `viewport has ${k}`);
     const sheets = [...index.matchAll(/<link rel="stylesheet" href="(\/css\/[^"]+)"/g)].map((x) => x[1]);
-    assert.equal(sheets[sheets.length - 1], '/css/devices.css', 'devices.css is the last stylesheet');
+    assert.deepEqual(sheets.slice(-2).map((href) => href.split('?')[0]), ['/css/devices.css', '/css/room-directory.css'], 'landscape device rules precede room-specific overrides');
     assert.match(index, /<script nomodule>/, 'a browser without ES modules gets a message');
     assert.match(index, /onerror="window\.__spBootFail/, 'a module graph that cannot load gets a message');
     assert.match(index, /apple-mobile-web-app-capable/);

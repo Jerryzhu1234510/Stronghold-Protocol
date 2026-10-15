@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "servers": [
+    {
+      "id": "8443",
+      "name": "8443服",
+      "url": "https://weishuxieyiwangye.cn:8443/game.html",
+      "badge": "完整素材内置",
+      "description": "图片、角色动画、棋盘与音频从本地读取。\n直接进入，无需导入资源 ZIP。"
+    },
+    {
+      "id": "icu",
+      "name": "icu服",
+      "url": "https://weishuxieyi.icu/game.html",
+      "badge": "合作服务器",
+      "description": "使用 icu 服的独立账号与玩法。\n资源加载遵循该站点的配置。"
+    }
+  ]
+}

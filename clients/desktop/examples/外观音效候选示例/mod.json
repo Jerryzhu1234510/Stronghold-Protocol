@@ -1,0 +1,71 @@
+{
+  "format": 2,
+  "id": "example-visual-audio",
+  "name": "示例：头像与护盾音效候选",
+  "version": "1.0.0",
+  "server": "8443",
+  "description": "演示分组候选。头像复用基础包素材，音效为本地合成提示音。仅用于测试接口。",
+  "files": [],
+  "variants": [
+    {
+      "id": "alternate",
+      "name": "备用头像",
+      "group": "portrait",
+      "groupName": "凯尔希头像",
+      "category": "appearance",
+      "default": true,
+      "files": [
+        {
+          "target": "/assets/char/avatar/char_003_kalts.png",
+          "originalSha256": "398f32e2ff78d9e6fcee8cb9b49979aca2457f47f8d7ce5e15c589ff317c17c0",
+          "path": "alternate.png"
+        }
+      ]
+    },
+    {
+      "id": "classic",
+      "name": "经典头像",
+      "group": "portrait",
+      "groupName": "凯尔希头像",
+      "category": "appearance",
+      "default": false,
+      "files": [
+        {
+          "target": "/assets/char/avatar/char_003_kalts.png",
+          "originalSha256": "398f32e2ff78d9e6fcee8cb9b49979aca2457f47f8d7ce5e15c589ff317c17c0",
+          "path": "classic.png"
+        }
+      ]
+    },
+    {
+      "id": "soft",
+      "name": "柔和提示音",
+      "group": "shield",
+      "groupName": "获得护盾音效",
+      "category": "audio",
+      "default": true,
+      "files": [
+        {
+          "target": "/assets/audio/sfx/battle/b_char/b_char_addshield.mp3",
+          "originalSha256": "665f728a27311214188944875df33ff78c18a6d46100aa57205fa1de75a2c27b",
+          "path": "soft.wav"
+        }
+      ]
+    },
+    {
+      "id": "bright",
+      "name": "清脆提示音",
+      "group": "shield",
+      "groupName": "获得护盾音效",
+      "category": "audio",
+      "default": false,
+      "files": [
+        {
+          "target": "/assets/audio/sfx/battle/b_char/b_char_addshield.mp3",
+          "originalSha256": "665f728a27311214188944875df33ff78c18a6d46100aa57205fa1de75a2c27b",
+          "path": "bright.wav"
+        }
+      ]
+    }
+  ]
+}

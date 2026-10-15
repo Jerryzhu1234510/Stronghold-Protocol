@@ -21,7 +21,8 @@
 
 import { useLayoutEffect, useReducer, useRef } from '../vendor/hooks.module.js';
 import { PHASE } from '../../shared/constants.js';
-import { preferences } from './preferences.js';
+import { emptyChat } from './ui/chatState.js';
+import { t } from '../../shared/i18n.js';
 
 /**
  * Create an observable store.
@@ -79,11 +80,8 @@ export const initialState = Object.freeze({
   me: { playerId: null, name: '', token: null },
   session: { entered: false },
   room: null,
+  chat: emptyChat(),
   match: emptyMatch(),
-  // 匹配 (matchmaking queue): the last queue.status ({ waiting, difficulty, count, total, waitedMs, minSeats, seats }) plus
-  // the queue.matched payload the server sent when it put this player in a room ({ code, difficulty, seated, expect }:
-  // `expect` is how many humans a matched host waits for in account mode, DESIGN §28.2; 0 from the Node server).
-  queue: { waiting: false, difficulty: null, count: 0, total: 0, waitedMs: 0, minSeats: 0, seats: 0, matched: null },
   ticker: [],
   emotes: [],
   clock: { offset: 0, rtt: null, synced: false },
@@ -120,18 +118,6 @@ export function isSpectating(room, playerId) {
 }
 
 /**
- * Whether the player is a spectator of the room, of either kind: in one of its spectator seats (isSpectating — the Node
- * server) or watching its public match (room.state `spectating` — the room Worker, worker/rooms/spectators.js; no seat
- * at all). Either watches like an eliminated player and may not act; each kind follows the match its own way.
- * @param {any} room room.state payload
- * @param {string|null|undefined} playerId
- * @returns {boolean}
- */
-export function isSpectator(room, playerId) {
-  return !!room?.spectating || isSpectating(room, playerId);
-}
-
-/**
  * The notice after a `welcome` that starts a brand-new server session (the server restarted, or this session expired
  * on it: a new playerId) while a room or a match was on screen — everything shown is gone. Null when nothing is lost
  * (the first welcome, a resumed session, only the title / lobby on screen).
@@ -142,8 +128,8 @@ export function isSpectator(room, playerId) {
 export function sessionResetNotice(prev, playerId) {
   const prevId = prev?.me?.playerId;
   if (prevId == null || prevId === playerId) return null;
-  if (prev?.match?.public || prev?.room?.inMatch) return '服务器会话已重置，上一局模拟已结束';
-  if (prev?.room) return '服务器会话已重置，已返回大厅';
+  if (prev?.match?.public || prev?.room?.inMatch) return t('服务器会话已重置，上一局模拟已结束');
+  if (prev?.room) return t('服务器会话已重置，已返回大厅');
   return null;
 }
 
@@ -173,41 +159,34 @@ export function shallowEqual(a, b) {
   return true;
 }
 
-// ---- persisted preferences (account-synced allowlist; device-local fallback) --------------------
+// ---- tiny persisted preferences (localStorage, failure-tolerant) --------------------------------
 
 /**
- * Read a JSON preference from the active account cache or device-local storage.
+ * Read a JSON preference from localStorage.
  * @template T
  * @param {string} key
  * @param {T} fallback
  * @returns {T}
  */
 export function loadPref(key, fallback) {
-  return preferences.load(key, fallback);
+  try {
+    const raw = globalThis.localStorage?.getItem(`sp.pref.${key}`);
+    return raw == null ? fallback : JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
 }
 
 /**
- * Save immediately on this device and queue account-scoped preferences for server persistence.
+ * Write a JSON preference to localStorage (silently ignores quota/privacy errors).
  * @param {string} key
  * @param {any} value
  */
-export function savePref(key, value) {
-  preferences.save(key, value);
-}
-
-export const subscribePrefs = listener => preferences.subscribe(listener);
-
-/** Re-render when a saved preference changes, including a delayed cloud recovery. */
-export function usePref(key, fallback) {
-  const [, render] = useReducer(n => n + 1, 0);
-  useLayoutEffect(() => subscribePrefs(changed => { if (changed === key) render(); }), [key]);
-  return [loadPref(key, fallback), value => savePref(key, value)];
-}
-
-export function usePrefStatus() {
-  const [, render] = useReducer(n => n + 1, 0);
-  useLayoutEffect(() => subscribePrefs(key => { if (key === null) render(); }), []);
-  return preferences.status;
+const prefListeners = new Set();
+export function onPrefSave(fn) { prefListeners.add(fn); return () => prefListeners.delete(fn); }
+export function savePref(key, value, fromCloud = false) {
+  try { globalThis.localStorage?.setItem(`sp.pref.${key}`, JSON.stringify(value)); } catch { /* ignore */ }
+  for (const fn of prefListeners) { try { fn(key, value, fromCloud); } catch (e) { console.warn('[preferences]', e); } }
 }
 
 const identity = (s) => s;

@@ -12,8 +12,6 @@ them (with `node_modules/`, which keeps each package's own licence file).
 
 | Component | Version | Licence | Where it is used | In the repository | In the release bundle |
 |---|---|---|---|---|---|
-| [zip.js](https://github.com/gildas-lormeau/zip.js) | 2.22.0 | BSD-3-Clause | browser resource ZIP importer; notice in `public/vendor/zip-LICENSE.txt` | no (npm) | yes |
-| [fflate](https://github.com/101arrowz/fflate) | 0.8.3 | MIT | local resource ZIP pack builder (`node_modules/fflate/LICENSE`) | no (npm) | yes (`node_modules/`) |
 | [PixiJS](https://github.com/pixijs/pixijs) | 7.4.2 | MIT | browser renderer — `public/vendor/pixi.min.js` | no (npm) | yes |
 | [pixi-spine](https://github.com/pixijs/spine) | 4.0.6 | MIT banner; contains the **Spine Runtimes**, under the **Spine Runtimes License Agreement** (package licence "SEE SPINE-LICENSE") | Spine model playback — `public/vendor/pixi-spine.js` | no (npm) | yes |
 | [Preact](https://github.com/preactjs/preact) | 10.29.8 | MIT | UI — `public/vendor/preact.module.js`, `hooks.module.js` | no (npm) | yes |
@@ -50,8 +48,21 @@ All names, characters, artwork, Spine models, UI graphics, music, sound effects 
 [fexli/ArknightsResource](https://github.com/fexli/ArknightsResource),
 [isHarryh/Ark-Models](https://github.com/isHarryh/Ark-Models),
 [ArknightsAssets/ArknightsAssets2](https://github.com/ArknightsAssets/ArknightsAssets2) — thanks to their maintainers.
+The English game texts (`data/i18n/en.json`, `tools/build-i18n.mjs`) come from the official EN client tables mirrored by
+[ArknightsAssets/ArknightsGamedata](https://github.com/ArknightsAssets/ArknightsGamedata) (`en/gamedata`, the default
+source) and [Kengxxiao/ArknightsGameData_YoStar](https://github.com/Kengxxiao/ArknightsGameData_YoStar) (`en_US`,
+`--source yostar`); same terms as the rest of the game data.
 Quotations of PRTS Wiki, BWIKI, NGA, 巴哈姆特 and other community pages in `docs/` stay under the terms of their
 sources (the wikis' texts are CC BY-NC-SA).
+
+## Translations
+
+The English UI strings (`public/i18n/en.json`) and the fallback game-text translations (`tools/i18n/fallback-pr70.json`)
+are based on GitHub PR #70 (branch `en-translation`) by **@YuriRestia**, reused with credit and released with the project
+under GPL-3.0-or-later (docs/I18N.md). PR #70 named ak-spa-database.pages.dev and arknights.wiki.gg as references: texts
+it took from ak-spa-database.pages.dev (no licence) are excluded; arknights.wiki.gg is CC BY-SA 4.0, which may be combined
+into a GPL-3.0 work (the one-way compatibility Creative Commons declared) — thanks to its contributors. Official game
+terms and names in those files remain © Hypergryph / Yostar.
 
 ---
 

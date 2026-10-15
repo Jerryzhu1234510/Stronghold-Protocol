@@ -80,14 +80,16 @@ const remAt = (w, h) => Math.max(40, Math.min(w / 19.2, h / 10.8, 240));
  * Run `fn` with a stubbed DOM: root font size, the HUD layer's rect (safe-area insets), the corner buttons (client-px
  * rects, or none) and whether the pointer is coarse (`sp-coarse`, --tap-min 44 px).
  */
-function withDom({ rem, hudTop = 0, hudBottom = null, corner = null, coarse = false }, fn) {
+function withDom({ rem, hudTop = 0, hudBottom = null, corner = null, coarse = false, shopHeight = null, cardsHeight = null }, fn) {
   const g = globalThis;
   const saved = { document: g.document, getComputedStyle: g.getComputedStyle };
   const root = { classList: { contains: (c) => c === 'sp-coarse' && coarse } };
   g.getComputedStyle = (el) => ({ fontSize: `${rem}px`, getPropertyValue: (p) => (el === root && p === '--tap-min' ? ' 44px' : '') });
   g.document = {
     documentElement: root,
-    querySelector: (s) => (s === '.gm__hud' ? { getBoundingClientRect: () => ({ top: hudTop, bottom: hudBottom ?? 0 }) } : null),
+    querySelector: (s) => (s === '.gm__hud' ? { getBoundingClientRect: () => ({ top: hudTop, bottom: hudBottom ?? 0 }) }
+      : s === '.shopbar' && shopHeight !== null ? { getBoundingClientRect: () => ({ height: shopHeight }) }
+      : s === '.shopbar__row' && cardsHeight !== null ? { getBoundingClientRect: () => ({ height: cardsHeight }) } : null),
     querySelectorAll: (s) => (s.includes('.gm__corner') && corner ? corner.map((r) => ({ getBoundingClientRect: () => r })) : []),
   };
   try { return fn(); } finally { g.document = saved.document; g.getComputedStyle = saved.getComputedStyle; }
@@ -113,19 +115,27 @@ describe('hudBands: the folded shop\'s band', () => {
     assert.match(read('public/css/devices.css'), /@media \(max-width: 767px\) \{\n {2}\.gm\.is-collapsed \.gm__corner \{ flex-wrap: nowrap; width: auto; \}\n\}/);
   });
 
-  test('prep / Final Assault prep only; open = the bar (unchanged), folded = the higher of the tab and the corner', () => {
+  test('prep / Final Assault prep only; open reserves the mobile dock, folded reserves the tab and corner', () => {
     withDom({ rem: 40 }, () => {
       for (const k of ['normal', 'unite', 'boss', 'pen']) assert.equal(hudBands(k, { width: 844, height: 390 }, { shop: false }), null, k);
       for (const k of ['prep', 'bossPrep']) {
         const open = hudBands(k, { width: 844, height: 390 });
         assert.deepEqual(hudBands(k, { width: 844, height: 390 }, { shop: true }), open);
-        assert.ok(Math.abs(open.bottom - 108.6) < 1e-9, 'the bar: 2.64rem + 3 px');
+        assert.ok(Math.abs(open.bottom - 156.6) < 1e-9, 'fallback reserves cards and original controls on phones');
         const f = hudBands(k, { width: 844, height: 390 }, { shop: false });
         assert.equal(f.top, open.top, 'the top band does not change');
         assert.ok(Math.abs(f.bottom - 35) < 1e-9, `no corner on the page: the tab .8rem + 3 px (${f.bottom})`);
       }
     });
     withDom({ rem: 100 }, () => assert.deepEqual(hudBands('prep', { width: 1920, height: 1080 }, { shop: false }), { top: 216, bottom: 83 }));
+    withDom({ rem: 100 }, () => assert.equal(hudBands('prep', { width: 1920, height: 1080 }).bottom, 267, 'desktop dock unchanged'));
+    withDom({ rem: 40, shopHeight: 136 }, () => assert.equal(hudBands('prep', { width: 844, height: 390 }).bottom, 144, 'measure actual dock height'));
+    withDom({ rem: 40, shopHeight: 136, cardsHeight: 100 }, () => {
+      const hud = hudBands('prep', { width: 844, height: 390 });
+      assert.equal(hud.bottom, 144, 'keep r07 zoom baseline');
+      assert.equal(hud.benchBottom, 108, 'align with measured cards plus dock bottom offset');
+      assert.equal(hudBands('prep', { width: 844, height: 390 }, { shop: false }).benchBottom, undefined, 'folded camera unchanged');
+    });
   });
 
   test('the corner buttons are measured, touch hit areas included; the tab sits above the bottom safe-area inset', () => {
@@ -173,9 +183,7 @@ describe('the folded board grows and every bench / temp tile stays clear of the 
         const foldCam = presetCamera(kind, { width: w, height: h }, { ...opts, shop: false, hud: foldHud });
         const tag = `${kind}${opts.side} ${w}×${h}`;
         const midRow = rows.back - 2;
-        // (on a touch screen the shop camera itself is no longer zoomed out below the official framing — DESIGN §26.1 — so
-        // folding grows the board by less there, but it still grows)
-        assert.ok(tileAt(foldCam, midRow) > tileAt(openCam, midRow) * (coarse ? 1.05 : 1.15), `${tag}: grows (${tileAt(openCam, midRow).toFixed(1)} → ${tileAt(foldCam, midRow).toFixed(1)})`);
+        assert.ok(tileAt(foldCam, midRow) > tileAt(openCam, midRow) * 1.15, `${tag}: grows (${tileAt(openCam, midRow).toFixed(1)} → ${tileAt(foldCam, midRow).toFixed(1)})`);
         const e = extents(foldCam, rows);
         // (projection.js clearHud keeps an official camera that overlaps a band by ≤ 0.5 px: float noise)
         assert.ok(e.benchBottom <= h - foldHud.bottom + 0.5 + 1e-6, `${tag}: bench ${e.benchBottom} above the folded band ${h - foldHud.bottom}`);
@@ -207,8 +215,9 @@ describe('wiring', () => {
     assert.match(app, /return opts\.hud\(kind, sz, o\) \|\| null;/);
     const game = read('public/js/screens/game.js');
     assert.match(game, /const shopFolded = showShop && \(pen \? penRef\.current\.collapsed : collapsed\);/);
-    // entering prep and the boss-prep re-frame take the fold state; a fold / unfold re-frames through foldCamera
-    assert.equal((game.match(/const pc = prepCameraFor\(pub, myId, shopFolded\);/g) || []).length, 2);
-    assert.match(game, /const next = foldCamera\(\{\n\s+pub, myId, folded: shopFolded, ownPrep: !!view && viewModeRef\.current === 'prep' && showPrep,\n\s+pen, busy: !!drag \|\| !!facing, current: camRef\.current,\n\s+\}\);\n\s+if \(next\) setCam\(next\.kind, next\.opts\);\n\s+\}, \[view, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey\]\);/);
+    // Entering prep and repairing a stale field share one synchronization; fold / unfold still uses foldCamera.
+    assert.equal((game.match(/const pc = prepCameraFor\(pub, myId, shopFolded, priv\);/g) || []).length, 1);
+    assert.match(game, /const shown = view\.prepField\?\.\(\);/);
+    assert.match(game, /const next = foldCamera\(\{\n\s+pub, priv, myId, folded: shopFolded, ownPrep: !!view && viewModeRef\.current === 'prep' && showPrep,\n\s+pen, busy: !!drag \|\| !!facing, current: camRef\.current,\n\s+\}\);\n\s+if \(next\) setCam\(next\.kind, next\.opts\);\n\s+\}, \[view, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey\]\);/);
   });
 });

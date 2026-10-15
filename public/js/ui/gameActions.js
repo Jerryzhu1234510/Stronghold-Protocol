@@ -20,6 +20,22 @@ const emitBusy = () => { for (const fn of [...busyListeners]) { try { fn(infligh
 /** Subscribe to the number of in-flight intents (for subtle busy indicators). */
 export function onBusy(fn) { busyListeners.add(fn); return () => busyListeners.delete(fn); }
 
+// Single-flight shop refresh (GitHub #501, single-ptilopsis): under a high RTT the shop has not answered yet while the
+// player taps 刷新 again — every extra g.refresh the client sends is a paid refresh (server/match intents.js → ps.refresh).
+// A tap while the previous request is still on the wire is dropped; the button dims and the R hotkey stays inert (both
+// call actions.refresh) until the request settles (success or failure). This is not server-side cancellation or
+// idempotency: a timed-out request may already have executed. The shop bar receives onRefreshBusy via the game screen.
+let refreshPending = false;
+const refreshBusyListeners = new Set();
+const emitRefreshBusy = () => { for (const fn of [...refreshBusyListeners]) { try { fn(refreshPending); } catch { /* ignore */ } } };
+
+/**
+ * Subscribe to the shop refresh's in-flight state — fires once with the current state.
+ * @param {(busy: boolean) => void} fn
+ * @returns {() => void} unsubscribe
+ */
+export function onRefreshBusy(fn) { refreshBusyListeners.add(fn); try { fn(refreshPending); } catch { /* ignore */ } return () => refreshBusyListeners.delete(fn); }
+
 /**
  * Send an intent. Resolves true on `ok`, false on error (already toasted).
  * @param {string} t
@@ -52,8 +68,15 @@ export const actions = {
   band: (bandId) => act('g.band', { bandId }),
   bandSkip: () => act('g.bandSkip'),
   buy: (slot) => act('g.buy', { slot }),
-  refresh: () => act('g.refresh'),
+  // a tap while the previous g.refresh is still on the wire is dropped (GitHub #501) — see onRefreshBusy above
+  refresh: () => {
+    if (refreshPending) return Promise.resolve(false);
+    refreshPending = true;
+    emitRefreshBusy();
+    return act('g.refresh').finally(() => { refreshPending = false; emitRefreshBusy(); });
+  },
   freeze: () => act('g.freeze'),
+  shopFocus: (bondId) => act('g.shopFocus', { bondId }, { sfx: 'click' }),
   levelUp: () => act('g.levelUp'),
   sell: (uid) => act('g.sell', { uid }),
   // `dir` (UP|RIGHT|DOWN|LEFT): the direction chosen with the deploy wheel (research 09 §6.1 — g.move / g.art carry it;
@@ -66,8 +89,14 @@ export const actions = {
   reward: (idx) => act('g.reward', { idx }),
   choice: (idx) => act('g.choice', { idx }),
   ready: (ready) => act('g.ready', { ready }, { sfx: ready ? 'ready' : 'back' }),
-  emote: (id) => act('g.emote', { id }, { quiet: true }),
-  watch: (fieldId) => act('g.watch', { fieldId }, { sfx: 'tab' }),
+  prepExtend: (seconds) => act('g.prepExtend', { seconds }),
+  prepVote: (voteId, agree) => act('g.prepVote', { voteId, agree }),
+  uniteSkip: () => act('g.uniteSkip'),
+  uniteVote: (voteId, agree) => act('g.uniteVote', { voteId, agree }),
+  readyReminder: () => act('g.readyReminder'),
+  emote: (id) => act('g.emote', { id }),
+  // `playerId`: the player tapped in the team panel (a shared field shows two) — what an eliminated viewer follows
+  watch: (fieldId, playerId = null) => act('g.watch', typeof playerId === 'string' && playerId ? { fieldId, playerId } : { fieldId }, { sfx: 'tab' }),
   autoplay: (on) => act('g.autoplay', { on }),
   // solo battles only (ui/matchStatus.js pauseAvailable): m.public.paused follows
   pause: (on) => act('g.pause', { on: !!on }, { sfx: on ? 'click' : 'confirm' }),

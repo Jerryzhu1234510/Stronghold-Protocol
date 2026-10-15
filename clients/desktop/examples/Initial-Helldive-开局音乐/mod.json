@@ -1,0 +1,17 @@
+{
+  "format": 3,
+  "id": "initial-helldive-match-start",
+  "name": "Initial Helldive-开局音乐",
+  "version": "1.0.0",
+  "server": "8443",
+  "description": "新对局开始时播放用户提供的 Wilbert Roget II - Initial Helldive Theme。每局一次，普通回合、刷新和重连不补播。需要PC 1.0.4通用音乐触发器补丁；只在本机生效，沿用游戏BGM音量。",
+  "files": [],
+  "events": [
+    {
+      "event": "match-start",
+      "path": "audio/initial-helldive-theme.mp3",
+      "volume": 0.8,
+      "startSeconds": 0
+    }
+  ]
+}

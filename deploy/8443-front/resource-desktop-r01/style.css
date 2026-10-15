@@ -1,0 +1,109 @@
+.sp-local-banner{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:900;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;width:max-content;max-width:94vw;padding:10px 16px;background:#14291ff5;border:1px solid #f0be64;border-radius:8px;color:#eaf9ef;font:13px/1.6 system-ui,sans-serif;box-shadow:0 5px 24px #0008}.sp-local-banner[hidden]{display:none}.sp-local-banner strong{color:#ffd38a}.sp-local-banner a,.sp-local-announcement a{color:#94f0cc;text-decoration:underline}.sp-local-banner button{font:inherit;background:#94f0cc;color:#10251d;border:0;border-radius:4px;padding:4px 9px;cursor:pointer}.sp-local-announcement{border:2px solid #ffd38a;background:#382f1d;padding:16px;margin:0 0 18px;color:#fff1d5;font-size:15px;line-height:1.8}.sp-local-announcement>strong{display:block;font-size:20px;color:#ffd38a}.sp-local-announcement p{margin:9px 0}.sp-local-dialog{box-sizing:border-box;width:min(580px,94vw);max-height:90dvh;overflow:auto;background:#14251f;color:#e5f4ed;border:2px solid #ffd38a;border-radius:12px;padding:28px;font:15px/1.8 system-ui,sans-serif;box-shadow:0 20px 90px #000a}.sp-local-dialog::backdrop{background:#000b}.sp-local-dialog h2{color:#ffd38a;font-size:23px;line-height:1.45;margin:10px 0 16px}.sp-local-dialog a{color:#a1f3d2}.sp-local-dialog form{margin:0}.sp-local-close{float:right;background:none;border:0;color:#e5f4ed;font-size:26px;cursor:pointer;padding:0 7px}.sp-local-eyebrow{color:#94cfb6;font-size:12px;margin:0;letter-spacing:1px}.sp-local-dialog progress{width:100%;height:9px;accent-color:#94f0cc}.sp-local-status{min-height:3.6em;color:#ffd38a;overflow-wrap:anywhere}.sp-local-actions{display:flex;gap:12px;flex-wrap:wrap}.sp-local-primary,.sp-local-retry{box-sizing:border-box;font:600 14px/1.5 system-ui,sans-serif;padding:10px 14px;border:1px solid #94f0cc;border-radius:6px;cursor:pointer;text-decoration:none}.sp-local-dialog .sp-local-primary{color:#10251d;background:#94f0cc}.sp-local-retry{color:#e5f4ed;background:#203a2f}.sp-local-retry:disabled{opacity:.45;cursor:wait}.sp-local-resume{font-size:13px}.sp-local-required{border:2px solid #ffd38a!important;background:#2b291b!important}.sp-local-required h3{color:#ffd38a}.sp-local-required strong{color:#ffd38a}@media(max-width:600px){.sp-local-banner{font-size:11px;gap:6px;padding:8px 10px;bottom:5px}.sp-local-banner span{display:none}.sp-local-dialog{padding:20px}.sp-local-dialog h2{font-size:20px}.sp-local-announcement>strong{font-size:17px}}
+.sp-local-dialog{max-height:90vh;max-height:90dvh}.sp-local-close{min-width:44px;min-height:44px}.sp-local-dialog button,.sp-local-actions a{min-height:44px}.sp-local-banner{bottom:max(8px,env(safe-area-inset-bottom));max-width:calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 16px)}@media(pointer:coarse){.sp-local-banner button,.sp-local-banner a{min-height:44px;display:inline-flex;align-items:center}.sp-local-dialog{font-size:16px;padding:18px}.sp-local-banner{font-size:12px;padding:4px 10px;gap:6px}.sp-local-banner span{display:none}}@media(pointer:coarse) and (max-height:500px){.sp-local-banner{bottom:env(safe-area-inset-bottom);padding:2px 8px}.sp-local-dialog{max-height:94vh;max-height:94dvh}.sp-local-dialog h2{font-size:19px;margin:0 0 8px}}
+
+/* Lobby only. Loaded after the frozen game's styles by the resource front.
+ * Explicit placement avoids the account (two-column) / upstream (three-column)
+ * cascade putting actions into the middle column and leaving the right empty. */
+.lobby-screen .topbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "status actions" "heading heading";
+  align-items: center;
+  height: auto;
+  min-height: 0;
+  gap: 10px 24px;
+  padding: 12px clamp(16px, 2.3vw, 44px) 10px;
+}
+.lobby-screen .topbar__left {
+  grid-area: status;
+  min-width: 0;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.lobby-screen .topbar__right {
+  grid-area: actions;
+  justify-self: stretch;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.lobby-screen .topbar__right > * { max-width: 100%; }
+.lobby-screen .topbar__right > .acc-panels { flex-wrap: wrap; gap: 6px; }
+.lobby-screen .topbar__right > .release-notes-entry {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 10px;
+}
+.lobby-screen .release-notes-entry__feedback {
+  max-width: 240px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.lobby-screen .topbar__center {
+  grid-area: heading;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  width: auto;
+  padding: 2px 0;
+}
+.lobby-screen .topbar__title {
+  font-size: clamp(18px, 1.5vw, 28px);
+  line-height: 1.3;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+.lobby-screen .topbar__center > .micro { font-size: 10px; }
+.lobby-screen .topbar__left > .btn,
+.lobby-screen .topbar__right > .btn,
+.lobby-screen .topbar__right > .acc-panels > .btn,
+.lobby-screen .topbar__right > .release-notes-entry > .btn {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 12px;
+  font-size: clamp(12px, .9vw, 16px);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.lobby-screen .topbar__right > .me-chip {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+}
+.lobby-screen .me-chip__name { font-size: 15px; max-width: 180px; }
+.lobby-screen .me-chip__text > .micro { font-size: 10px; }
+.lobby-screen .me-chip > .avatar { --av: 36px; }
+@media (max-width: 1280px) {
+  .lobby-screen .topbar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "status" "actions" "heading";
+    gap: 8px;
+  }
+  .lobby-screen .topbar__right { justify-content: flex-start; }
+  .lobby-screen .topbar__right > .release-notes-entry { justify-content: flex-start; }
+}
+@media (max-width: 1024px), (max-height: 600px) {
+  .lobby-screen .topbar { padding: 8px 16px; }
+  .lobby-screen .topbar__center { display: none; }
+  .lobby-screen .topbar__left { gap: 8px; }
+  .lobby-screen .topbar__right { gap: 6px; }
+  .lobby-screen .topbar__right > .me-chip { display: none; }
+}
+@media (max-width: 740px) {
+  .lobby-screen .topbar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "status" "actions";
+  }
+  .lobby-screen .topbar__right { flex: none; }
+  .lobby-screen .release-notes-entry__feedback { max-width: 180px; font-size: 11px; }
+}

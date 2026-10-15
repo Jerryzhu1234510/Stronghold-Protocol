@@ -1,0 +1,32 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const {ResourceLibrary,digest}=createRequire(import.meta.url)('../resources.cjs');
+const folder=await fs.mkdtemp(path.join(os.tmpdir(),'weishu-desktop-test-'));
+const origin='https://game.example',body=Buffer.from('verified original resource'),hash=digest(body),changedBytes=Buffer.from('changed'.padEnd(body.length,'!')),changed=digest(changedBytes);
+const index={version:1,files:2,bytes:body.length,entries:{[hash]:{offset:0,bytes:body.length,core:true}}};
+const raw=JSON.stringify(index);await fs.writeFile(folder+'/index.json',raw);await fs.writeFile(folder+'/bundle-info.json',JSON.stringify({indexSha256:digest(raw)}));await fs.writeFile(folder+'/assets.bin',body);
+let manifests=0,assets=0;const library=await new ResourceLibrary({directory:folder,origin,remote:async r=>{
+ const u=new URL(r.url);if(u.pathname.endsWith('resource-cache.json')){manifests++;return Response.json({version:1,entries:{'/assets/test.png':{hash:u.pathname.includes('/new/')?changed:hash,bytes:body.length}},aliases:{'/media/test':'/assets/test.png'}})}assets++;return new Response('network');
+}}).initialize();
+library.setPage(origin+'/_build/old/');
+const req=(url,headers={},method='GET')=>new Request(origin+url,{headers,method});
+const responses=await Promise.all(Array.from({length:4},()=>library.handle(req('/_build/old/assets/test.png'))));
+for(const r of responses){assert.equal(r.headers.get('x-sp-native-resource'),'DESKTOP-BUNDLED');assert.equal(await r.text(),body.toString())}
+assert.equal(manifests,1);assert.equal(assets,0);
+const partial=await library.handle(req('/media/test',{range:'bytes=2-5'}));assert.equal(partial.status,206);assert.equal(await partial.text(),body.subarray(2,6).toString());
+const suffix=await library.handle(req('/assets/test.png',{range:'bytes=-3'}));assert.equal(await suffix.text(),body.subarray(-3).toString());
+assert.equal((await library.handle(req('/assets/test.png',{range:'bytes=999-'}))).status,416);
+assert.equal(await(await library.handle(req('/_build/new/assets/test.png'))).text(),'network');
+assert.equal(await(await library.handle(new Request('https://other.example/_build/old/assets/test.png'))).text(),'network');
+assert.equal(await(await library.handle(req('/assets/test.png',{},'POST'))).text(),'network');
+assert.equal(assets,3);
+library.mods={replacement:async()=>({bytes:Buffer.from('local appearance'),path:'skin.png'})};
+const mod=await library.handle(req('/assets/test.png'));assert.equal(mod.headers.get('x-sp-native-resource'),'DESKTOP-MOD');assert.equal(await mod.text(),'local appearance');library.mods=null;
+library.patches={get:async h=>h===changed?changedBytes:null};const update=await library.handle(req('/_build/new/assets/test.png'));assert.equal(update.headers.get('x-sp-native-resource'),'DESKTOP-PATCH');assert.equal(await update.text(),changedBytes.toString());library.patches=null;
+library.verified.clear();await fs.writeFile(folder+'/assets.bin',Buffer.alloc(body.length));
+assert.equal(await(await library.handle(req('/_build/old/assets/test.png'))).text(),'network');assert.equal(library.status().corrupt,1);
+await library.close();
+console.log(JSON.stringify({ok:true,checks:['manifest deduplicated for concurrent art requests','original hash matched before using local bytes','audio aliases, ranges and suffix requests','new-build changed art and other servers use network','POST never treated as local art','corrupted bundled art falls back safely']}));

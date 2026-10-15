@@ -130,6 +130,8 @@
 .ebubble.has-sprite::before, .ebubble.has-sprite::after { content: none; }
 /* in the team panel the bubble is anchored beside the row (placement: screens/game.css .team__bubble) */
 .ebubble.team__bubble { position: absolute; }
+/* Expanded teams scroll inside a clipped box. Keep bubbles within the sender's row. */
+.team--expanded .ebubble.team__bubble { left: .65rem; top: 50%; z-index: 5; }
 .ebubble__icon { position: absolute; left: .26rem; top: .12rem; width: .68rem; height: .70rem; display: grid; place-items: center; }
 .ebubble .eart { width: 100%; height: 100%; }
 

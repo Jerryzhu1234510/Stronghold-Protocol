@@ -376,27 +376,51 @@ test('render/app.js hands the `form` of a sim fx (shared/protocol.js fxForm) wit
   // …and UnitView.setForm skips a change clip that would already have ended
   assert.match(readFileSync(path.join(ROOT, 'public/js/render/units.js'), 'utf8'), /!\(late > 0 && late >= \(this\.actor\.dur\?\.\(f\.change\) \?\? Infinity\)\)/);
   assert.match(src, /if \(!\(late > 0\)\) fx\.simFx\(/);
-  assert.match(src, /interp\.takeEvents\(renderT, EVS, renderT - 1\.5, EVT, LATE\);/);
+  assert.match(src, /interp\.takeEvents\(renderT, EVS, renderT - 1\.5, LATE\);/);
 });
 
-// User report (2026-10-03): models bobbed up and down at targets on other rows — every attack pushed the whole body
-// 0.12 tile towards the target (render/units.js lunge). The original never moves a model off its tile to attack: the
-// swing is in the clip, so only the placeholder diamond (no model) still lunges.
-test('an operator model stays on its tile when it attacks a target on another row (星熊)', async () => {
-  const entry = assets.chars.char_136_hsguma.spine.front;
-  const names = Object.keys(entry.animations || {});
-  const ctx = fakeViewCtx(fake.P, { cam, assets: {
-    picture: () => null, image: async () => null, spineEntry: () => entry,
-    spine: { acquire: async () => ({ animations: names.map((name) => ({ name })) }), release() {} },
-  } });
-  const v = new UnitView(ctx, { id: 3, side: 'ally', kind: 'op', defId: 'chess_char_4_17_a', spine: 'char_136_hsguma', tier: 1, x: 5, y: 10, maxHp: 1000, dir: 'RIGHT' });
-  await tick(); await tick();
-  assert.ok(v.actor && v.spineReady, 'Spine model built');
-  frames(v, 30);
-  const rest = { x: v.root.position.x, y: v.root.position.y };
-  v.onAttack({ x: 5.6, y: 9.2 }, 1);
-  for (let i = 0; i < 12; i++) {
-    v.update(1 / 60, cam(), 1 + i / 60);
-    assert.ok(Math.abs(v.root.position.x - rest.x) < 1e-6 && Math.abs(v.root.position.y - rest.y) < 1e-6, `frame ${i}: no lunge`);
+// PR #275 (@xcdoge): 巨大的丑东西 (kitUglyThing: KO ⇒ 10 s 重生 ⇒ the fleeing 大祭司) and 自在 (kitXi: KO ⇒ 5 s 重生 ⇒ the
+// same model, stronger) had no clip set, so their 重生 played no clip. The Revive clip is the 重生's change clip; the sim
+// reports the 重生 as a stun (archetypes.js reborn), so 巨大的丑东西's 重生 holds the 大祭司's idle after its 8.67 s clip.
+test('“巨大的丑东西” / “自在”: the 重生 plays the skeleton’s Revive clip, then the second form', () => {
+  const mc = FORMS.enemy_1512_mcmstr;
+  assert.equal(mc.reborn.change, 'Revive', 'the 8.67 s Revive clip opens the 10 s 重生');
+  assert.equal(mc.reborn.next, 'form2');
+  assert.equal(mc.reborn.roles.stun.loop, 'Idle_2', 'the rest of the 重生 (a sim stun) holds the 大祭司 idle, not the first form’s Stun_1');
+  assert.equal(mc.form2.roles.idle, 'Idle_2');
+  assert.equal(mc.form2.roles.move.loop, 'Move_2');
+  assert.equal(mc.form2.roles.stun.loop, 'Stun_2', 'the 大祭司 stunned: its own clip');
+  assert.equal(mc.form2.roles.attack, null, 'the 大祭司 never attacks');
+  const xi = FORMS.enemy_1517_xi;
+  assert.equal(xi.reborn.change, 'Revive_01', 'the 5.33 s Revive_01 is the 5 s 重生');
+  assert.deepEqual(xi.form2.roles, {}, 'the same model, only stronger (reborn.atk)');
+});
+
+// Every clip a form set names must exist in that model's manifest entry: a typo is a silently missing animation.
+test('every clip FORMS names exists in its model’s manifest', () => {
+  const clipsOf = (v, out = new Set()) => {
+    if (typeof v === 'string') { if (v) out.add(v); return out; }
+    if (Array.isArray(v)) { for (const x of v) clipsOf(x, out); return out; }
+    if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) if (k !== 'via' && k !== 'next') clipsOf(x, out);
+    return out;
+  };
+  const entries = (id) => {
+    const out = [];
+    const e = assets.enemies?.[id]?.spine; if (e) out.push(e.front || e);
+    const t = assets.tokens?.[id]?.spine; if (t) out.push(t);
+    const c = assets.chars?.[id]?.spine; if (c) out.push(...[c.front, c.back].filter(Boolean));
+    return out;
+  };
+  const bad = [];
+  let checked = 0;
+  for (const [id, forms] of Object.entries(FORMS)) {
+    const es = entries(id);
+    if (!es.length) continue;
+    checked++;
+    for (const [form, spec] of Object.entries(forms)) {
+      for (const clip of clipsOf(spec)) if (!es.some((e) => e.animations && Object.hasOwn(e.animations, clip))) bad.push(`${id}.${form}: ${clip}`);
+    }
   }
+  assert.ok(checked > 10, `the table was walked (${checked} models)`);
+  assert.deepEqual(bad, [], 'clips named by a form set but missing from the manifest');
 });

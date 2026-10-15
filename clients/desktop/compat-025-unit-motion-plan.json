@@ -1,0 +1,94 @@
+{
+  "format": 2,
+  "origin": "https://weishuxieyiwangye.cn:8443",
+  "files": {
+    "/js/render/units.js": {
+      "variants": [
+        {
+          "variant": "canonical",
+          "sha256": "d9e5b35e87b2cc42ca2502d3e6675f348764aab3173f1c2127d3ddd279cca2f0",
+          "bytes": 104148,
+          "edits": [
+            {
+              "offset": 91445,
+              "text": "try{globalThis.__SPDesktopUnitMotion?.drop3d?.(this);}catch{}"
+            },
+            {
+              "offset": 74086,
+              "text": "}finally{try{globalThis.__SPDesktopUnitMotion?.step3d?.(this,dt,cam,t);}catch{}}"
+            },
+            {
+              "offset": 64711,
+              "text": "try{"
+            }
+          ],
+          "transformedSha256": "4ea3f9c648cf3b6b6b895e0e3e5af419551d5449e76270dd500e7023edee0fd3"
+        },
+        {
+          "variant": "fd4dbe120420-2",
+          "sha256": "b8e7811be77dffc6a53e3eef645eefce6ab9dfea0a3479b03e4c4ab5350ec4c9",
+          "bytes": 104286,
+          "edits": [
+            {
+              "offset": 91583,
+              "text": "try{globalThis.__SPDesktopUnitMotion?.drop3d?.(this);}catch{}"
+            },
+            {
+              "offset": 74224,
+              "text": "}finally{try{globalThis.__SPDesktopUnitMotion?.step3d?.(this,dt,cam,t);}catch{}}"
+            },
+            {
+              "offset": 64849,
+              "text": "try{"
+            }
+          ],
+          "transformedSha256": "9e1ced17f5c2353e683389760f0d1df98c8964c0a920f5ede9b7638bdf6dc5c8"
+        }
+      ]
+    },
+    "/js/ui/fallbackField.js": {
+      "variants": [
+        {
+          "variant": "canonical",
+          "sha256": "a87af8871f5d76b90951f76238c7b988a8700db64b56cfbb34eefae89260a513",
+          "bytes": 31649,
+          "edits": [
+            {
+              "offset": 31266,
+              "text": "try{globalThis.__SPDesktopUnitMotion?.dropDomView?.(root);}catch{}"
+            },
+            {
+              "offset": 15543,
+              "text": " ref=${(() => {try{return globalThis.__SPDesktopUnitMotion?.ref?.(info,L.tile,{prep:!!st.field?.prep,fieldId:st.field?.fieldId,dead});}catch{return undefined;}})()}"
+            },
+            {
+              "offset": 10520,
+              "text": " ref=${(() => {try{return globalThis.__SPDesktopUnitMotion?.ref?.({kind:p.kind==='chess'?'op':p.kind,side:'ally',id:'p:'+p.uid},L.tile,{prep:true,area});}catch{return undefined;}})()}"
+            }
+          ],
+          "transformedSha256": "58ab0d836d287a1ecfb70572b9deef876ef4c9c4329d06bc7c13a403135e2502"
+        },
+        {
+          "variant": "fd4dbe120420-2",
+          "sha256": "f8f8e268ee5432dc07368518244b5294fef44821d6df63d0a7cd2d7b1d8c7d5f",
+          "bytes": 31775,
+          "edits": [
+            {
+              "offset": 31392,
+              "text": "try{globalThis.__SPDesktopUnitMotion?.dropDomView?.(root);}catch{}"
+            },
+            {
+              "offset": 15669,
+              "text": " ref=${(() => {try{return globalThis.__SPDesktopUnitMotion?.ref?.(info,L.tile,{prep:!!st.field?.prep,fieldId:st.field?.fieldId,dead});}catch{return undefined;}})()}"
+            },
+            {
+              "offset": 10646,
+              "text": " ref=${(() => {try{return globalThis.__SPDesktopUnitMotion?.ref?.({kind:p.kind==='chess'?'op':p.kind,side:'ally',id:'p:'+p.uid},L.tile,{prep:true,area});}catch{return undefined;}})()}"
+            }
+          ],
+          "transformedSha256": "4a5505449487844d19f728c7b4c8603f6e858bf9d80365ff024494b79945e7a9"
+        }
+      ]
+    }
+  }
+}

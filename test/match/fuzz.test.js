@@ -3,18 +3,15 @@
 // report an internal error and never corrupt the invariants (pool accounting, funds, slots, legality, merges).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateC2S, C2S, SP_CARDS_MAX } from '../../shared/protocol.js';
-import { ERR, EMOTES, MAX_SEATS } from '../../shared/constants.js';
+import { validateC2S, C2S } from '../../shared/protocol.js';
+import { ERR, EMOTES } from '../../shared/constants.js';
 import { createRng } from '../../server/sim/rng.js';
 import { DATA, makeMatch, checkInvariants } from './harness.js';
 
 const GAME = Object.keys(C2S).filter((t) => t.startsWith('g.') && t !== 'g.leave');
 const BANDS = Object.keys(DATA.bands);
 
-// a room of 5–8 seats (remake extension): its extra field ids and the 机变 cards above 6
-const LARGE_WATCH = ['n:p_0', 'n:p_5', 'n:ai_0', 'n:ai_5', 'u', 'u2', 'b1', 'b3', 'b4', 'zz', ''];
-
-function randomIntent(rng, m, ps, large = false) {
+function randomIntent(rng, m, ps) {
   const t = rng.pick(GAME);
   const pieces = [];
   if (ps) {
@@ -27,30 +24,29 @@ function randomIntent(rng, m, ps, large = false) {
   const uid = () => (pieces.length && rng() < 0.8 ? rng.pick(pieces) : 1 + rng.int(5000));
   const to = () => (rng() < 0.6 ? { area: 'board', row: rng() < 0.8 ? 9 + rng.int(4) : rng.int(19), col: rng() < 0.8 ? 2 + rng.int(9) : rng.int(21) } : { area: 'hand', idx: rng.int(10) });
   switch (t) {
+    case 'g.shopFocus': return { t, bondId: null };
     case 'g.band': return { t, bandId: rng() < 0.8 ? rng.pick(BANDS) : rng.pick(['constructor', '__proto__', 'band_x', 'a'.repeat(64)]) };
     case 'g.buy': return { t, slot: rng.int(16) };
     case 'g.sell': case 'g.destroy': return { t, uid: uid() };
     case 'g.move': return { t, uid: uid(), to: to() };
     case 'g.equip': return { t, itemUid: uid(), targetUid: uid() };
     case 'g.art': return { t, itemUid: uid(), row: rng.int(19), col: rng.int(21) };
-    case 'g.reward': return { t, idx: rng.int(6) };
-    case 'g.choice': return { t, idx: rng.int(large ? SP_CARDS_MAX : 6) };
+    case 'g.reward': case 'g.choice': return { t, idx: rng.int(6) };
     case 'g.ready': return { t, ready: rng() < 0.4 };
     case 'g.emote': return { t, id: rng.pick(EMOTES) };
-    case 'g.watch': return { t, fieldId: rng.pick(large ? LARGE_WATCH : ['n:p_0', 'n:p_1', 'n:ai_0', 'u', 'b1', 'b2', 'zz', '']) };
+    case 'g.watch': return { t, fieldId: rng.pick(['n:p_0', 'n:p_1', 'n:ai_0', 'u', 'b1', 'b2', 'zz', '']) };
     case 'g.autoplay': return { t, on: rng() < 0.05 };
     case 'g.pause': return { t, on: rng() < 0.5 };
     default: return { t };
   }
 }
 
-function fuzzOne(seed, { fake, large = false }) {
+function fuzzOne(seed, { fake }) {
   const rng = createRng(seed * 7919);
-  // large: a co-op room of 5–8 seats (the seeds of the official-size block draw exactly as before)
-  const mode = large ? 'coop' : rng() < 0.3 ? 'solo' : 'coop';
+  const mode = rng() < 0.3 ? 'solo' : 'coop';
   const difficulty = rng.pick(['FUNNY', 'NORMAL', 'HARD', 'ABYSS']);
-  const humans = mode === 'solo' ? 1 : large ? 1 + rng.int(MAX_SEATS) : 1 + rng.int(3);
-  const bots = mode === 'solo' ? 0 : large ? Math.max(5 - humans, 0) + rng.int(MAX_SEATS - Math.max(humans, 5) + 1) : rng.int(3);
+  const humans = mode === 'solo' ? 1 : 1 + rng.int(3);
+  const bots = mode === 'solo' ? 0 : rng.int(3);
   const h = makeMatch({ mode, difficulty, humans, bots, seed, fake, captureFrames: false, checkFrames: true, script: () => ({ duration: 2 + rng.int(6), leaks: {} }) });
   const m = h.m;
   m.start();
@@ -61,7 +57,7 @@ function fuzzOne(seed, { fake, large = false }) {
     const pid = rng.pick(humanIds);
     const ps = m.players.get(pid);
     if (r < 0.82) {
-      const msg = randomIntent(rng, m, ps, large);
+      const msg = randomIntent(rng, m, ps);
       assert.equal(validateC2S(msg), null, `fuzz produced an invalid message ${JSON.stringify(msg)}`);
       const res = m.handle(pid, msg);
       intents++;
@@ -98,12 +94,6 @@ test('fuzz with FakeBattle: 60 matches of random intents / connection churn / ti
   let n = 0;
   for (let seed = 1; seed <= 60; seed++) n += fuzzOne(seed, { fake: true });
   assert.ok(n > 10000, `${n} intents`);
-});
-
-test('fuzz with FakeBattle: 15 co-op rooms of 5–8 seats (remake extension)', () => {
-  let n = 0;
-  for (let seed = 201; seed <= 215; seed++) n += fuzzOne(seed, { fake: true, large: true });
-  assert.ok(n > 1500, `${n} intents`);
 });
 
 test('fuzz with the real simulation: 8 matches', () => {

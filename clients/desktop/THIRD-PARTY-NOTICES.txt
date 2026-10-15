@@ -1,0 +1,11 @@
+卫戍协议 PC 内置资源客户端
+
+客户端源代码：GPL-3.0-or-later，随包 resources/app 提供。
+Stronghold-Protocol 基础项目：https://github.com/sganggs/Stronghold-Protocol
+项目许可：GPL-3.0，见 LICENSE.game.txt。
+游戏素材包含来自明日方舟及原项目资源的内容，相关角色、音效、音乐、图片与其他素材的权利归原权利人所有。本客户端不改变这些资源的权利归属。
+
+Electron：https://www.electronjs.org/ ，MIT，运行时许可见 LICENSE。
+Chromium及相关第三方组件：见 LICENSES.chromium.html。
+
+本程序为社区客户端，不代表鹰角网络或其他原权利人官方发布。

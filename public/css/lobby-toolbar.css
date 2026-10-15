@@ -1,0 +1,52 @@
+/* One layout owns the lobby toolbar. Older feature styles also style .topbar;
+   this explicit grid prevents their third column from leaving an empty lane. */
+.lobby-screen > .lobby-toolbar.topbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "status actions" "title title";
+  align-items: center;
+  gap: 12px 20px;
+  height: auto;
+  min-height: 0;
+  padding: 12px clamp(16px, 2.3vw, 44px);
+}
+.lobby-toolbar.topbar > .topbar__left {
+  grid-area: status;
+  justify-self: start;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+.lobby-toolbar.topbar > .topbar__right {
+  grid-area: actions;
+  justify-self: stretch;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.lobby-toolbar.topbar > .topbar__right > * { flex: 0 0 auto; max-width: 100%; }
+.lobby-toolbar.topbar > .topbar__right > .me-chip { margin-left: 4px; }
+.lobby-toolbar.topbar > .topbar__center {
+  grid-area: title;
+  order: 0;
+  width: 100%;
+  min-width: 0;
+}
+.lobby-toolbar.topbar .release-notes-entry { min-width: 0; }
+
+@media (max-width: 1024px), (max-height: 600px) {
+  .lobby-screen > .lobby-toolbar.topbar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "status" "actions";
+    gap: 6px;
+    padding: 6px 16px;
+  }
+  .lobby-toolbar.topbar > .topbar__left { width: 100%; gap: 6px; }
+  .lobby-toolbar.topbar > .topbar__right { justify-content: flex-start; gap: 5px; }
+  .lobby-toolbar.topbar > .topbar__center { display: none; }
+}

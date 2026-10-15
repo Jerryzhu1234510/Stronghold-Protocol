@@ -1,0 +1,22 @@
+{
+  "format": 4,
+  "id": "initial-helldive-dance-session",
+  "name": "整局跳舞与循环BGM-示例",
+  "version": "1.0.0",
+  "server": "8443",
+  "description": "PC1.0.5：本人干员显示跳动旋转，整局循环用户提供的Initial Helldive Theme。事件音乐可暂时插播；所有效果仅在本机生效。",
+  "files": [],
+  "sessionMusic": {
+    "path": "audio/initial-helldive-theme.mp3",
+    "volume": 0.7,
+    "startSeconds": 0
+  },
+  "motion": {
+    "target": "own",
+    "bounceHeight": 0.3,
+    "bounceHz": 1,
+    "spinRps": 1,
+    "flipX": false,
+    "flipY": false
+  }
+}

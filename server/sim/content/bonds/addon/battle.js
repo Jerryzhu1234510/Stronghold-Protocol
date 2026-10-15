@@ -31,11 +31,18 @@
 //                      无来源 damage uses the chance and hits nobody, a 流失 never does — PRTS 备注 / 作战机制)
 //                      + 脆弱 ×damage_scale for weak[limit] s
 //   助力 deputShip     all operators DEF +(base + per·L), redeploy time ×(1 + respawn_time)
-//   突袭 raidShip      member idle ≥ no_attack_duration s (or skill ready) with no enemy in range → "保留技力立即再部署"
-//                      next to the most advanced ground enemy it can reach: on a free tile its position may be deployed
+//   突袭 raidShip      member idle ≥ no_attack_duration s (or skill ready — a passive skill that is on counts, GitHub
+//                      #49, and so does a deploy-timed skill while it runs, #109) with no enemy in range → "保留技力立即再部署"
+//                      next to the most advanced ground enemy it can reach: on a free tile of a board of its field
+//                      (Battle.onFieldBoard: its own or a teammate's on the same field — the two-helper 联防 field and a
+//                      pair field open both halves, the owner's decision of 2026-10-07; never a boss field's hand /
+//                      临时整备区 rows, never the empty other half of a lone 联防 helper or a solo boss field — community
+//                      reports of 2026-10-06, items 40 and 16.3) its position may be deployed
 //                      on from which its range covers that enemy (GitHub issue #51 [ASSUMED]: the first of the 8 most
 //                      advanced that has such a tile; none → it stays and the next poll looks again, never a jump that
-//                      hits nothing); grid.canStand: never the 深水区 (player report #3 after 0.1.0, members dropped
+//                      hits nothing) — for a melee member that blocks, a tile where its block applies first (ground
+//                      units pass it, an enemy path runs through it: not a 围墙 — the owner's decision of 2026-10-06,
+//                      GitHub #148); grid.canStand: never the 深水区 (player report #3 after 0.1.0, members dropped
 //                      into 战场#08's pool after an enemy wading in it); Battle.isReservedTile: never a tile a knocked-out
 //                      operator lies on (player report F5, members landed on a fallen teammate). A real redeployment
 //                      (retreat + free redeploy on the landing tile, full HP, `deploy` fires — 部署时 traits such as
@@ -59,6 +66,7 @@ import { canTargetEnemy, extendedGrid } from '../../../targeting.js';
 import { normDir, rotateOffset, localOrder, localBefore } from '../../../dir.js';
 import { bodyKeys } from '../../../body.js';
 import { isHpLoss } from '../../../damage.js';
+import { AUTO_OP_COOLDOWN } from '../../../constants.js';
 import {
   num, bondRecord, buffParams, bondTier, bondLayers, isMember, isElite, isGroundOp, onField, playerOps, passiveBuff,
   fxOn, N4, N8, directMods, COLS,
@@ -70,7 +78,7 @@ export const ID = Object.freeze({
 });
 export const KEY = Object.freeze({
   preci: 'bond:preciShip', stead: 'bond:steadShip', deput: 'bond:deputShip', skillful: 'bond:skillfulShip',
-  raid: 'bond:raidShip', raidAspd: 'bond:raidShip:aspd', empty: 'bond:emptyShip', emptyDmg: 'bond:emptyShip:dmg',
+  raid: 'bond:raidShip', raidResume: 'bond:raidShip:resume', raidAspd: 'bond:raidShip:aspd', empty: 'bond:emptyShip', emptyDmg: 'bond:emptyShip:dmg',
   solo: 'bond:soloShip', sunt: 'bond:suntShip', arcane: 'bond:arcaneShip',
 });
 /** Bonds whose battle values depend on layers (recomputed on in-battle gains). */
@@ -266,26 +274,43 @@ function raidReach(u) {
 /**
  * Landing tile [row, col] of a jump to enemy `e`, or null: a tile from which the member's range (`reach`, raidReach)
  * covers the enemy's body (a huge enemy: any tile it occupies — body.js), within RAID_SEARCH tiles (Chebyshev) of the
- * enemy, inside the field rect, that the member's position may be deployed on (grid.canStand: never the 深水区 —
- * player report #3 after 0.1.0) and that is free (Battle.isReservedTile: no living unit, no knocked-out operator's
- * body — player report F5 —, no waiting piece's tile). The nearest first (Chebyshev, then 0.01·Manhattan); last
- * tie-break the offset in the member's facing-RIGHT frame (sim/dir.js localOrder; for a RIGHT-facing unit the plain
- * tile-key order), so the landing tile turns with its direction. Only the tiles a range offset leads back to from a
- * body tile are looked at, so a search that finds nothing stays cheap.
+ * enemy, inside the field rect and on a board of its field (Battle.onFieldBoard — "再部署" goes where a player of the
+ * field deploys: its own board or a teammate's half when both halves are taken, the two-helper 联防 field and a pair
+ * field — the owner's decision of 2026-10-07, DESIGN §26.1; never a boss field's hand row 0 or 临时整备区 row 1, both
+ * inside BOSS_RECT and buildable high ground, nor the empty other half of the one-helper 联防 map or a solo boss field;
+ * community reports of 2026-10-06, items 40 and 16.3: a ranged member landed on the 临时整备区 row of a solo leader
+ * round, and on the right half of the one-helper 联防 map), that the member's
+ * position may be deployed on (grid.canStand: never the 深水区 —
+ * player report #3 after 0.1.0 —, and for a melee member low ground only, never a 高台: GitHub #148) and that is free
+ * (Battle.isReservedTile: no living unit, no knocked-out operator's body — player report F5 —, no waiting piece's tile).
+ * A melee member that blocks takes a tile where its block applies first — ground units pass it (not a 围墙 / 围栏 tile,
+ * where a unit blocks no ground enemy: Battle._blockerFor) and an enemy ground path runs through it
+ * (Battle.groundPathTiles) or its enemy stands on it — over one where it would block nothing (the owner's decision of
+ * 2026-10-06 after GitHub
+ * #148: a member landed on a 围墙 tile, drawn raised, while a road tile covered its enemy too [ASSUMED: the official
+ * landing picks among the legal tiles at random]); then the nearest (Chebyshev, then 0.01·Manhattan); last tie-break
+ * the offset in the member's facing-RIGHT frame (sim/dir.js localOrder; for a RIGHT-facing unit the plain tile-key
+ * order), so the landing tile turns with its direction. Only the tiles a range offset leads back to from a body tile
+ * are looked at, so a search that finds nothing stays cheap.
  */
-function raidTile(battle, u, e, reach) {
+function raidTile(battle, u, e, reach, canStand) {
   const er = Math.round(e.y), ec = Math.round(e.x);
   const ranged = u.def?.position === 'RANGED';
-  let best = null, bd = Infinity, bo = null;
-  for (const k of bodyKeys(e)) {
+  const body = bodyKeys(e);
+  const path = !ranged && u.s.blockCnt > 0 ? battle.groundPathTiles() : null;
+  let best = null, bp = 2, bd = Infinity, bo = null;
+  for (const k of body) {
     const br = Math.floor(k / COLS), bc = k - br * COLS;
     for (let i = 0; i < reach.length; i += 2) {
       const r = br - reach[i], c = bc - reach[i + 1], dr = r - er, dc = c - ec;
       if (Math.abs(dr) > RAID_SEARCH || Math.abs(dc) > RAID_SEARCH) continue;
-      if (!battle.grid.inRect(r, c) || !battle.grid.canStand(r, c, { ranged }) || battle.isReservedTile(r, c)) continue;
+      if (!battle.grid.inRect(r, c) || !battle.onFieldBoard(r, c)
+        || !(canStand ? canStand(r, c, u) : battle.grid.canStand(r, c, { ranged })) || battle.isReservedTile(r, c)) continue;
+      const t = r * COLS + c;
+      const p = path && battle.grid.tile(r, c).pass === 'ALL' && (path.has(t) || body.includes(t)) ? 0 : 1;   // its block applies
       const d = Math.max(Math.abs(dr), Math.abs(dc)) + 0.01 * (Math.abs(dr) + Math.abs(dc));
       const o = localOrder(dr, dc, u.dir);
-      if (d < bd - 1e-9 || (Math.abs(d - bd) <= 1e-9 && localBefore(o, bo))) { best = [r, c]; bd = d; bo = o; }
+      if (p < bp || (p === bp && (d < bd - 1e-9 || (Math.abs(d - bd) <= 1e-9 && localBefore(o, bo))))) { best = [r, c]; bp = p; bd = d; bo = o; }
     }
   }
   return best;
@@ -309,17 +334,32 @@ function raidTargets(battle, u, pid) {
   return list;
 }
 
-function raidPoll(battle, st) {
+function raidPoll(battle, st, canStand) {
   const bb = st.bb[ID.raid];
   const idle = num(bb.no_attack_duration, 10);
   let targets = null; // the player's candidates (raidTargets), shared by its members until a jump changes the field
   for (const u of st.members[ID.raid]) {
     if (!onField(u) || !u.canAct) continue;
     const since = Math.max(u.lastAttackAt ?? -Infinity, u.deployedAt ?? -Infinity, u.mem[KEY.raid] ?? -Infinity);
-    const ready = !!(u.skill && u.skill.ready && !(u.skill.active && u.skill.isTimed));
+    // 技能就绪: a charged skill, or a passive skill that is on (GitHub #49: skills.js `ready` is false for every passive,
+    // so 缄默德克萨斯 / 宴 … only ever jumped on the idle trigger; the reporter's footage of the official game shows
+    // 缄默德克萨斯 jumping within her passive's 10 s with no enemy in range). The engine keeps a passive on for the whole
+    // deployment, so such a member may jump whenever nothing is in its range [ASSUMED: "技能就绪" of a passive = the
+    // skill being on]; the landing rule below keeps it from hopping. Here only — the global `ready` stays as it is.
+    // A deploy-timed skill (#109: kind 'duration' with no SP — spType 'none' — run from the deployment: 宴 S2, 斯卡蒂 S2,
+    // 伊内丝 S3, 缄默德克萨斯 S1–S3, 耀骑士临光 S2, the generic "部署后…N秒内" passives) counts the same way while its
+    // window runs — the 10 s of the reporter's footage; once it has ended only the idle trigger is left.
+    const sk = u.skill;
+    const resume = !!u.mem[KEY.raidResume];
+    const deploySkillOn = !!(sk && sk.active && (sk.kind === 'passive' || sk.spType === 'none'));
+    // A deployment skill stays on after landing; it is not a fresh operation every poll.
+    // Keep the initial jump immediate, but subsequent automatic relocations cool down for 3 game seconds.
+    if ((deploySkillOn || resume) && battle.time - (u.mem[KEY.raid] ?? -Infinity) < AUTO_OP_COOLDOWN - 1e-9) continue;
+    const ready = !!(sk && !sk.noSkill && ((sk.ready && !(sk.active && sk.isTimed)) || deploySkillOn));
     const idleOk = battle.time - since >= idle - 1e-9;
-    if (!(ready || idleOk)) continue;
-    if (battle.enemiesInKeys(u.rangeKeys || [], u, u.profile).length) continue;
+    if (!(resume || ready || idleOk)) continue;
+    const inRange = battle.enemiesInKeys(u.rangeKeys || [], u, u.profile);
+    if (!resume && inRange.length) continue;
     const list = (targets ??= raidTargets(battle, u, st.pid));
     if (!list.length) continue;
     // either trigger: raidTile only offers tiles with the target in range (without that a ready skill that finds no
@@ -327,11 +367,14 @@ function raidPoll(battle, st) {
     // 0.1.1, hopped every 10 s: issue #51)
     const reach = raidReach(u);
     for (let i = 0; i < list.length && i < RAID_TARGETS; i++) {
-      const tile = raidTile(battle, u, list[i], reach);
+      // A revival must first check the closest-to-goal target, not any nearby trailing enemy.
+      if (inRange.includes(list[i])) { delete u.mem[KEY.raidResume]; break; }
+      const tile = raidTile(battle, u, list[i], reach, canStand);
       if (!tile) continue;
       targets = null; // the retreat / redeploy handlers (部署时 effects) may change the enemies: the next member re-sorts
       const res = raidRedeploy(battle, u, tile[0], tile[1]);
       if (!res) continue;
+      delete u.mem[KEY.raidResume];
       u.mem[KEY.raid] = battle.time; // with deployedAt: the idle time starts again from the landing
       if (res === 'raid') {
         battle.addBuff(u, { key: KEY.raid, mods: st.raidMods });
@@ -342,18 +385,38 @@ function raidPoll(battle, st) {
   }
 }
 
+/** The same raid lifecycle works for fixed co-op rosters and continuously changing PvP rosters. */
+export function installRaid(battle, { states = null, canStand = null } = {}) {
+  const current = () => (states || battle.players.map(p => makeState(battle, p)))
+    .filter(st => st.tiers[ID.raid] && st.members[ID.raid].size);
+  battle.on('death', ({ unit }) => { if (unit?.mem) delete unit.mem[KEY.raidResume]; });
+  battle.on('deploy', ({ unit, respawn }) => {
+    if (respawn && onField(unit) && current().some(st => st.members[ID.raid].has(unit))) unit.mem[KEY.raidResume] = true;
+  }, { priority: -50 });
+  battle.every(RAID_POLL, () => {
+    for (const st of current()) {
+      st.raidMods = raidMods(st.bb[ID.raid], L(battle, st, ID.raid));
+      raidPoll(battle, st, canStand);
+    }
+  });
+}
+
 /**
  * "保留技力立即再部署": retreat the unit and redeploy it for free on (r, c) with its SP / charges kept (engine redeploy
- * `tile` + `keepSp`: restored before the `deploy` handlers run; the board tile stays its home). Should the landing fail
+ * `tile` + `keepSp`: restored plus initial SP before `deploy` handlers; owner 2026-10-09; the board tile stays its home). Should the landing fail
  * (raidTile skips taken, reserved and body tiles, so only content refusing it), the unit goes straight back to its home
  * tile (never stranded off the field).
  * Returns 'raid' | 'home' | false.
  */
 function raidRedeploy(battle, u, r, c) {
+  const previousDir = u.dir;
   battle.retreat(u, { reason: 'raid' });
   if (u.alive) return false;
-  if (battle.redeploy(u, { free: true, tile: [r, c], keepSp: true })) return 'raid';
-  return battle.redeploy(u, { free: true, keepSp: true }) ? 'home' : false;
+  // raidTile already selected a landing in the original facing's range.
+  u.dir = previousDir;
+  if (battle.redeploy(u, { free: true, tile: [r, c], keepSp: true, addInitSp: true })) return 'raid';
+  u.dir = previousDir;
+  return battle.redeploy(u, { free: true, keepSp: true, addInitSp: true }) ? 'home' : false;
 }
 
 // =====================================================================================================================
@@ -397,10 +460,7 @@ export function install(battle) {
 
   // 突袭
   if (has(ID.raid)) {
-    const raid = states.filter((st) => st.tiers[ID.raid] && st.members[ID.raid].size);
-    if (raid.length) {
-      battle.every(RAID_POLL, () => { for (const st of raid) raidPoll(battle, st); });
-    }
+    installRaid(battle, { states });
   }
 
   // 迅捷
@@ -457,14 +517,15 @@ export function install(battle) {
       if (!INDOM_EXITS.has(c.reason) || !(stOf(u) || (banked && u.kind === 'op'))) return;
       const st = stOf(u);
       const bb = st ? st.bb[ID.indom] : null;
+      // Complete an immediate deployment before awarding the team's SP, including the revived casualty.
+      if (!u.alive && !u.removed && u.mem[ID.indom] !== battle.time &&
+          (banked || (st && battle.rng() < prob(bb, L(battle, st, ID.indom))))) {
+        u.mem[ID.indom] = battle.time;
+        if (battle.redeploy(u, { free: true })) fxOn(battle, 'revive', u, 'bond:indomShip', 'redeploy');
+      }
       if (st && c.reason === 'killed' && st.tiers[ID.indom] >= 2) {
         const sp = num(bb.sp);
         if (sp > 0) for (const o of st.ops) if (onField(o) && o.skill) o.skill.gainSp(sp, 'bond');
-      }
-      if (u.alive || u.removed || u.mem[ID.indom] === battle.time) return;
-      if (banked || (st && battle.rng() < prob(bb, L(battle, st, ID.indom)))) {
-        u.mem[ID.indom] = battle.time;
-        if (battle.redeploy(u, { free: true })) fxOn(battle, 'revive', u, 'bond:indomShip', 'redeploy');
       }
     }, { priority: 10 });
     battle.on('dollSwap', ({ unit: u }) => {
@@ -482,7 +543,7 @@ export function install(battle) {
   if (stead) {
     battle.on('hit', (c) => {
       const t = c.target, dmg = c.dmg;
-      if (!t || t.side !== 'ally' || t.kind !== 'op' || !dmg || dmg.cancel || dmg.steadShare || dmg.steadCut || dmg.type === 'element') return;
+      if (!t || t.side !== 'ally' || t.kind !== 'op' || !dmg || dmg.cancel || dmg.steadShare || dmg.steadCut || dmg.tags?.includes('transfer') || dmg.type === 'element') return;
       const st = byPid[t.ownerId];
       if (!st || (st.tiers[ID.stead] ?? 0) < 2 || st.members[ID.stead].has(t)) return;
       let any = false;
@@ -512,7 +573,8 @@ export function install(battle) {
           // the share is already mitigated and already carries the attacker's damage multipliers: deal it sourceless
           // (the member's own damage-taken modifiers and shields still apply), never re-scaled by the attacker
           for (const m of on) {
-            const d = battle.makeDamage({ amount: share / on.length, type: 'true', canDodge: false, tags: ['bond:stead:share'] });
+            // A transferred hit must not be transferred again by Skadi S1 (or another redirect).
+            const d = battle.makeDamage({ amount: share / on.length, type: 'true', canDodge: false, tags: ['bond:stead:share', 'transfer'] });
             d.steadShare = true;
             battle.dealDamage(null, m, d);
           }

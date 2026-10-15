@@ -6,8 +6,7 @@
 //   * a teammate's board in prep (前往查看, research 09 §3.1 "their board, read-only, including their pen and bonds"), a
 //     teammate's battle watched after the own one ended, the field an eliminated player auto-observes → THAT player's
 //     bonds (m.public players[].bonds);
-//   * a shared field (联防 'u' — 'u2' … with more than 4 players —, the Final Assault / Hidden Core pairs 'b1' … 'b4',
-//     a lone last player on its own half) — no source shows the strip there; this
+//   * a shared field (联防 'u', the Final Assault / Hidden Core pair 'b1' / 'b2') — no source shows the strip there; this
 //     rule was settled by the user (DESIGN §20.15): the player holding the half the ‹ › pill points at ("你自己" → yours, "👁 name" → theirs). On 全景 (or an
 //     empty half, "无人在家"): yourself when you fight on that field; a viewer who does not (a 联防 leaker, an eliminated
 //     spectator) never sees their own bonds there — the teammate they picked with 前往查看 (official observing targets a
@@ -63,7 +62,7 @@ export function bondOwnerId({ pub, myId, fieldId = null, field = null, layer = '
   }
   const meta = isObj(field) && field.fieldId === fieldId ? field : null;
   const sides = meta ? sidesOf(meta) : {};
-  if (halves && meta && (layer === 'L' || layer === 'R')) {
+  if (halves && meta && (layer === 'L' || layer === 'R' || layer === 'T')) {
     const pid = Object.keys(sides).find((id) => sides[id] === layer);
     if (ok(pid)) return pid;
   }
@@ -98,7 +97,7 @@ export function playerLayer(field, pub, myId, playerId) {
   if (!isObj(field) || typeof playerId !== 'string' || !playerId) return null;
   if (!cameraLayers(field, pub, myId).length) return null;
   const side = sidesOf(field)[playerId];
-  return side === 'L' || side === 'R' ? side : null;
+  return side === 'L' || side === 'R' || side === 'T' ? side : null;
 }
 
 /**
@@ -154,8 +153,9 @@ export function withLiveLayers(bonds, live) {
  * field's units) and, under client-side combat, the battle on screen's (`extra` = battle/runner.js ownerOps: the meta
  * the runner publishes is taken before the operators deploy). Their hand is never sent — members count as owned only
  * when they are on the field. Their operators keep the items the unit info carries (UnitInfo `items`), so a 变形同构体
- * wearer is listed as a member of the bond it grants (gameLogic grantedBonds). null without a field or battle.
- * @param {any} field @param {string} ownerId @param {any[]|null} [extra] UnitInfo-like { kind, ownerId, defId, items? }
+ * wearer is listed as a member of the bond it grants (gameLogic grantedBonds), and a 补位 unit its `standInFor` (the
+ * popup draws the stand-in). null without a field or battle.
+ * @param {any} field @param {string} ownerId @param {any[]|null} [extra] UnitInfo-like { kind, ownerId, defId, items?, standInFor? }
  */
 export function ownerBoard(field, ownerId, extra = null) {
   const fromField = isObj(field) && Array.isArray(field.units) ? field.units : null;
@@ -163,7 +163,14 @@ export function ownerBoard(field, ownerId, extra = null) {
   if (!fromField && !fromBattle) return null;
   const board = [...(fromField || []), ...(fromBattle || [])]
     .filter((u) => isObj(u) && u.ownerId === ownerId && u.kind === 'op' && typeof u.defId === 'string')
-    .map((u) => (Array.isArray(u.items) && u.items.length ? { kind: 'chess', id: u.defId, items: u.items.filter((x) => typeof x === 'string') } : { kind: 'chess', id: u.defId }));
+    .map((u) => {
+      const p = Array.isArray(u.items) && u.items.length ? { kind: 'chess', id: u.defId, items: u.items.filter((x) => typeof x === 'string') } : { kind: 'chess', id: u.defId };
+      // 0.2.0 自选编队: a DIY slot's unit names its operator (UnitInfo diy) — the popup counts it for that operator's bonds
+      if (isObj(u.diy) && typeof u.diy.charId === 'string') p.diy = u.diy;
+      // 0.2.0 补位: a unit fighting as its stand-in says so (UnitInfo standInFor) — the popup draws that member as the stand-in
+      if (typeof u.standInFor === 'string' && u.standInFor) p.standInFor = u.standInFor;
+      return p;
+    });
   return { board, hand: [], temp: [] };
 }
 

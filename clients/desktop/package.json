@@ -1,0 +1,8 @@
+{
+  "name": "weishu-desktop",
+  "version": "1.0.8",
+  "private": true,
+  "main": "main.cjs",
+  "description": "8443服内置资源 Windows 客户端",
+  "license": "GPL-3.0-or-later"
+}

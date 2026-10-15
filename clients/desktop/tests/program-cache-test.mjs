@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),{prepareProgramCache}=require('../program-cache.cjs');
+const folder=await fs.mkdtemp(new URL('../test-output/program-cache-',import.meta.url));
+await fs.writeFile(path.join(folder,'keep-account-marker'),'account-settings-untouched');
+let calls=0,codeCalls=0;const session={async clearCache(){calls++;},async clearCodeCaches(options){assert.deepEqual(options,{});codeCalls++;}};
+assert.equal(await prepareProgramCache(session,folder,'1.0.5'),true);assert.equal(calls,1);
+assert.equal(await prepareProgramCache(session,folder,'1.0.5'),false);assert.equal(calls,1);
+assert.equal(await prepareProgramCache(session,folder,'1.0.6'),true);assert.equal(calls,2);
+assert.equal(codeCalls,2,'compiled script cache is refreshed with the HTTP cache');
+assert.equal(await fs.readFile(path.join(folder,'keep-account-marker'),'utf8'),'account-settings-untouched');
+await assert.rejects(()=>prepareProgramCache({async clearCache(){throw Error('cache failure');}},folder,'1.0.7'),/cache failure/);
+assert.equal(JSON.parse(await fs.readFile(path.join(folder,'desktop-program-cache.json'),'utf8')).version,'1.0.6','failed invalidation must not be marked successful');
+console.log(JSON.stringify({ok:true,checks:['invalidate cached frozen scripts once per program version','do not invalidate on every restart','preserve account/settings markers','failed invalidation is retryable']}));

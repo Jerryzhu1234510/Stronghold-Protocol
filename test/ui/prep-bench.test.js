@@ -27,8 +27,8 @@ const { resolveDetail } = await import('../../public/js/ui/detailPanel.js');
 describe('the scouted prep board renders the hand like the own bench', () => {
   test('the game screen frames it with the prep camera in its shop-folded form (source)', () => {
     const game = read('public/js/screens/game.js');
-    // a normal scout board takes the prep camera, shop folded; a boss round's scout stays the pair's boss field (fork #9)
-    assert.match(game, /if \(field\.prep && kind === 'normal'\) setCam\('prep', \{ rect: field\.rect, side: 'L', shop: false \}\)/);
+    assert.match(game, /field\.prep \? 'prep' : \(field\.kind === 'hidden' \? 'boss' : field\.kind \|\| 'normal'\)/);
+    assert.match(game, /field\.prep \? \{ shop: false \} : \{\}/);
     assert.match(game, /const scoutPid = watchingOther && field\?\.prep/);
     assert.ok(!game.includes('ScoutedBench'), 'the floating strip is gone — the hand rides the board');
     assert.ok(!read('public/css/screens/game.css').includes('.sbench'), 'its styles too');

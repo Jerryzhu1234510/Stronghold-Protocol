@@ -1,0 +1,7 @@
+Stronghold Protocol community mobile client, 8443 server, 1.0.0.
+Native Java client and accompanying web modifications: GPL-3.0, source included with distribution.
+Stronghold Protocol upstream: https://github.com/sganggs/Stronghold-Protocol
+Upstream project license: GNU GPL version 3, included as GPL-3.0.txt.
+Arknights artwork, models, fonts, voices and music retain their original owners' rights and the notices of the upstream distribution. This is a community client; it is not an official Hypergryph or Gryphline release.
+Web ZIP compatibility: fflate 0.8.2, copyright (c) 2023 Arjun Barrett, MIT license. Its license is included in the source distribution.
+Android SDK and Eclipse Temurin JDK are build tools only, not included in the distributed application.

@@ -40,7 +40,7 @@ test('COMBAT: one battle per alive player with the board as input; watchers get 
   const before = h.allTo('p_0', 'b.snap').length;
   h.sched.advance(1000);
   const snaps = h.allTo('p_0', 'b.snap').length - before;
-  assert.ok(snaps >= 17 && snaps <= 23, `≈20 snapshots per real second, got ${snaps}`);
+  assert.ok(snaps >= 8 && snaps <= 12, `custom bandwidth policy: ≈10 snapshots per real second, got ${snaps}`);
   const last = h.lastTo('p_0', 'b.snap');
   assert.equal(typeof last.gt, 'number', 'game time travels as gt (t is the frame type)');
   assert.ok(Array.isArray(last.units));

@@ -78,9 +78,11 @@
   --lv-6: #5d341e;
 
   /* type */
-  --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Source Han Sans SC', 'Noto Sans CJK SC', sans-serif;
-  --font-num: 'Bender', 'Rajdhani', 'Oxanium', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-display: 'Novecento', 'Novecento Wide', 'Oxanium', 'Rajdhani', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  /* the Han / Hangul faces follow <html lang> (ui/lang.js htmlLang; the :lang() rules below): Simplified Chinese by default */
+  --cjk-faces: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Source Han Sans SC', 'Noto Sans CJK SC';
+  --font-cjk: var(--cjk-faces), sans-serif;
+  --font-num: 'Bender', 'Rajdhani', 'Oxanium', var(--cjk-faces), sans-serif;
+  --font-display: 'Novecento', 'Novecento Wide', 'Oxanium', 'Rajdhani', var(--cjk-faces), sans-serif;
   --font-mono: 'Bender', 'Oxanium', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
   /* motion */
@@ -93,7 +95,7 @@
   /* layers */
   --z-screen: 1;
   --z-banner: 40;
-  --z-conn: 60;
+  --z-conn: 75;
   --z-modal: 80;
   --z-toast: 90;
   --z-tooltip: 95;
@@ -104,6 +106,12 @@
   --bk-l: .14rem;
   --bk-w: 2px;
 }
+
+/* Language packs (docs/I18N.md): the same characters take their own glyph forms per language — Japanese kanji,
+   Traditional Chinese, a Korean face for Hangul (each stack falls back to the Simplified Chinese faces). */
+:root:lang(ja) { --cjk-faces: 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', 'Noto Sans CJK JP', 'Noto Sans SC', 'Microsoft YaHei'; }
+:root:lang(ko) { --cjk-faces: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans CJK KR', 'Noto Sans SC', 'Microsoft YaHei'; }
+:root:lang(zh-TW) { --cjk-faces: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', 'Noto Sans CJK TC', 'Noto Sans SC', 'Microsoft YaHei'; }
 
 /* ---- root scale ----------------------------------------------------------------------------- */
 html {
@@ -348,27 +356,11 @@ h1, h2, h3, h4, p { margin: 0; }
   border-radius: 2px;
 }
 .rotate-hint__title { font-size: 20px; font-weight: 700; color: var(--text-hi); }
-/* for a player whose rotation is locked: the OS lock beats the page, so the hint says where to switch it off */
-.rotate-hint__tip { max-width: 22em; font-size: 14px; line-height: 1.6; color: var(--text-lo); }
-/* 全屏并横屏: js/ui/device.js enters fullscreen from this tap and locks landscape where the browser allows it. Only where
-   the Fullscreen API exists (html.sp-fs — not iPhone Safari); the 44 px floor is the touch-target minimum */
-.rotate-hint__fs {
-  display: none;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0 24px;
-  border: 1px solid var(--mint-700);
-  background: rgba(20, 24, 22, .9);
-  color: var(--mint-400);
-  font: inherit;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  cursor: pointer;
-}
-.sp-fs .rotate-hint__fs { display: inline-block; }
-.rotate-hint__fs:active { background: var(--mint-a20); border-color: var(--mint-500); }
 .rotate-hint__micro { font-family: var(--font-display); font-size: 11px; letter-spacing: .3em; color: var(--mint-700); }
+.rotate-hint__button { min-height: 48px; padding: 12px 28px; border: 1px solid var(--mint-500); background: var(--mint-500); color: var(--bg-0); font: inherit; font-weight: 700; cursor: pointer; }
+.rotate-hint__button:disabled { opacity: .6; cursor: wait; }
+.rotate-hint__button:focus-visible { outline: 2px solid var(--text-hi); outline-offset: 4px; }
+.rotate-hint__status { max-width: 340px; margin: 0; font-size: 13px; line-height: 1.6; }
 @keyframes rotate-phone {
   0%, 20% { transform: rotate(0deg); }
   50%, 75% { transform: rotate(-90deg); }

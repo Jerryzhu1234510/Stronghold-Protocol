@@ -20,11 +20,16 @@
 // the default). createBattleFromSpec hands the Battle a per-battle data view (withUnitLoadouts) that resolves each
 // operator def — and its summons — for the loadout of its chess (simdata getChess(id, loadout) / getToken(id, owner,
 // ownerLoadout)); an explicit loadout argument always wins over the view's per-chess lookup.
+// 补位 (DATA.md §18): an operator entry with `standIn: true` (kept only when exactly `true`) is fielded as its chess's
+// stand-in (simdata getChess(id, { standIn: true }); its skill / module are the chess's backup selection).
+// 自选 (DATA.md §18): an operator entry of a DIY slot (`chessId` its `_a` / `_b` id) carries `diy: { charId, skillIndex?,
+// uniEquipId? }` (kept when well-formed; the data layer checks legality — shared/diy.js checkDiyPick) and is fielded as
+// simdata getChess(id, { diy }).
 
 import { Battle } from './Battle.js';
+import { MAX_SEATS } from '../../shared/constants.js';
 import { toDataSource, withUnitLoadouts } from './simdata.js';
 import { BOSS_POOL_MIN_HP } from './constants.js';
-import { RESULT_LIMITS } from '../../shared/protocol.js';
 
 export const SPEC_VERSION = 1;
 
@@ -77,11 +82,34 @@ export function buildBattleSpec(o = {}) {
 
 const LOADOUT_ID = /^[A-Za-z0-9_\-]{1,64}$/;
 
-/** Keep a unit's `skillIndex` / `moduleId` only when well-formed (the data layer checks legality). Mutates `u`. */
+/**
+ * A well-formed 自选 pick `{ charId, skillIndex?, uniEquipId? }` reduced to those fields (skill 0–9 or null, module a
+ * loadout id or null), or null.
+ */
+function cleanDiyPick(d) {
+  if (!d || typeof d !== 'object' || Array.isArray(d) || typeof d.charId !== 'string' || !LOADOUT_ID.test(d.charId)) return null;
+  const out = { charId: d.charId };
+  if (d.skillIndex != null) {
+    if (!(Number.isInteger(d.skillIndex) && d.skillIndex >= 0 && d.skillIndex <= 9)) return null;
+    out.skillIndex = d.skillIndex;
+  }
+  if (d.uniEquipId != null) {
+    if (!(typeof d.uniEquipId === 'string' && LOADOUT_ID.test(d.uniEquipId))) return null;
+    out.uniEquipId = d.uniEquipId;
+  }
+  return out;
+}
+
+/**
+ * Keep a unit's `skillIndex` / `moduleId` only when well-formed (the data layer checks legality), `standIn` only when
+ * exactly `true` (补位) and `diy` only as a well-formed pick (自选). Mutates `u`.
+ */
 export function sanitizeUnitLoadout(u) {
   if ('skillIndex' in u && !(Number.isInteger(u.skillIndex) && u.skillIndex >= 0 && u.skillIndex <= 9)) delete u.skillIndex;
   if ('moduleId' in u && !(typeof u.moduleId === 'string' && LOADOUT_ID.test(u.moduleId))) delete u.moduleId;
-  if (u.kind === 'token') { delete u.skillIndex; delete u.moduleId; }
+  if ('standIn' in u && u.standIn !== true) delete u.standIn;
+  if ('diy' in u) { const d = cleanDiyPick(u.diy); if (d) u.diy = d; else delete u.diy; }
+  if (u.kind === 'token') { delete u.skillIndex; delete u.moduleId; delete u.standIn; delete u.diy; }
   return u;
 }
 
@@ -315,8 +343,7 @@ function compactMods(m) {
 export function compactResult(res) {
   const r = res && typeof res === 'object' ? res : {};
   const perPlayer = {};
-  // a field holds at most 2 players; the wire bound is shared/protocol.js RESULT_LIMITS.players (MAX_SEATS)
-  for (const pid of Object.keys(r.perPlayer || {}).slice(0, RESULT_LIMITS.players)) {
+  for (const pid of Object.keys(r.perPlayer || {}).slice(0, MAX_SEATS)) {
     const p = r.perPlayer[pid] || {};
     const layerGains = {};
     for (const [k, v] of Object.entries(p.layerGains || {}).slice(0, 40)) if (isKey(k) && fnum(v) > 0) layerGains[k] = Math.min(1e4, fnum(v));
@@ -372,10 +399,7 @@ export const RESULT_FRAME_BUDGET = 60 * 1024;
 /**
  * Keep a compact result under the frame budget (a larger frame closes the socket: the server would take the field over
  * at the very end). Never touches what settles LP / funds / layers of a normal field. In order: drop the per-unit
- * statistics, drop the leaks' `mods` (the server rebuilds them from the spec), then — normal / 联防 fields — keep only the
- * keys of a leak / never-spawned entry the server settles with (enemyKey, sourcePlayerId, a non-default `counted` /
- * `lpr` / `boss`: server/match/fields.js validateClientResult takes tag and mods from the spec and defaults the rest; a
- * 联防 field of a room above 4 players can hold several leakers' rounds of enemies), or — boss fields, whose leaks cost
+ * statistics, drop the leaks' `mods` (the server rebuilds them from the spec), and — boss fields only, whose leaks cost
  * team LP through b.progress — drop leak entries. Returns the (possibly) trimmed copy.
  * @param {object} result compactResult(...) output
  * @param {{ bossLike?: boolean, budget?: number, battleId?: string }} [o]
@@ -387,20 +411,7 @@ export function fitResult(result, { bossLike = false, budget = RESULT_FRAME_BUDG
   for (const [pid, p] of Object.entries(result.perPlayer || {})) r.perPlayer[pid] = { ...p, unitStats: [] };
   if (size(r) <= budget) return r;
   for (const p of Object.values(r.perPlayer)) p.leaked = (p.leaked || []).map((l) => ({ ...l, mods: null }));
-  if (size(r) <= budget) return r;
-  if (!bossLike) {
-    const lean = (l) => {
-      const o = { enemyKey: l.enemyKey };
-      if (l.sourcePlayerId != null) o.sourcePlayerId = l.sourcePlayerId;
-      if (l.counted === false) o.counted = false;
-      if (Number.isFinite(l.lpr) && l.lpr !== 1) o.lpr = l.lpr;
-      if (l.boss) o.boss = true;
-      return o;
-    };
-    for (const p of Object.values(r.perPlayer)) p.leaked = p.leaked.map(lean);
-    if (Array.isArray(r.unspawned)) r.unspawned = r.unspawned.map((u) => (u.sourcePlayerId != null ? { enemyKey: u.enemyKey, sourcePlayerId: u.sourcePlayerId } : { enemyKey: u.enemyKey }));
-    return r;
-  }
+  if (size(r) <= budget || !bossLike) return r;
   for (const p of Object.values(r.perPlayer)) p.leaked = [];
   if (Array.isArray(r.unspawned)) r.unspawned = [];
   return r;

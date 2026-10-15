@@ -76,15 +76,15 @@ export function resolveDrop(p) {
   if (!slot) return { kind: 'cancel', reason: 'notTarget' };
   if (slot.area === 'temp') return { kind: 'cancel', reason: 'temp' };
   if (sameSlot(slot, from) && slot.area !== 'board') return { kind: 'cancel', reason: 'same' };
-  if (!isLegal(p.canPlace, piece, slot)) return { kind: 'cancel', reason: 'illegal' };
+  if (!isLegal(p.canPlace, piece, slot, p.geo)) return { kind: 'cancel', reason: 'illegal' };
   return { kind: 'drop', target: slot };
 }
 
 /** Legality via the UI callback (board → (piece,row,col); hand → (piece, HAND_ROW, idx)). Throwing ⇒ illegal. */
-export function isLegal(canPlace, piece, slot) {
+export function isLegal(canPlace, piece, slot, geo = GEO) {
   if (!slot || slot.area === 'temp' || slot.area === 'outside') return false;
   if (typeof canPlace !== 'function') return true;
-  const row = slot.area === 'board' ? slot.row : GEO.HAND_ROW;
+  const row = slot.area === 'board' ? slot.row : geo.HAND_ROW;
   const col = slot.area === 'board' ? slot.col : slot.idx;
   try { return canPlace(piece, row, col, slot) !== false; } catch { return false; }
 }
@@ -99,17 +99,13 @@ const DEFAULTS = { threshold: 6, touchThreshold: 10, longPressMs: 480 };
  *   isOverCanvas?: (clientX, clientY) => boolean, // false when DOM UI covers the point (default true)
  *   canPlace?: (piece, row, col, target) => boolean,
  *   emit: (name, payload) => void,
- *   setTimeout?, clearTimeout?, nextFrame?, threshold?, touchThreshold?, longPressMs?
+ *   setTimeout?, clearTimeout?, threshold?, touchThreshold?, longPressMs?
  * }} hooks
  */
 export function createDragController(hooks) {
   const h = { ...DEFAULTS, ...hooks };
   const setT = h.setTimeout || ((fn, ms) => setTimeout(fn, ms));
   const clearT = h.clearTimeout || ((id) => clearTimeout(id));
-  // the long press is decided at the next frame: a finger lifted while the page was busy (a slow phone's long frame) is
-  // delivered at the start of that frame, before its animation callbacks — a tap, not a long press (which opened the
-  // detail instead of selecting the unit)
-  const nextFrame = h.nextFrame || (typeof requestAnimationFrame === 'function' ? (fn) => requestAnimationFrame(fn) : (fn) => fn());
   let editable = false;
   let canPlace = typeof h.canPlace === 'function' ? h.canPlace : null;
   /** @type {null | { mode: 'pressed'|'dragging'|'held', pointerId, pointerType, piece, from, sx, sy, timer }} */
@@ -124,7 +120,7 @@ export function createDragController(hooks) {
   const overCanvas = (cx, cy) => { try { return h.isOverCanvas ? h.isOverCanvas(cx, cy) !== false : true; } catch { return true; } };
 
   function setHoverTile(tile) {
-    const slot = tile ? tileSlot(tile) : null;
+    const slot = tile ? tileSlot(tile, h.geo || GEO) : null;
     const key = tile ? `${tile.row},${tile.col}` : '';
     if (key === hoverTileKey) return;
     hoverTileKey = key;
@@ -151,8 +147,8 @@ export function createDragController(hooks) {
   function moveDrag(e) {
     const tile = tileAt(e.x, e.y);
     const over = overCanvas(e.clientX, e.clientY);
-    const slot = over && tile ? tileSlot(tile) : null;
-    const legal = !!slot && slot.area !== 'temp' && (slot.area === 'board' || !sameSlot(slot, st.from)) && isLegal(canPlace, st.piece, slot);
+    const slot = over && tile ? tileSlot(tile, h.geo || GEO) : null;
+    const legal = !!slot && slot.area !== 'temp' && (slot.area === 'board' || !sameSlot(slot, st.from)) && isLegal(canPlace, st.piece, slot, h.geo);
     setHoverTile(over ? tile : null);
     emit('pieceDragMove', { uid: st.piece.uid, piece: st.piece, x: e.x, y: e.y, clientX: e.clientX, clientY: e.clientY, target: slot, legal });
   }
@@ -164,7 +160,7 @@ export function createDragController(hooks) {
     let dropped = false;
     if (!cancelled) {
       const tile = tileAt(e.x, e.y);
-      const d = resolveDrop({ piece: s.piece, from: s.from, tile, overCanvas: overCanvas(e.clientX, e.clientY), clientX: e.clientX, clientY: e.clientY, canPlace });
+      const d = resolveDrop({ piece: s.piece, from: s.from, tile, overCanvas: overCanvas(e.clientX, e.clientY), clientX: e.clientX, clientY: e.clientY, canPlace, geo: h.geo });
       if (d.kind === 'drop') {
         dropped = true;
         emit('pieceDrop', { uid: s.piece.uid, piece: s.piece, from: s.from, target: d.target });
@@ -202,12 +198,9 @@ export function createDragController(hooks) {
         st.timer = setT(() => {
           if (st !== snapshot || st.mode !== 'pressed') return;
           st.timer = null;
-          nextFrame(() => {
-            if (st !== snapshot || st.mode !== 'pressed') return;
-            st.mode = 'held';
-            emit('pieceClick', { uid: piece.uid, piece, button: 0, detail: true, clientX: snapshot.cx, clientY: snapshot.cy });
-            emit('pieceDetail', { uid: piece.uid, piece, clientX: snapshot.cx, clientY: snapshot.cy });
-          });
+          st.mode = 'held';
+          emit('pieceClick', { uid: piece.uid, piece, button: 0, detail: true, clientX: snapshot.cx, clientY: snapshot.cy });
+          emit('pieceDetail', { uid: piece.uid, piece, clientX: snapshot.cx, clientY: snapshot.cy });
         }, h.longPressMs);
       }
       return true;

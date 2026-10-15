@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -9,7 +8,7 @@ import { createServer } from 'node:http';
 import { MirrorPolicy, selectDownloadSource } from '../tools/assets/network.mjs';
 import { downloadUrls, githubProxyUrl, githubSourceUrl, normalizeProxyPrefix } from '../tools/assets/sources.mjs';
 import { Downloader } from '../tools/assets/downloader.mjs';
-import { cachedJson, loadCharWords, loadIndexes } from '../tools/assets/cache.mjs';
+import { cachedJson, loadIndexes } from '../tools/assets/cache.mjs';
 import { resolveTemplate } from '../tools/assets/manifest.mjs';
 import { processModels } from '../tools/assets/spine.mjs';
 
@@ -83,20 +82,6 @@ test('downloader uses proxy, validates payload, falls back, and skips existing f
   assert.equal(calls.length, 2);
 });
 
-// A 外援 roster entry (tools/assets/waiguan-operators.json, plan.mjs entryUrls) lists raw and its jsDelivr copy as two
-// candidates: the jsDelivr copy is also the raw URL's own fallback, and is tried once, not twice.
-test('a job listing raw and its jsDelivr copy tries each source once, after the proxy in mirror mode', async (t) => {
-  for (const [source, expected] of [['direct', [RAW, CDN]], ['mirror', [PROXY, RAW, CDN]]]) {
-    const dir = await fixture(t);
-    const calls = [];
-    const dl = new Downloader({ root: dir, ledgerPath: join(dir, 'ledger.json'), source, retries: 1, backoffMs: 0, log: quiet,
-      fetchImpl: async (url) => { calls.push(url); return new Response('down', { status: 503 }); } });
-    const job = { rel: 'a.json', urls: [RAW, CDN], kind: 'json' };
-    assert.equal((await dl.run([job])).get(job.rel).status, 'error');
-    assert.deepEqual(calls, expected, source);
-  }
-});
-
 test('proxy provenance is recognized as the primary asset, not a fallback asset', async (t) => {
   const dir = await fixture(t);
   const dl = new Downloader({ root: dir, ledgerPath: join(dir, 'ledger.json'), source: 'mirror', log: quiet,
@@ -136,20 +121,16 @@ test('Spine pages from old proxy ledger entries respect direct and explicitly di
   }
 });
 
-// The fork loads charword_table.json on its own (loadCharWords, only when voice is wanted: tools/assets/voice.mjs), not
-// inside loadIndexes as upstream #73 does: the three indexes are loadIndexes' two plus loadCharWords.
 test('all three indexes use the selected proxy and cached/offline reads make no request', async (t) => {
   const dir = await fixture(t);
   const calls = [];
   const opts = { source: 'mirror', log: quiet, fetchImpl: async (url) => { calls.push(url); return Response.json({ index: true }); } };
   const result = await loadIndexes(dir, opts);
-  assert.deepEqual(result, { audioData: { index: true }, modelsData: { index: true } });
-  assert.deepEqual(await loadCharWords(dir, opts), { index: true });
+  assert.deepEqual(result, { audioData: { index: true }, modelsData: { index: true }, charword: { index: true } });
   assert.equal(calls.length, 3);
   assert.ok(calls.some((url) => url.endsWith('/charword_table.json')));
   assert.ok(calls.every((url) => url.startsWith('https://gh-proxy.com/https://raw.githubusercontent.com/')));
   await loadIndexes(dir, { ...opts, offline: true, refresh: true });
-  await loadCharWords(dir, { ...opts, offline: true, refresh: true });
   assert.equal(calls.length, 3);
   assert.deepEqual(JSON.parse(await readFile(join(dir, '.cache', 'ark-models', 'models_data.json'), 'utf8')), { index: true });
 });
@@ -196,7 +177,6 @@ test('empty proxy setting disables every downloader and index proxy request in m
   const calls = [];
   const opts = { source: 'mirror', proxyPrefix: '', log: quiet, fetchImpl: async (url) => { calls.push(url); return Response.json({ ok: true }); } };
   await loadIndexes(dir, opts);
-  await loadCharWords(dir, opts);
   const dl = new Downloader({ root: dir, ledgerPath: join(dir, 'ledger.json'), ...opts });
   await dl.run([{ rel: 'a.json', urls: [RAW], kind: 'json' }]);
   assert.equal(calls.length, 4);
@@ -212,8 +192,7 @@ test('one circuit spans indexes, assets and fonts and stops after three failed p
     calls.push(url);
     return url.startsWith('https://gh-proxy.com/') ? new Response('', { status: 503 }) : Response.json({ ok: true });
   } };
-  await loadIndexes(dir, opts); // three consecutive proxy failures across the indexes: audio_data, models_data …
-  await loadCharWords(dir, opts); // … and charword_table (fetch-assets passes the run's one mirrorPolicy to both)
+  await loadIndexes(dir, opts); // three consecutive proxy failures across the indexes
   assert.equal(mirrorPolicy.disabled, true);
   const dl = new Downloader({ root: join(dir, 'assets'), ledgerPath: join(dir, 'ledger.json'), concurrency: 1, ...opts });
   await dl.run([1, 2, 3].map((i) => ({ rel: `${i}.json`, urls: [RAW + i], kind: 'json' })));
@@ -348,7 +327,6 @@ test('mirror header timeout does not cap a steadily streaming index or asset bod
   assert.ok(Date.now() - started > 100, 'the body takes longer than the header deadline while making progress');
 });
 
-// The voice flags are the fork's (--voice=LANGS, --voice-lang=L as its alias; no --voice-all): test/fetch-assets-shrink.test.js.
 test('CLI source defaults to direct and retains the 0.1.1 shrink/local-spine flags', async () => {
   const { parseArgs } = await import('../tools/fetch-assets.mjs');
   const old = process.env.SP_ASSET_SOURCE;
@@ -357,14 +335,14 @@ test('CLI source defaults to direct and retains the 0.1.1 shrink/local-spine fla
     assert.equal(parseArgs([]).source, 'direct');
     process.env.SP_ASSET_SOURCE = 'mirror';
     assert.equal(parseArgs([]).source, 'mirror');
-    assert.equal(parseArgs([]).voice, undefined, 'no voice flag: the default dubs (voice.mjs DEFAULT_VOICE_LANGS)');
-    const opts = parseArgs(['--asset-source=direct', '--allow-shrink', '--local-spines', '--voice-lang=jp']);
+    assert.equal(parseArgs([]).voiceLang, 'cn');
+    assert.equal(parseArgs([]).voiceAll, false);
+    const opts = parseArgs(['--asset-source=direct', '--allow-shrink', '--local-spines', '--voice-lang=jp', '--voice-all']);
     assert.equal(opts.source, 'direct');
     assert.equal(opts.allowShrink, true);
     assert.equal(opts.localSpines, true);
-    assert.deepEqual(opts.voice, ['jp']);
-    assert.deepEqual(parseArgs(['--voice=cn,kr', '--asset-source=mirror']).voice, ['cn', 'kr']);
-    assert.throws(() => parseArgs(['--asset-source=auto']), /unknown asset source/);
+    assert.equal(opts.voiceLang, 'jp');
+    assert.equal(opts.voiceAll, true);
   } finally {
     if (old === undefined) delete process.env.SP_ASSET_SOURCE;
     else process.env.SP_ASSET_SOURCE = old;
@@ -388,20 +366,5 @@ test('setup and asset CLI document and validate source options before doing work
     const invalid = spawnSync(process.execPath, [script, '--asset-source=invalid'], { encoding: 'utf8' });
     assert.notEqual(invalid.status, 0);
     assert.match(invalid.stderr, /unknown asset source/);
-  }
-});
-
-// tools/fetch-assets-retry.mjs (the 外援 PR's download-only helper) takes the same source choice as fetch-assets: the
-// option or SP_ASSET_SOURCE, checked before any work, and the gh-proxy copies go through the shared MirrorPolicy.
-test('fetch-assets-retry takes --asset-source / SP_ASSET_SOURCE like fetch-assets and checks it before doing work', () => {
-  const script = 'tools/fetch-assets-retry.mjs';
-  for (const [args, env] of [[['--asset-source=invalid'], {}], [['--asset-source', 'auto'], {}], [[], { SP_ASSET_SOURCE: 'auto' }]]) {
-    const r = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
-    assert.notEqual(r.status, 0, JSON.stringify(args));
-    assert.match(r.stderr, /unknown asset source/);
-  }
-  const src = readFileSync(script, 'utf8');
-  for (const needle of ['new MirrorPolicy(', 'githubProxyUrl(', 'network.request(', 'network.readBody(', 'network.failed(', 'validate(job.kind']) {
-    assert.ok(src.includes(needle), needle);
   }
 });

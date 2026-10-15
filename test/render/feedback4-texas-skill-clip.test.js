@@ -48,7 +48,7 @@ test('德克萨斯 S2 剑雨: an instant skill with no Begin clip plays its Skil
   assert.deepEqual(a.log, [['set', 'Skill', false]], 'the skill clip itself, played once');
   a.setSkill(false);   // the sim fires 'skill' 1 and 0 in the same tick: the flag is already off
   run(a, 1);
-  assert.equal(a.mode, 'skillCast', 'the one-shot cast (the fork\'s skill state machine, PR #5)');
+  assert.equal(a.mode, 'skillBegin');
   assert.equal(a.current, 'Skill', 'still on screen halfway through the cast');
   run(a, 1.3);
   assert.equal(a.mode, 'base');
@@ -81,21 +81,16 @@ test('a skill that stays on (银灰 S3 真银斩: same clip shape, 1.33 s clip) 
   assert.equal(a.current, 'Idle', 'no End clip: straight back to the idle');
 });
 
-test('unchanged: a Begin clip still runs into its next clip, a skill with its own Idle still idles', () => {
-  // the fork's state machine (PR #5) queues nothing behind a Begin clip: update() plays the base of the moment after it
+test('unchanged: a Begin clip still runs into its queued next clip, a skill with its own Idle still idles, and End still closes the skill', () => {
   const b = actor('char_4207_branch', 1);   // 折桠 S2: Skill_2_Begin → Skill_2_Idle (community report #23)
   b.setSkill(true);
-  assert.deepEqual(b.log, [['set', 'Skill_2_Begin', false]]);
-  run(b, 1.5);
-  assert.deepEqual(names(b), ['Skill_2_Begin', 'Skill_2_Idle']);
+  assert.deepEqual(b.log, [['set', 'Skill_2_Begin', false], ['queue', 'Skill_2_Idle', true]]);
   const n = actor('char_1014_nearl2', 2);   // 耀骑士临光 S3: no Begin, own Idle — plays that idle at once
   n.setSkill(true);
   assert.deepEqual(n.log, [['set', 'Skill_3_Idle', true]]);
-  const u = actor('char_337_utage', 1);     // 宴: Begin → loop, unchanged
+  const u = actor('char_337_utage', 0);     // 宴 S1 分神: Begin → loop, unchanged (her S2 has no skill clip, DESIGN §25.22.9)
   u.setSkill(true);
-  assert.deepEqual(u.log, [['set', 'Skill_Start', false]]);
-  run(u, 1);
-  assert.deepEqual(names(u), ['Skill_Start', 'Skill_Loop']);
+  assert.deepEqual(u.log, [['set', 'Skill_Start', false], ['queue', 'Skill_Loop', true]]);
 });
 
 test('the deploy-time passives the sim now opens a window for play their clip (琳琅诗怀雅 S1/S2: kind passive, no duration)', () => {
@@ -121,6 +116,6 @@ test('a skill clip that IS the normal attack clip is not played as a skill anima
   const a = actor('char_1028_texas2', 0);   // 缄默德克萨斯 S1: anims.skill.loop === anims.attack.loop ('Attack')
   assert.equal(a.roles.skill.loop, a.roles.attack.loop);
   a.setSkill(true);
-  assert.deepEqual(a.log, [], 'stays on the base clip, as before (no skill clip played)');
+  assert.deepEqual(a.log, [['set', 'Idle', true]], 'falls through to the base clip, as before');
   assert.equal(a.current, 'Idle');
 });

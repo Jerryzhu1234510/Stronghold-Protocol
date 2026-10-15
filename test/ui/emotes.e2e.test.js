@@ -299,8 +299,9 @@ describe('official emotes in the browser', { skip: !ENABLED && 'set SP_E2E=1 (an
     // neither the local-client art nor the copies setup downloads (GitHub #42) load: the glyph is the last link
     const { page, problems } = await open('/dev/uikit.html', {
       manifest: { version: 1, groups: { 'emoticon/basic': { pic_happy_battle: { path: '/assets/local/emoticon/basic/nope_404.png', w: 120, h: 120 } } } },
-      block: /\/assets\/ui\/emoticon\//,
-      ignore: [/nope_404\.png/, /\/assets\/ui\/emoticon\//, /Failed to load resource/],
+      // the served manifest's URLs may carry a content-hash segment (/assets/~<hash>/ui/…, 0.2.6 host bandwidth layer 1)
+      block: /\/assets\/(?:~[0-9a-f]{16}\/)?ui\/emoticon\//,
+      ignore: [/nope_404\.png/, /\/assets\/(?:~[0-9a-f]{16}\/)?ui\/emoticon\//, /Failed to load resource/],
     });
     await page.evaluate(() => localStorage.removeItem('sp.pref.emoteTheme'));
     await page.reload({ waitUntil: 'networkidle0' });
@@ -352,5 +353,29 @@ describe('official emotes in the browser', { skip: !ENABLED && 'set SP_E2E=1 (an
     await page.screenshot({ path: path.join(OUT, 'emotes-mock-sent-1920.png') });
     assert.deepEqual(problems, []);
     await page.close();
+  });
+  test('expanded team: clicked emotes remain visible inside the scroll area on desktop and phone', async () => {
+    for (const [w, h] of [[1600, 900], [844, 390]]) {
+      const { page, problems } = await open('/dev/game-mock.html?phase=PREP&shot=1', { w, h });
+      await page.evaluate(() => {
+        __MOCK__.mutate(s => {
+          for (let i = 4; i < 8; i++) s.pub.players.push({ ...s.pub.players[1], playerId: `extra${i}`, seat: i, name: `队友${i}` });
+        });
+        __MOCK__.pushPublic();
+      });
+      await page.waitForSelector('.team--expanded');
+      await page.click('.ewheel__btn');
+      await page.click('.ewheel__item:nth-child(1)');
+      await sleep(300);
+      assert.equal((await wheelState(page)).open, false);
+      const geometry = await page.$eval('.team__row.is-self .ebubble', e => {
+        const b = e.getBoundingClientRect(), p = e.closest('.team').getBoundingClientRect();
+        return { contained: b.left >= p.left && b.right <= p.right, visible: Number(getComputedStyle(e).opacity) > .5,
+          picture: [...e.querySelectorAll('img')].some(i => i.complete && i.naturalWidth > 0) };
+      });
+      assert.deepEqual(geometry, { contained: true, visible: true, picture: true });
+      await page.screenshot({ path: path.join(OUT, `emotes-expanded-${w}.png`) });
+      assert.deepEqual(problems, []); await page.close();
+    }
   });
 });

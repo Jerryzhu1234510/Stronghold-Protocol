@@ -13,6 +13,51 @@ import * as THREE from 'three';
 
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 
+test('phone shop-open view is 25% closer than r07 and bench aligns with cards, retaining original pitch', () => {
+  for (const [width, height] of [[756, 366], [844, 390], [960, 434]]) {
+    for (const kind of ['prep', 'bossPrep']) for (const side of ['L', 'R']) for (const shop of [true, false]) {
+      const hud = { top: 86, bottom: shop ? 150 : 48, ...(shop ? { benchBottom: 109 } : {}) };
+      const viewport = { width, height };
+      const flattened = presetCamera(kind, viewport, { mobile: true, tilt: 55, side, shop, hud });
+      const camera = presetCamera(kind, viewport, { mobile: true, side, shop, hud });
+      const distant = presetCamera(kind, viewport, { mobile: true, side, shop, hud, margin: .1, headroom: CAMERA_PRESETS[kind].headroom });
+      const firstRow = kind === 'prep' ? 7 : 0;
+      const firstCol = kind === 'bossPrep' && side === 'R' ? 10 : 0;
+      const r06 = fitCamera({ r0: firstRow, r1: firstRow + 5, c0: firstCol, c1: firstCol + 10 }, {
+        ...viewport, padding: { left: Math.min(100, width * .12), right: 20, top: hud.top, bottom: hud.bottom },
+      }, { tilt: OFFICIAL.pitch, dist: CAMERA_PRESETS.prep.dist, margin: 0, headroom: .5 });
+      assert.equal(camera.tilt, OFFICIAL.pitch, 'same original pitch as desktop');
+      assert.ok(near(camera.scaleAt(firstCol + 5, firstRow + 3) / r06.scaleAt(firstCol + 5, firstRow + 3), shop ? 1.2 * 1.25 : 1), 'another 25% larger than r07; folded overview unchanged');
+      if (shop) assert.ok(near(camera.project(firstCol + 5, firstRow - .5, .16).y, height - hud.benchBottom - 8), 'bench lower edge is 8 CSS pixels above card row top');
+      if (shop) assert.ok(camera.scaleAt(firstCol + 5, firstRow + 3) > distant.scaleAt(firstCol + 5, firstRow + 3) * 1.1, 'phone tiles are at least 10% larger than r05 without changing perspective');
+      const ratio = cam => {
+        const quad = tileQuad(cam, firstRow + 3, firstCol + 5, .42);
+        return (Math.max(...quad.map(p => p.y)) - Math.min(...quad.map(p => p.y)))
+          / (Math.max(...quad.map(p => p.x)) - Math.min(...quad.map(p => p.x)));
+      };
+      assert.ok(ratio(camera) > ratio(flattened) * 1.3, 'tile tops retain depth instead of becoming flat strips');
+      if (shop) {
+        const folded = presetCamera(kind, viewport, { mobile: true, side, shop: false, hud: { top: hud.top, bottom: 48 } });
+        assert.ok(folded.scaleAt(firstCol + 5, firstRow + 3) > camera.scaleAt(firstCol + 5, firstRow + 3), 'folded shop still enlarges the board');
+      }
+      for (let row = firstRow; row <= firstRow + 5; row++) for (let col = firstCol; col <= firstCol + 10; col++) {
+        for (const p of tileQuad(camera, row, col, row === firstRow ? .16 : .42)) {
+          assert.ok(p.x >= 0 && p.x <= width && p.y >= (shop ? 0 : hud.top) && p.y <= height - (hud.benchBottom ?? hud.bottom),
+            `${width}×${height} ${kind}/${side} shop=${shop} tile ${row},${col} is pressable`);
+          const picked = camera.unproject(p.x, p.y, row === firstRow ? .16 : .42);
+          assert.ok(picked && Number.isFinite(picked.x), 'touch projection remains invertible');
+        }
+        if (shop) assert.ok(camera.project(col, row, row === firstRow ? .16 : .42).y >= 44, 'distant tile centers remain below top bar');
+      }
+    }
+    for (const kind of ['normal', 'unite', 'boss']) {
+      const a = presetCamera(kind, { width, height });
+      const b = presetCamera(kind, { width, height }, { mobile: true });
+      assert.deepEqual(b.project(5, 10), a.project(5, 10), 'combat keeps its existing larger camera');
+    }
+  }
+});
+
 describe('Camera', () => {
   test('project → unproject round trip on several planes and tilts', () => {
     for (const tilt of [0, 20, 36, 55]) {
@@ -354,28 +399,6 @@ describe('HUD clearance of the prep views (user playtest #5 item 9)', () => {
       for (const v of Object.values(out.params())) assert.ok(Number.isFinite(v));
     }
     assert.equal(clearHud(cam, hud, null, vp), cam);
-  });
-
-  test('clearHud minZoom (touch screens): the zoom-out stops there, the bench stays clear and the back rows go under the top HUD', () => {
-    const vp = { width: 780, height: 300 };
-    const keep = { near: 6.5, zNear: 0.16, far: 12.5, zFar: 0.42 };
-    const cam = presetCamera('prep', vp);
-    const hud = { top: 86, bottom: 109 };
-    const fit = clearHud(cam, hud, keep, vp);
-    assert.ok(fit.scale / cam.scale < 0.8, `a phone with its browser bars zooms far out: ×${fit.scale / cam.scale}`);
-    for (const minZoom of [0.85, 1]) {
-      const z = clearHud(cam, { ...hud, minZoom }, keep, vp);
-      assert.ok(near(z.scale / cam.scale, minZoom, 1e-9), `×${z.scale / cam.scale}`);
-      const b = band(z, 'prep');
-      assert.ok(near(b.near, vp.height - hud.bottom - 1, 1e-6), `bench edge on the shop bar's top + 1 px gap: ${b.near}`);
-      assert.ok(b.far < hud.top, 'the back row goes under the top HUD');
-      const c0 = cam.project(0, 9, 0), c1 = z.project(0, 9, 0);
-      assert.ok(near(c1.x - vp.width / 2, minZoom * (c0.x - vp.width / 2), 1e-6), 'x about the centre');
-    }
-    // a band that fits, or a floor below the fitting zoom: unchanged behaviour
-    assert.equal(clearHud(cam, { top: 0, bottom: 0, minZoom: 1 }, keep, vp), cam);
-    assert.deepEqual(clearHud(cam, { ...hud, minZoom: 0.1 }, keep, vp).params(), fit.params());
-    assert.deepEqual(clearHud(cam, { ...hud, minZoom: NaN }, keep, vp).params(), fit.params());
   });
 
   test('an adjusted camera picks, projects and lerps like any other (bench, raised and low tiles; three.js too)', () => {

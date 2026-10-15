@@ -1,16 +1,16 @@
 {
   "name": "stronghold-protocol-alliance",
-  "version": "0.1.4",
+  "version": "0.2.6",
   "private": true,
-  "description": "明日方舟「卫戍协议：盟约」非官方同人联机网页复刻（1–8 人合作，官方 1–4 人、5–8 人为本作扩展；Node.js 服务器 + 浏览器客户端）",
+  "description": "8443服0.2.6兼容版：账号、好友、累计杯数、房间扩展与本地Mod客户端",
   "license": "GPL-3.0-or-later",
-  "homepage": "https://github.com/sganggs/Stronghold-Protocol#readme",
+  "homepage": "https://github.com/Jerryzhu1234510/Stronghold-Protocol#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sganggs/Stronghold-Protocol.git"
+    "url": "git+https://github.com/Jerryzhu1234510/Stronghold-Protocol.git"
   },
   "bugs": {
-    "url": "https://github.com/sganggs/Stronghold-Protocol/issues"
+    "url": "https://github.com/Jerryzhu1234510/Stronghold-Protocol/issues"
   },
   "keywords": [
     "arknights",
@@ -23,35 +23,30 @@
   "type": "module",
   "main": "server/index.js",
   "scripts": {
+    "build:browser": "node tools/build-browser.mjs",
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "test": "node --test",
-    "test:fast": "node tools/test-fast.mjs",
     "golden": "node tools/golden.mjs",
     "golden:update": "node tools/golden.mjs --update",
     "vendor": "node tools/vendor.mjs",
-    "build-data": "node tools/build-data.mjs",
+    "build-data": "node tools/build-data.mjs && node tools/apply-custom-data.mjs",
     "assets": "node tools/vendor.mjs && node tools/fetch-assets.mjs",
     "postinstall": "node tools/vendor.mjs",
     "setup": "node tools/setup.mjs",
     "doctor": "node tools/doctor.mjs",
     "launch": "node scripts/launch.mjs",
-    "build:worker": "node tools/build-worker.mjs",
-    "archives:backup": "node tools/archive-backup.mjs",
-    "accounts:reset-password": "node tools/reset-password.mjs",
-    "dev:worker": "wrangler dev",
-    "deploy:worker": "node tools/build-replay.mjs --release && wrangler deploy",
-    "resources:manifest": "node tools/resource-pack.mjs --manifest-only",
-    "resources:pack": "node tools/resource-pack.mjs",
-    "resources:zip": "node tools/vendor.mjs && node tools/fetch-assets.mjs && node tools/resource-pack.mjs --out=.",
-    "android:assets": "node tools/build-android.mjs"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit --checkJs -p jsconfig.json",
+    "check:imports": "node tools/check-imports.mjs",
+    "package": "node tools/package.mjs",
+    "package:lite": "node tools/package.mjs --lite",
+    "apply-custom-data": "node tools/apply-custom-data.mjs"
   },
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
-    "@zip.js/zip.js": "^2.22.0",
-    "fflate": "^0.8.3",
     "htm": "^3.1.1",
     "pixi-spine": "^4.0.6",
     "pixi.js": "^7.4.2",
@@ -60,10 +55,12 @@
     "ws": "^8.22.0"
   },
   "devDependencies": {
-    "@pixi-spine/runtime-3.8": "^4.0.6",
-    "esbuild": "0.28.2",
-    "miniflare": "^5.20261001.0-alpha",
+    "@eslint/js": "^10.0.1",
+    "acorn": "^8.19.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
     "puppeteer-core": "^25.12.0",
-    "wrangler": "^4.147.0"
+    "typescript": "^5.9.2"
   }
 }

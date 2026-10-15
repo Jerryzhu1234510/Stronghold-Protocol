@@ -8,8 +8,8 @@
 //     remainder is dropped so a stalled server never spirals.
 //   * instant (VirtualScheduler default): every field is stepped to completion synchronously.
 //   * a solo pause (Match.paused, g.pause) skips the intervals: the field clock stands still (HeadlessPacer too).
-// Every SNAP_EVERY (3) ticks of a field its events are drained; watchers of that field get `b.ev` then `b.snap`, both
-// carrying the field's game time `gt` (`emit: false` skips the streaming: server-run fields under client-side combat).
+// Every SNAP_EVERY (3) ticks events are drained and sent; full pictures follow every STREAM_SNAPSHOT_EVERY (6)
+// ticks, or immediately at the end. Both carry game time `gt` (`emit: false` skips streaming under client combat).
 // Per-field isolation: an exception from step() force-ends that field as a timeout (and, if even that throws, the
 // field is closed with a synthetic result). A hard cap (HARD_CAP_SECONDS of game time) force-ends anything left.
 // Results that did not come from a finished battle carry `synthetic: true` (the match never charges LP for them).
@@ -32,13 +32,15 @@
 import { TICK, SNAPSHOT_EVERY } from '../sim/constants.js';
 import { layerGainRoom } from '../../shared/constants.js';
 import { uniteLeft } from '../sim/spec.js';
-import { GRANTED_CAP_OVERRIDE } from '../sim/content/garrisons/battle.js';
+import { diyTokenOwner } from '../../shared/diy.js';
 
 export const MAX_TICKS_PER_INTERVAL = 8;
 export const INTERVAL_MS = 1000 / 30;
 export const GAME_SPEED = 2;
 export const HARD_CAP_SECONDS = 3700;
 const SNAP_EVERY = Number.isInteger(SNAPSHOT_EVERY) && SNAPSHOT_EVERY > 0 ? SNAPSHOT_EVERY : 3;
+// 10 full pictures/sec at the normal 2× speed. Events still flush at the original 20 Hz.
+export const STREAM_SNAPSHOT_EVERY = SNAP_EVERY * 2;
 
 /** Catch-up cap per pacing interval: 8 ticks at the normal 2× speed, proportionally more when sped up. */
 export function maxTicksPerInterval(speed) {
@@ -168,7 +170,7 @@ export class FieldRunner {
         this._forceField(f, 'timeout');
       }
       if (b.finished) { f.live = false; this.m.markPublic(); }
-      if (this.ticks % SNAP_EVERY === 0 || !f.live) this._emit(f);
+      if (this.ticks % SNAP_EVERY === 0 || !f.live) this._emit(f, this.ticks % STREAM_SNAPSHOT_EVERY === 0 || !f.live);
     }
     if (this.onTick) {
       try { this.onTick(this); } catch (e) { this.m.reportError('field onTick', e); }
@@ -198,21 +200,25 @@ export class FieldRunner {
 
   forceAll(reason = 'forced') { this._forceAll(reason); this._checkDone(); }
 
-  _emit(f) {
+  _emit(f, snapshot = true) {
     let ev = [];
     try { ev = f.battle.drainEvents() || []; } catch (e) { this.m.reportError(`field ${f.fieldId} drainEvents`, e); }
     if (!this.emit) return;
     const watchers = this.m.watchersOf(f.fieldId);
     if (!watchers.length) return;
     let snapMsg = null;
-    try { snapMsg = snapFrame(f.fieldId, f.battle.snapshot()); } catch (e) { this.m.reportError(`field ${f.fieldId} snapshot`, e); }
+    if (snapshot) {
+      try { snapMsg = snapFrame(f.fieldId, f.battle.snapshot()); } catch (e) { this.m.reportError(`field ${f.fieldId} snapshot`, e); }
+    }
     const time = Number(f.battle.time);
     const gt = snapMsg ? snapMsg.gt : Number.isFinite(time) ? time : 0;
     const evMsg = ev.length ? { t: 'b.ev', fieldId: f.fieldId, gt, ev } : null;
-    for (const pid of watchers) {
-      if (evMsg) this.m.sendTo(pid, evMsg);
-      if (snapMsg) this.m.sendTo(pid, snapMsg);
-    }
+    const send = msg => {
+      if (typeof this.m.sendMany === 'function') this.m.sendMany(watchers, msg);
+      else for (const pid of watchers) this.m.sendTo(pid, msg);
+    };
+    if (evMsg) send(evMsg);
+    if (snapMsg) send(snapMsg);
   }
 
   _checkDone() {
@@ -542,6 +548,17 @@ function summonsOf(gd, chessId) {
   for (const id of [chessId, rec && rec.baseId, rec && rec.goldenId]) for (const t of (id && idx.byOwner.get(id)) || []) out.add(t);
   return [...out];
 }
+/**
+ * Summon ids a 自选 piece (0.2.0: a DIY slot `slotId` with its `pick`) can create: data/backups.json tokens whose owners
+ * name the pick's owner form (`<charId>@<statusKey>`, shared/diy.js diyTokenOwner).
+ */
+function diySummonsOf(gd, slotId, pick) {
+  const tokens = gd.raw && gd.raw.backups && gd.raw.backups.tokens && typeof gd.raw.backups.tokens === 'object' ? gd.raw.backups.tokens : null;
+  const slot = typeof gd.chess === 'function' && typeof slotId === 'string' ? gd.chess(slotId) : null;
+  if (!tokens || !slot || !pick || typeof pick.charId !== 'string') return [];
+  const owner = diyTokenOwner(pick.charId, slot.status);
+  return Object.keys(tokens).filter((id) => Array.isArray(tokens[id] && tokens[id].owners) && tokens[id].owners.includes(owner));
+}
 /** Summons no chess owns (bond / band units every player may field: 炎佑, 预备干员-医疗, Touch). */
 function ownerlessSummons(gd) { return summonIndex(gd).ownerless; }
 
@@ -577,8 +594,8 @@ function layerBondsOf(p, gd) {
  * §21.26): the traits of its units (garrisons with `bond_add_count` / `bond_add_count_multi`) and the ones their ADD_BOND
  * traits hand out (`give_garrison_id`, counted for every operator of the player — "所有【X】" reaches them all), each on
  * the bonds it names (`bond_by_id` ids; `bond_self` / `bond_actived_maxstack`: every bond of the player's snapshot and
- * units), up to the per-battle cap the sim applies (content/garrisons/battle.js: `max_add_count_per_battle`, the handed-out
- * 华法琳 trait's GRANTED_CAP_OVERRIDE). A trait the data gives no cap (初雪 / 银灰's freeze trait, 菲莱 / 百炼嘉维尔's per-skill
+ * units), up to the per-battle cap the sim applies (content/garrisons/battle.js: `max_add_count_per_battle` — a handed-out
+ * trait's too, 华法琳's 7 / 14, GitHub #175). A trait the data gives no cap (初雪 / 银灰's freeze trait, 菲莱 / 百炼嘉维尔's per-skill
  * 萨尔贡, 斯卡蒂's per-kill …) — or a 魔王, whose +extra on every trait gain counts toward no cap — leaves its bonds bounded
  * only by the room under 999 (Infinity here): such boards legitimately gain hundreds of layers a battle.
  * @returns {Map<string, number>} bondId → extra allowance (Infinity: uncapped)
@@ -590,23 +607,22 @@ function layerAllowanceOf(p, gd) {
   const lineup = new Set(Object.keys(p.bonds && typeof p.bonds === 'object' ? p.bonds : {}));
   for (const u of units) for (const b of gd.chess(u.chessId)?.bonds || []) lineup.add(b);
   let extra = false;
-  const credit = (g, times, handedOut) => {
+  const credit = (g, times) => {
     const bb = g.bb || {};
     if (Number.isFinite(bb.extra_cnt)) { extra = true; return; }
     if (!Number.isFinite(bb.bond_add_count) && !Number.isFinite(bb.bond_add_count_multi)) return;
     const s = g.bbStr || {};
     const bonds = s.bond_type === 'bond_by_id' ? String(s.bond_id ?? '').split(',').map((x) => x.trim()).filter((x) => gd.bond(x)) : [...lineup];
-    const override = handedOut ? GRANTED_CAP_OVERRIDE[g.garrisonId] : undefined;
-    const cap = override ?? (Number(bb.max_add_count_per_battle) > 0 ? Number(bb.max_add_count_per_battle) : Infinity);
+    const cap = Number(bb.max_add_count_per_battle) > 0 ? Number(bb.max_add_count_per_battle) : Infinity;
     for (const b of bonds) out.set(b, (out.get(b) || 0) + cap * times);
   };
   for (const u of units) {
     for (const gid of gd.chess(u.chessId)?.garrisonIds || []) {
       const g = gd.garrison(gid);
       if (!g || g.eventType !== 'IN_BATTLE') continue;
-      if (g.effectKey !== 'ADD_BOND') { credit(g, 1, false); continue; }
+      if (g.effectKey !== 'ADD_BOND') { credit(g, 1); continue; }
       const given = gd.garrison(g.bbStr?.give_garrison_id);
-      if (given && given.eventType === 'IN_BATTLE') credit(given, units.length, true);
+      if (given && given.eventType === 'IN_BATTLE') credit(given, units.length);
     }
   }
   if (extra) for (const b of out.keys()) out.set(b, Infinity);
@@ -674,6 +690,7 @@ export function specBounds(spec, gd = null) {
       if (u.kind !== 'token') {
         chess.set(u.uid, defId);
         if (gd) for (const t of summonsOf(gd, defId)) defIds.add(t);
+        if (gd && u.diy) for (const t of diySummonsOf(gd, defId, u.diy)) defIds.add(t);
       }
     }
     // the layers each bond starts the battle with (PlayerBattleInput.bonds): a gain never passes BOND_LAYER_CAP
@@ -698,8 +715,7 @@ export function specBounds(spec, gd = null) {
  * 联防: the most enemies settlement can bill each leaker — what it sent in plus what those enemies can leave behind
  * (splits / summons within offspringPerParent, maxTotal without a data bound): validateClientResult's (key, leaker)
  * budgets summed per leaker. Bounds the live counter (Match._uniteLeft; user playtest #6 item 7).
- * @param {object[]} spawns one 联防 field's spawns (unite.js — its group's `leaked`: { enemyKey, sourcePlayerId, … }; with
- *   several fields above 4 alive each field is bounded on its own leaks, like validateClientResult on its own spec)
+ * @param {object[]} spawns the 联防 spawns (unite.js plan.leaked: { enemyKey, sourcePlayerId, … })
  * @returns {Map<string, number>} leaker id → bound
  */
 export function uniteBillBounds(spawns, gd = null) {

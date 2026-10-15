@@ -34,19 +34,6 @@ test('droppedEntries: leaves of the old manifest the new one lacks; build fields
   assert.deepEqual(droppedEntries(null, next), [], 'no current manifest: nothing to lose');
 });
 
-test('operator voice roles added (行动出发 depart, 完成高难行动 win4) are growth, not a shrink; a renamed array role would be one (DESIGN §21.30)', () => {
-  const u = (n) => `/assets/voice/cn/char_1012_skadi2/cn_0${n}.mp3`;
-  const old = { select: [u(21), u(22)], deploy: [u(23), u(24)], combat: [u(25), u(26), u(27), u(28)], start: u(20), win3: u(30), win: u(31), fail: u(32) };
-  const prev = { audio: { voice: { cn: { char_1012_skadi2: old } } } };
-  const next = { audio: { voice: { cn: { char_1012_skadi2: { ...old, depart: u(19), win4: u(29) } } } } };
-  assert.deepEqual(droppedEntries(prev, next), [], 'two new keys per operator: the manifest only grows');
-  assert.deepEqual(droppedEntries(next, prev), ['audio.voice.cn.char_1012_skadi2.depart', 'audio.voice.cn.char_1012_skadi2.win4']);
-  // why tools/assets/voice.mjs keeps the key `combat` (positional 作战中1–4): an array is one leaf, so a rename drops it
-  const { combat, ...rest } = next.audio.voice.cn.char_1012_skadi2;
-  const renamed = { audio: { voice: { cn: { char_1012_skadi2: { ...rest, skill: combat } } } } };
-  assert.deepEqual(droppedEntries(next, renamed), ['audio.voice.cn.char_1012_skadi2.combat']);
-});
-
 test('fetch-assets shrink guard: the committed manifest minus some audio entries (PR #7) is refused unless --allow-shrink / --prune', async () => {
   const { shrinkGuard, parseArgs } = await import('../tools/fetch-assets.mjs');
   const before = statSync(MANIFEST).mtimeMs;
@@ -81,17 +68,10 @@ test('fetch-assets shrink guard: the committed manifest minus some audio entries
   assert.deepEqual(shrinkGuard(null, next, parseArgs([])), { dropped: [], write: true }, 'no current manifest: written');
   assert.equal(parseArgs(['--allow-shrink']).allowShrink, true);
   assert.throws(() => parseArgs(['--allow-shrinks']), /unknown option/);
-  // 干员战斗语音 (DESIGN §21.30): the fork's --voice=LANGS picks the dubs (tools/assets/voice.mjs parseVoiceLangs);
-  // upstream's --voice-lang=L is taken as its spelling of --voice=L (EN / KR included); --voice-all (the prep-only lines
-  // no client of the fork plays) is not
-  assert.deepEqual(parseArgs(['--voice=jp']).voice, ['jp']);
-  assert.deepEqual(parseArgs(['--voice=none']).voice, []);
-  assert.deepEqual(parseArgs(['--voice=cn,en,kr']).voice, ['cn', 'en', 'kr']);
-  assert.deepEqual(parseArgs(['--voice-lang=en']).voice, ['en']);
-  assert.deepEqual(parseArgs(['--voice-lang=kr']).voice, ['kr']);
-  assert.throws(() => parseArgs(['--voice-lang=fr']), /unknown voice language/);
-  assert.throws(() => parseArgs(['--voice-lang']), /--voice-lang needs a language/);
-  assert.throws(() => parseArgs(['--voice-all']), /unknown option/);
+  // 干员战斗语音: the prep-only slots are opt-in (DESIGN §21.30 — no battle requests them)
+  assert.equal(parseArgs([]).voiceAll, false, 'the battle slots are what a plain run plans');
+  assert.equal(parseArgs(['--voice-all']).voiceAll, true);
+  assert.equal(parseArgs(['--voice-lang=jp']).voiceLang, 'jp');
   assert.equal(statSync(MANIFEST).mtimeMs, before, 'importing the tool runs nothing');
 });
 

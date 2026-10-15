@@ -2,7 +2,7 @@
 //
 // Every `*.json` file in the data directory becomes a top-level key named after its basename
 // (config, chess, bonds, garrisons, items, bands, effects, choices, enemies, factions, waves, stages,
-// bosses, tokens, assets, …). The result is deep-frozen so no module can mutate shared data by accident.
+// bosses, tokens, assets, backups, …). The result is deep-frozen so no module can mutate shared data by accident.
 // Missing or unparsable files are tolerated with a warning (data is generated in parallel with the
 // server); consumers must cope with an absent key.
 //
@@ -13,13 +13,20 @@
 // Every getter returns null for unknown ids / missing files and takes an optional data object (default:
 // the process-wide getData() singleton).
 
-import { ROOT, DATA_DIR, readDataDirectory } from './data-node.js';
-export { ROOT, DATA_DIR };
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/** Repository root (…/Stronghold-Protocol). */
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/** Default data directory. */
+export const DATA_DIR = path.join(ROOT, 'data');
 
 /** Files the game expects (a warning lists the missing ones). */
 export const DATA_FILES = Object.freeze([
   'config', 'chess', 'bonds', 'garrisons', 'items', 'bands', 'effects', 'choices',
-  'enemies', 'factions', 'waves', 'stages', 'bosses', 'tokens', 'assets', 'waiguan',
+  'enemies', 'factions', 'waves', 'stages', 'bosses', 'tokens', 'assets', 'backups',
 ]);
 
 /**
@@ -49,7 +56,25 @@ export function deepFreeze(root) {
  * @returns {Readonly<Record<string, any>>}
  */
 export function loadData(dir = DATA_DIR, { log = console, expected = DATA_FILES } = {}) {
-  const out = readDataDirectory(dir, log);
+  /** @type {Record<string, any>} */
+  const out = {};
+  let names = [];
+  try {
+    names = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isFile() && d.name.toLowerCase().endsWith('.json'))
+      .map((d) => d.name)
+      .sort();
+  } catch (e) {
+    log.warn(`[data] cannot read ${dir}: ${e.code || e.message} — running without game data`);
+  }
+  for (const file of names) {
+    const key = file.slice(0, -'.json'.length);
+    try {
+      out[key] = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+    } catch (e) {
+      log.error(`[data] skipping ${file}: ${e.message}`);
+    }
+  }
   const missing = expected.filter((k) => !(k in out));
   if (missing.length) log.warn(`[data] missing data files: ${missing.map((k) => k + '.json').join(', ')}`);
   return deepFreeze(out);

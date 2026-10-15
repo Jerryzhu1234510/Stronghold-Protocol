@@ -1,0 +1,47 @@
+.population-strip.population-strip--detailed {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 238px;
+  max-width: 100%;
+  gap: 5px;
+  padding: 3px 10px;
+  letter-spacing: 0;
+}
+.population-strip--detailed .population-strip__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.population-strip--detailed .population-strip__details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.population-strip--detailed span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 5px;
+  white-space: nowrap;
+}
+.population-strip.population-strip--detailed small { font-size: 11px; line-height: 16px; }
+.population-strip.population-strip--detailed strong { font-size: 20px; line-height: 23px; font-variant-numeric: tabular-nums; }
+.population-strip.population-strip--detailed .population-strip__details small { font-size: 10px; }
+.population-strip.population-strip--detailed .population-strip__details strong { font-size: 12px; line-height: 16px; color: var(--text-hi); }
+.room-screen .room-heading { flex-wrap: wrap; }
+@media (max-height: 600px), (max-width: 1024px) {
+  .population-strip.population-strip--detailed { width: 216px; gap: 3px; padding: 2px 6px; }
+  .population-strip.population-strip--detailed strong { font-size: 16px; line-height: 19px; }
+  .population-strip--detailed .population-strip__summary { gap: 14px; }
+  .population-strip--detailed .population-strip__details { gap: 6px; }
+  .population-strip.population-strip--detailed small { font-size: 10px; line-height: 14px; }
+  .room-screen .population-strip.population-strip--detailed { padding: 0; border: 0; }
+  .lobby-screen .topbar__right { min-width: 0; flex-wrap: wrap; gap: 5px; }
+  .lobby-screen .topbar { grid-template-columns: auto minmax(0, 1fr); }
+}
+@media (max-width: 740px) {
+  .lobby-screen .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+  .lobby-screen .topbar__right { flex: 1 1 240px; margin-left: 0; }
+  .lobby-screen .topbar__left { flex-wrap: wrap; }
+  .room-screen .room-heading { gap: 4px 10px; }
+}

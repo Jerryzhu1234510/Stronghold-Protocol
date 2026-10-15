@@ -1,0 +1,276 @@
+{
+  "format": 1,
+  "origin": "https://weishuxieyiwangye.cn:8443",
+  "files": {
+    "/js/browser/sim.js": {
+      "variant": "canonical",
+      "sha256": "7de2a5410eb95208fa19c30f39371629258e1e2123a701b22257e385560c17eb",
+      "bytes": 1206839,
+      "edits": [
+        {
+          "offset": 1170141,
+          "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&s==='freeze'&&e?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,e,r?.source);}catch{}}"
+        },
+        {
+          "offset": 1168042,
+          "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(s==='freeze'&&e&&typeof e.findBuff==='function'){__spDesktopFreezeBefore=!!e.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+        },
+        {
+          "offset": 918065,
+          "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+        },
+        {
+          "offset": 917773,
+          "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(t,e);}catch{}try{"
+        }
+      ],
+      "transformedSha256": "21c38af42bee73878666d634bfa2c89d69e81bc588d6b017e77c66e558c1228b",
+      "freezeMethods": 1,
+      "windScopes": 1,
+      "variants": [
+        {
+          "sha256": "ee932606d0c16b15ac03ae5a42e1d9b35f16404a002424edbc15273555572504",
+          "bytes": 1201148,
+          "edits": [
+            {
+              "offset": 1166772,
+              "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&s==='freeze'&&e?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,e,r?.source);}catch{}}"
+            },
+            {
+              "offset": 1164673,
+              "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(s==='freeze'&&e&&typeof e.findBuff==='function'){__spDesktopFreezeBefore=!!e.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+            },
+            {
+              "offset": 917802,
+              "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+            },
+            {
+              "offset": 917510,
+              "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(t,e);}catch{}try{"
+            }
+          ],
+          "transformedSha256": "862adf64528411ae9f4d80f9dfd64c383964a2ce9b173635d2a2eb430cdf2bd0",
+          "freezeMethods": 1,
+          "windScopes": 1,
+          "variant": "0.2.5-canonical"
+        },
+        {
+          "variant": "SP_BUILD_TEMPLATE",
+          "sha256": "7de2a5410eb95208fa19c30f39371629258e1e2123a701b22257e385560c17eb",
+          "bytes": 1206839,
+          "edits": [
+            {
+              "offset": 1170141,
+              "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&s==='freeze'&&e?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,e,r?.source);}catch{}}"
+            },
+            {
+              "offset": 1168042,
+              "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(s==='freeze'&&e&&typeof e.findBuff==='function'){__spDesktopFreezeBefore=!!e.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+            },
+            {
+              "offset": 918065,
+              "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+            },
+            {
+              "offset": 917773,
+              "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(t,e);}catch{}try{"
+            }
+          ],
+          "transformedSha256": "21c38af42bee73878666d634bfa2c89d69e81bc588d6b017e77c66e558c1228b",
+          "freezeMethods": 1,
+          "windScopes": 1
+        },
+        {
+          "variant": "0.2.6-previous-canonical",
+          "sha256": "af1e62a78fe9e8a51b3d45a09f35db6385d390346dfda62c08938c57f14c31cc",
+          "bytes": 1202206,
+          "edits": [
+            {
+              "offset": 1167613,
+              "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&s==='freeze'&&e?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,e,r?.source);}catch{}}"
+            },
+            {
+              "offset": 1165514,
+              "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(s==='freeze'&&e&&typeof e.findBuff==='function'){__spDesktopFreezeBefore=!!e.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+            },
+            {
+              "offset": 917845,
+              "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+            },
+            {
+              "offset": 917553,
+              "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(t,e);}catch{}try{"
+            }
+          ],
+          "transformedSha256": "3265e974e768ae1c750f09bc84c007d7b5ed40e72379a56d405f0178a331fbfd",
+          "freezeMethods": 1,
+          "windScopes": 1
+        },
+        {
+          "variant": "0.2.6-previous-canonical",
+          "sha256": "78a398aa6d51f2a608f88ea40ca60b151a5d0ba5707967375691c5d69cb5f329",
+          "bytes": 1204246,
+          "edits": [
+            {
+              "offset": 1169653,
+              "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&s==='freeze'&&e?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,e,r?.source);}catch{}}"
+            },
+            {
+              "offset": 1167554,
+              "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(s==='freeze'&&e&&typeof e.findBuff==='function'){__spDesktopFreezeBefore=!!e.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+            },
+            {
+              "offset": 917997,
+              "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+            },
+            {
+              "offset": 917705,
+              "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(t,e);}catch{}try{"
+            }
+          ],
+          "transformedSha256": "abbfaf2d02eebf15260f241c5b5ffc06b2147ee6ef0ecd8900a1e4ce1b991e8d",
+          "freezeMethods": 1,
+          "windScopes": 1
+        },
+        {
+          "variant": "0.2.6-previous-canonical",
+          "sha256": "62bf4c3d067be71cc82aae526a52cad8cb0eb143db6dfb06029958298e5c9daf",
+          "bytes": 1204662,
+          "edits": [
+            {
+              "offset": 1170069,
+              "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&s==='freeze'&&e?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,e,r?.source);}catch{}}"
+            },
+            {
+              "offset": 1167970,
+              "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(s==='freeze'&&e&&typeof e.findBuff==='function'){__spDesktopFreezeBefore=!!e.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+            },
+            {
+              "offset": 917997,
+              "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+            },
+            {
+              "offset": 917705,
+              "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(t,e);}catch{}try{"
+            }
+          ],
+          "transformedSha256": "d8a082d7b8db47e322fbe30d15e8f96bce73f731a852aebc570c765fcfd2329a",
+          "freezeMethods": 1,
+          "windScopes": 1
+        }
+      ]
+    },
+    "/sim/battle/status.js": {
+      "variant": "canonical",
+      "sha256": "24f32f3a26259c9d0384aef87f54142e88457813425bb244b9ff3938661e97a1",
+      "bytes": 19243,
+      "edits": [
+        {
+          "offset": 13053,
+          "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&key==='freeze'&&target?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,target,opts?.source);}catch{}}"
+        },
+        {
+          "offset": 7696,
+          "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(key==='freeze'&&target&&typeof target.findBuff==='function'){__spDesktopFreezeBefore=!!target.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+        }
+      ],
+      "transformedSha256": "9a65f33c65b29ee31acd118b979a4b8f6ae84f6521cabc0b931341ce94b70b5b",
+      "freezeMethods": 1,
+      "windScopes": 0,
+      "variants": [
+        {
+          "sha256": "24f32f3a26259c9d0384aef87f54142e88457813425bb244b9ff3938661e97a1",
+          "bytes": 19243,
+          "edits": [
+            {
+              "offset": 13053,
+              "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&key==='freeze'&&target?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,target,opts?.source);}catch{}}"
+            },
+            {
+              "offset": 7696,
+              "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(key==='freeze'&&target&&typeof target.findBuff==='function'){__spDesktopFreezeBefore=!!target.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+            }
+          ],
+          "transformedSha256": "9a65f33c65b29ee31acd118b979a4b8f6ae84f6521cabc0b931341ce94b70b5b",
+          "freezeMethods": 1,
+          "windScopes": 0,
+          "variant": "0.2.5-canonical"
+        },
+        {
+          "variant": "SP_BUILD_TEMPLATE",
+          "sha256": "28840e5dfdf567912d6a54b38aea289b697d12a4cd382551dd45b14fa3d26dfb",
+          "bytes": 19378,
+          "edits": [
+            {
+              "offset": 13188,
+              "text": "}finally{try{if(__spDesktopFreezeKnown&&!__spDesktopFreezeBefore&&key==='freeze'&&target?.findBuff('freeze'))globalThis.__SPDesktopMusicBridge?.freeze?.(this,target,opts?.source);}catch{}}"
+            },
+            {
+              "offset": 7831,
+              "text": ";let __spDesktopFreezeKnown=false,__spDesktopFreezeBefore=false;try{if(key==='freeze'&&target&&typeof target.findBuff==='function'){__spDesktopFreezeBefore=!!target.findBuff('freeze');__spDesktopFreezeKnown=true;}}catch{}try{"
+            }
+          ],
+          "transformedSha256": "b426ff55f40b3f06bac2f3357ed89eb3330947fb9d7eb61b0d33b2638f8882a7",
+          "freezeMethods": 1,
+          "windScopes": 0
+        }
+      ]
+    },
+    "/sim/content/devices.js": {
+      "variant": "canonical",
+      "sha256": "5236d94ba820886755eb2a64ec859928fa9afed19ff08316f01fbf7a82b499de",
+      "bytes": 30384,
+      "edits": [
+        {
+          "offset": 8571,
+          "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+        },
+        {
+          "offset": 8055,
+          "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(battle,playerId);}catch{}try{"
+        }
+      ],
+      "transformedSha256": "109bf521888a8c31a88677ef329eb9fa9489740979bd095f828edff3382a2941",
+      "freezeMethods": 0,
+      "windScopes": 1,
+      "variants": [
+        {
+          "sha256": "5236d94ba820886755eb2a64ec859928fa9afed19ff08316f01fbf7a82b499de",
+          "bytes": 30384,
+          "edits": [
+            {
+              "offset": 8571,
+              "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+            },
+            {
+              "offset": 8055,
+              "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(battle,playerId);}catch{}try{"
+            }
+          ],
+          "transformedSha256": "109bf521888a8c31a88677ef329eb9fa9489740979bd095f828edff3382a2941",
+          "freezeMethods": 0,
+          "windScopes": 1,
+          "variant": "0.2.5-canonical"
+        },
+        {
+          "variant": "SP_BUILD_TEMPLATE",
+          "sha256": "f2396e7823a8827d878a3cce87df3653e8870c938c4e9bfe4a9e6f20b41d86ac",
+          "bytes": 30492,
+          "edits": [
+            {
+              "offset": 8679,
+              "text": "}finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spDesktopWindToken);}catch{}}"
+            },
+            {
+              "offset": 8163,
+              "text": ";let __spDesktopWindToken;try{__spDesktopWindToken=globalThis.__SPDesktopMusicBridge?.enterWind?.(battle,playerId);}catch{}try{"
+            }
+          ],
+          "transformedSha256": "28accd8bc7d51ec509ec005ecb8fa892eec1f379aa9b5e6aa0e867cd9ee5ef84",
+          "freezeMethods": 0,
+          "windScopes": 1
+        }
+      ]
+    }
+  }
+}

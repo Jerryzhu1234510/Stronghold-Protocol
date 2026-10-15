@@ -1,12 +1,17 @@
 // server/match/unite.js — 联防 (Unite) planning and LP attribution (DESIGN §6.1, research 06 §5, research 08 §5).
 //
 // Trigger (co-op only): after the normal combats, ≥ 1 alive player leaked (a counted leak ⇒ not perfect) and
-// ≥ 1 alive player was perfect. Helpers (PRTS 卫戍协议/帮助 §联防阶段): up to config.unite.maxHelpers (2) perfect (per
-// 联防 field; one field up to 4 alive — more above, see the end of this header)
+// ≥ 1 alive player was perfect. Helpers (PRTS 卫戍协议/帮助 §联防阶段): up to config.unite.maxHelpers (2) perfect
 // players chosen by most units on the field (downed included) > has an active bond (存疑) > most undowned units, then
 // seat; with 2 helpers the one ranked first by most units > active bond > Σ active bond layers (存疑) > most undowned
 // units "率先迎敌" on the RIGHT-hand field (colOffset +8, where the escaped_multi routes enter), the other keeps the
-// left half (colOffset 0); a lone helper plays escaped_single on its own field. Their operators keep the HP ratio and
+// left half (colOffset 0); a lone helper plays escaped_single on its own field. The field is the round's battlefield —
+// the match stage with its terrain, crates, water, devices and runes — opened to both halves (GEO.UNITE_RECT, cols
+// 0–20; the stage's right half is its left half + 8 columns), every helper's pieces on their prep tiles
+// ("按休整期位置部署在场"), the right-hand one shifted 8 columns (= the stage config's player_map_lr_offset 8): the
+// owner's knowledge of the official mode, 2026-10-07 「官服保留地形」. 0.2.0 fielded it on the escaped levels' own map,
+// an empty road (GitHub #41) — withdrawn in 0.2.1; data/stages.json keeps those two records (kind 'unite'), which no
+// match fields. Their operators keep the HP ratio and
 // the SP (技力, stored charges included) from the end of their own combat, nothing else — a skill still running then
 // enters switched off (BattleResult.unitsEnd → PlayerBattleInput.units[].carryState `{ hpPct, sp }`, "阵地以其当前状态";
 // community report #34 / GitHub #82: it used to restart for free). An operator knocked out at the end of its own combat (alive false) is fielded with
@@ -19,148 +24,49 @@
 // them beside the operators; one off the field at the end enters fresh [ASSUMED]). Enemies = the union of every leaker's
 // counted leaks (same stats: the SpawnSpec mods travel with the leak), routed on the escaped template (`escaped_single`
 // for 1 helper, `escaped_multi` for 2): walkers on its `lrsldr` action, flyers on `yokai`, tokens on `gopro_2` /
-// `lazerd` (waves.js buildUniteWave); kill bounties keep paying the killer (a helper). No IN_BATTLE layer gains ("该阶段
-// 不能叠加层数"); the helpers' bonds carry the layers their own combat reached (PlayerState.battleInput `reached`: the
-// round's pending gains, capped like settle() — the strip's count; "以其阵地当前的状态" [ASSUMED] includes them; until 0.1.3
-// the round-start layers), and settle() still adds those gains once. Time limit = the round's combat limit.
+// `lazerd` (waves.js buildUniteWave); kill bounties keep paying the killer (a helper) — a death no operator caused pays
+// the helper whose half it fell on (Battle._bountyPayee). No IN_BATTLE layer gains ("该阶段不能叠加层数"); the helpers'
+// bonds carry the layers their own combat reached (PlayerState.battleInput `reached`: the round's pending gains, capped
+// like settle() — the strip's count; "以其阵地当前的状态" [ASSUMED] includes them; until 0.1.3 the round-start layers),
+// and settle() still adds those gains once. Time limit = the round's combat limit.
 // LP: an enemy still alive at the end (leaked in the unite battle, or never spawned before the limit) costs its
 // SOURCE player 1 LP; each player's round loss = min(lpCap, survivors attributed to them + leaks that could not
 // re-enter) — the same 10 cap as a normal round.
-//
-// More than 4 alive (remake extension, gamedata.js largeRoom; DESIGN §24.4, docs/META.md §4): 1–4 alive keep exactly
-// the rules above — one field 'u', ≤ maxHelpers (2) helpers, every leaker's enemies on it. Above 4 alive, with
-// k = ⌈alive / 4⌉ (uniteFieldBudget): helpers = the top maxHelpers·k perfect players by the selection ranking above,
-// assigned maxHelpers per field in that order (uniteHelperGroups; within a field the pair order, sides, template and
-// colOffsets work as above), with k first capped by the number of leakers (uniteFieldCount), so the field count =
-// min(k, leakers, ⌈helpers / 2⌉) — never a field without a helper or without a leaker. Field ids
-// 'u', then 'u2', 'u3', … (uniteFieldId; seeds `u:<round>`, `u2:<round>`, …). The leakers are spread over the fields
-// balancing their counted leaks (largest leaker first, to the field with the fewest so far — the lowest field on a tie —
-// leakers of equal leaks by seat; every leaker has ≥ 1 counted leak, so each field gets one). Each field is a normal
-// 联防 battle with only its own leakers' enemies; settlement bills each leaker from its own field's result (uniteBills: a
-// field that could not run charges its leakers' own leaks, as without a 联防).
-// A plan: `{ helpers, leakers, leaked, notReentered, groups }` — the union over every field (helpers in field order,
-// leakers and leaks in seat order, as with one field) plus `groups: [{ fieldId, helpers, leakers, leaked, notReentered }]`
-// in field order (one field: its group shares the plan's own arrays).
 
 import { buildUniteWave } from './waves.js';
 import { layerGainRoom } from '../../shared/constants.js';
+import { trioUniteRoutes } from '../../shared/uniteLayout.js';
 
-/** Field id of the i-th 联防 field (0-based): 'u', then 'u2', 'u3', … */
-export function uniteFieldId(i) {
-  return i > 0 ? `u${i + 1}` : 'u';
-}
-
-/**
- * How many 联防 fields `alive` players may get: 1 up to largeRoom.players (4) alive — the official rule — else
- * ⌈alive / 4⌉ (remake extension: 2 for 5–8 alive).
- * @param {import('./gamedata.js').GameData} gd
- */
-export function uniteFieldBudget(gd, alive) {
-  if (!gd || typeof gd.isLargeRoom !== 'function' || !gd.isLargeRoom(alive)) return 1;
-  return Math.max(1, Math.ceil(Math.floor(Number(alive)) / gd.largeRoom.players));
-}
-
-/**
- * How many 联防 fields a round asks for: uniteFieldBudget capped by the number of leakers, so every field fights some
- * leaker's enemies (1 leaker → one field, the official layout). Always 1 up to 4 alive.
- * @param {import('./gamedata.js').GameData} gd
- */
-export function uniteFieldCount(gd, alive, leakers) {
-  return Math.max(1, Math.min(uniteFieldBudget(gd, alive), Math.floor(Number(leakers)) || 0));
-}
-
-/**
- * The 联防 fields of a plan in field order: `plan.groups`, or — a plan built without them (tests) — the plan itself as
- * the one field 'u'.
- * @returns {Array<{ fieldId: string, helpers: any[], leakers: any[], leaked: object[], notReentered: Map<string, number> }>}
- */
-export function uniteGroups(plan) {
-  if (!plan) return [];
-  if (Array.isArray(plan.groups) && plan.groups.length) return plan.groups;
-  return [{ fieldId: uniteFieldId(0), helpers: plan.helpers || [], leakers: plan.leakers || [], leaked: plan.leaked || [], notReentered: plan.notReentered || new Map() }];
-}
-
-/** The 联防 field (group) a player is on: as a helper, else as a leaker; null for anyone else. */
-export function uniteGroupOf(plan, playerId) {
-  const groups = uniteGroups(plan);
-  const has = (list) => (list || []).some((p) => p && p.playerId === playerId);
-  return groups.find((g) => has(g.helpers)) || groups.find((g) => has(g.leakers)) || null;
-}
-
-/**
- * Each 联防 field with its result. `uniteResult`: the field's BattleResult with one field (as ever), an array of the
- * fields' results in field order with several (Match settle(plan, results)).
- * @returns {Array<{ group: object, result: object|null }>}
- */
-export function uniteFieldResults(plan, uniteResult) {
-  const groups = uniteGroups(plan);
-  const list = Array.isArray(uniteResult) ? uniteResult : null;
-  if (groups.length <= 1) return groups.map((group) => ({ group, result: (list ? list[0] : uniteResult) || null }));
-  return groups.map((group, i) => ({ group, result: (list && list[i]) || null }));
-}
-
-/**
- * What settlement bills each leaker after the 联防: playerId → its enemies that survived on its own field (uncapped:
- * uniteSurvivors of that field's result), or null when its field's battle could not run (no result / a synthetic one —
- * settle() then charges the leaker's own counted leaks, as without a 联防).
- * @returns {Map<string, number|null>}
- */
-export function uniteBills(plan, uniteResult) {
-  const out = new Map();
-  if (!plan) return out;
-  for (const { group, result } of uniteFieldResults(plan, uniteResult)) {
-    const ran = !!(result && !result.synthetic);
-    const survivors = ran ? uniteSurvivors(group, result) : null;
-    for (const ps of group.leakers || []) out.set(ps.playerId, ran ? survivors.get(ps.playerId) || 0 : null);
-  }
-  return out;
-}
-
-/**
- * The 联防 result a player's settlement reads (bounty coins, kills and damage of a helper; onBattleResult `unite`): one
- * field → that field's result; several → the player's own field's (helper or leaker), else the first field's.
- */
-export function uniteResultFor(plan, uniteResult, playerId) {
-  if (!Array.isArray(uniteResult)) return uniteResult || null;
-  const fr = uniteFieldResults(plan, uniteResult);
-  const g = uniteGroupOf(plan, playerId);
-  const own = g ? fr.find((x) => x.group.fieldId === g.fieldId) : null;
-  return (own ? own.result : fr.length ? fr[0].result : null) || null;
-}
+// Only 7–8 seat rooms recruit a third helper and extend the timer; 5–6 retain the pair.
+export const largeUnite = m => !m.isSolo && Number(m.capacity ?? m.gd?.capacity ?? 4) >= 7;
+export const uniteTimeLimit = (m, base) => m.isSolo ? base : Math.round(base * (largeUnite(m) ? 1.6 : 1) * 1100) / 1000;
 
 /**
  * @param {import('./Match.js').Match} m
  * @param {Map<string, object>} results playerId → BattleResult.perPlayer entry of the player's own combat
- * @returns {null | { helpers: any[], leakers: any[], leaked: object[], notReentered: Map<string, number>, groups: object[] }}
+ * @returns {null | { helpers: any[], leakers: any[], leaked: object[], notReentered: Map<string, number> }}
  */
 export function planUnite(m, results) {
   if (m.isSolo) return null;
   const alive = m.alivePlayers();
   const leakers = [];
   const perfects = [];
-  /** leaker → its counted leaks (the field balance) */
-  const countedOf = new Map();
   for (const ps of alive) {
     const r = results.get(ps.playerId);
     if (!r) continue;
     const counted = (r.leaked || []).filter((l) => l && l.counted !== false);
-    if (counted.length > 0) { leakers.push(ps); countedOf.set(ps, counted.length); }
+    if (counted.length > 0) leakers.push(ps);
     else if (r.perfect !== false) perfects.push(ps);
   }
   if (!leakers.length || !perfects.length) return null;
-  const helperGroups = uniteHelperGroups(m, perfects, results, uniteFieldCount(m.gd, alive.length, leakers.length));
-  const helpers = helperGroups.length === 1 ? helperGroups[0] : helperGroups.flat();
+  const helpers = helperOrder(m, perfects, results);
   const leaked = [];
   const notReentered = new Map();
-  /** leaker → its re-entering leaks and how many of its counted leaks cannot re-enter */
-  const own = new Map();
   for (const ps of leakers) {
     const r = results.get(ps.playerId);
-    const mine = { leaked: [], skipped: 0 };
-    own.set(ps, mine);
     for (const l of r.leaked || []) {
       if (!l || l.counted === false) continue;
-      if (!m.gd.enemy(l.enemyKey)) { notReentered.set(ps.playerId, (notReentered.get(ps.playerId) || 0) + 1); mine.skipped++; continue; }
+      if (!m.gd.enemy(l.enemyKey)) { notReentered.set(ps.playerId, (notReentered.get(ps.playerId) || 0) + 1); continue; }
       // kill bounties keep paying in 联防, and only on the card's own enemy. A split or summoned child
       // never carries bountyId / bountyCoins (spawnChildren). A leak that still has the card's id but is
       // some other enemy — a copy that did not go through spawnChildren — does not collect the card either
@@ -173,43 +79,10 @@ export function planUnite(m, results) {
         ? { coins: Math.trunc(card.coin), ownerPlayerId: ps.playerId } : null;
       const extra = !bountyId && l.mods ? Math.trunc(Number(l.mods.bountyCoins) || 0) : 0;
       if (!bounty && extra > 0) bounty = { coins: extra, ownerPlayerId: ps.playerId };
-      const entry = { enemyKey: l.enemyKey, mods: l.mods ? { ...l.mods } : null, lpr: l.lpr ?? 1, sourcePlayerId: ps.playerId, tag: l.tag ?? null, bounty };
-      leaked.push(entry);
-      mine.leaked.push(entry);
+      leaked.push({ enemyKey: l.enemyKey, mods: l.mods ? { ...l.mods } : null, lpr: l.lpr ?? 1, sourcePlayerId: ps.playerId, tag: l.tag ?? null, bounty });
     }
   }
-  if (helperGroups.length === 1) return { helpers, leakers, leaked, notReentered, groups: [{ fieldId: uniteFieldId(0), helpers, leakers, leaked, notReentered }] };
-  const slot = assignLeakers(helperGroups.length, leakers, (ps) => countedOf.get(ps) || 0);
-  const groups = helperGroups.map((hs, i) => {
-    const ls = leakers.filter((ps) => slot.get(ps) === i);
-    const gl = [];
-    const gn = new Map();
-    for (const ps of ls) {
-      const mine = own.get(ps);
-      for (const e of mine.leaked) gl.push(e);
-      if (mine.skipped > 0) gn.set(ps.playerId, mine.skipped);
-    }
-    return { fieldId: uniteFieldId(i), helpers: hs, leakers: ls, leaked: gl, notReentered: gn };
-  });
-  return { helpers, leakers, leaked, notReentered, groups };
-}
-
-/**
- * Leakers onto `fields` 联防 fields, balancing the counted leaks: the largest leaker first (equal leaks: lower seat
- * first) goes to the field with the fewest counted leaks so far (a tie: the lowest field index).
- * @returns {Map<any, number>} leaker → field index
- */
-export function assignLeakers(fields, leakers, countOf) {
-  const load = Array.from({ length: Math.max(1, fields) }, () => 0);
-  const out = new Map();
-  const order = leakers.slice().sort((a, b) => countOf(b) - countOf(a) || a.seat - b.seat);
-  for (const ps of order) {
-    let best = 0;
-    for (let i = 1; i < load.length; i++) if (load[i] < load[best]) best = i;
-    out.set(ps, best);
-    load[best] += countOf(ps);
-  }
-  return out;
+  return { helpers, leakers, leaked, notReentered };
 }
 
 /**
@@ -242,47 +115,23 @@ export function helperStats(m, ps, results) {
   return { units, active, layers, standing };
 }
 
-/** The helper rankings of a set of perfect players: `select` (who helps) and `pair` (who meets the enemies first). */
-function helperRankings(m, perfects, results) {
-  const st = new Map(perfects.map((ps) => [ps.playerId, helperStats(m, ps, results)]));
-  const S = (ps) => st.get(ps.playerId);
-  return {
-    select: (a, b) => S(b).units - S(a).units || (S(b).active - S(a).active) || S(b).standing - S(a).standing || a.seat - b.seat,
-    pair: (a, b) => S(b).units - S(a).units || (S(b).active - S(a).active) || S(b).layers - S(a).layers || S(b).standing - S(a).standing || a.seat - b.seat,
-  };
-}
-
 /**
  * The ≤ maxHelpers helpers, first = the one that meets the enemies first (right-hand field): selection by units >
  * active bond > standing units > seat, then the pair ordered by units > active bond > layers > standing > seat.
  */
 export function helperOrder(m, perfects, results) {
-  const rank = helperRankings(m, perfects, results);
-  return perfects.slice().sort(rank.select).slice(0, m.gd.unite.maxHelpers).sort(rank.pair);
+  const st = new Map(perfects.map((ps) => [ps.playerId, helperStats(m, ps, results)]));
+  const S = (ps) => st.get(ps.playerId);
+  const select = perfects.slice().sort((a, b) => S(b).units - S(a).units || (S(b).active - S(a).active) || S(b).standing - S(a).standing || a.seat - b.seat)
+    .slice(0, largeUnite(m) ? 3 : m.gd.unite.maxHelpers);
+  return select.sort((a, b) => S(b).units - S(a).units || (S(b).active - S(a).active) || S(b).layers - S(a).layers || S(b).standing - S(a).standing || a.seat - b.seat);
 }
 
-/**
- * The helpers of each 联防 field, in field order: one field (`fields` ≤ 1) → [helperOrder]; more (above 4 alive) → the
- * top maxHelpers × fields perfect players by the selection ranking, maxHelpers per field in that order, each field's
- * helpers in the pair order (the first meets the enemies first). Never an empty field: fewer helpers give fewer fields.
- * @returns {any[][]}
- */
-export function uniteHelperGroups(m, perfects, results, fields = 1) {
-  if (!(fields > 1)) {
-    const hs = helperOrder(m, perfects, results);
-    return hs.length ? [hs] : [];
-  }
-  const per = m.gd.unite.maxHelpers;
-  const rank = helperRankings(m, perfects, results);
-  const select = perfects.slice().sort(rank.select).slice(0, per * fields);
-  const out = [];
-  for (let i = 0; i < select.length; i += per) out.push(select.slice(i, i + per).sort(rank.pair));
-  return out;
-}
-
-/** Battle options for one 联防 field — a plan group (or a one-field plan) — without data/logger, added by the match. */
+/** Battle options for the unite field (without data/logger, added by the match). */
 export function uniteBattleOpts(m, plan, timeLimit) {
-  const wave = buildUniteWave(m.gd, plan.leaked, plan.helpers.length, timeLimit);
+  const trio = plan.helpers.length === 3;
+  const wave = buildUniteWave(m.gd, plan.leaked, trio ? 2 : plan.helpers.length, timeLimit);
+  if (trio) wave.routes = trioUniteRoutes(wave.routes);
   const players = plan.helpers.map((ps, i) => {
     const carry = new Map();
     const r = m.lastResults.get(ps.playerId);
@@ -297,12 +146,13 @@ export function uniteBattleOpts(m, plan, timeLimit) {
       if (!u.alive) { carry.set(u.uid, { down: true }); continue; }
       // HP ratio and SP only: a skill still running at the end is not carried (unitsEnd `skillActive` stays unused —
       // community report #34, GitHub #82)
-      carry.set(u.uid, { hpPct: Number.isFinite(u.hpPct) ? Math.max(0.01, Math.min(1, u.hpPct)) : 1, sp });
+      carry.set(u.uid, { hpPct: Number.isFinite(u.hpPct) ? Math.max(0, Math.min(1, u.hpPct)) : 1, sp });
     }
     // 2 helpers: the first one meets the enemies first on the right-hand field (escaped_multi enters at col 18)
-    const colOffset = plan.helpers.length > 1 && i === 0 ? 8 : 0;
+    const colOffset = trio ? (i === 1 ? 0 : 8) : plan.helpers.length > 1 && i === 0 ? 8 : 0;
     // the layers its own combat reached (bondsView, the round's pending gains; PRTS "以其阵地当前的状态") — see header
     const input = ps.battleInput({ side: 'L', colOffset, carry, reached: true });
+    if (trio && i === 2) input.rowOffset = -7;
     const ev = { input, kind: 'unite', round: m.round, spawns: wave.spawns };
     m.dispatch(ps, 'onBattleStart', ev);
     return ev.input && typeof ev.input === 'object' ? ev.input : input;
@@ -312,8 +162,7 @@ export function uniteBattleOpts(m, plan, timeLimit) {
 
 /**
  * LP loss per leaker after the unite battle: survivors by source (+ unspawned re-entries + not re-entered leaks),
- * capped per round. `plan`: a one-field plan or one field's group (with several fields, each field's result bills only
- * its own leakers — uniteBills).
+ * capped per round.
  * @returns {Map<string, number>} playerId → survivors (uncapped)
  */
 export function uniteSurvivors(plan, uniteResult) {

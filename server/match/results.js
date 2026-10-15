@@ -10,12 +10,11 @@
 // 'min' titles (坚若磐石 "目标生命值损失最少" = least LP lost): every player still alive at the end is a candidate,
 // ranked low → high (the eliminated lost everything). Candidates are ranked by the player's rank for that stat
 // (0 = best), then by closeness to the best value, then title order, then seat; greedy assignment gives each player
-// ≤ 1 title and uses each title ≤ once (config.titleRule [ASSUMED]). A match of more than 4 players (remake extension,
-// gamedata.js DEFAULTS.largeRoom) then runs a second pass: each player still without a title gets its best-ranked
-// eligible title even when a teammate already holds it (a player with no eligible title stays without one).
+// ≤ 1 title and uses each title ≤ once (config.titleRule [ASSUMED]).
 
 import { bondList } from './bondsMeta.js';
 import { boardOrder } from './board.js';
+import { matchTrophyPolicy, resultTrophies } from '../../shared/trophies.js';
 
 const STAT_OF = {
   bossDamage: (ps) => ps.stats.bossDamage,
@@ -27,14 +26,7 @@ const STAT_OF = {
   fundsSpent: (ps) => ps.stats.gold,
 };
 
-/**
- * playerId → title (module header). `repeat: false` stops after the one-title-each pass (the auditor's reference).
- * @param {import('./gamedata.js').GameData} gd
- * @param {object[]} players every player of the match (eliminated / departed included)
- * @param {boolean} victory
- * @param {{ repeat?: boolean }} [o]
- */
-export function assignTitles(gd, players, victory, { repeat = true } = {}) {
+export function assignTitles(gd, players, victory) {
   const titles = Array.isArray(gd.titles) ? gd.titles : Array.isArray(gd.config.titles) ? gd.config.titles : [];
   const cands = [];
   titles.forEach((t, ti) => {
@@ -61,34 +53,12 @@ export function assignTitles(gd, players, victory, { repeat = true } = {}) {
   cands.sort((a, b) => a.rank - b.rank || b.rel - a.rel || a.ti - b.ti || a.ps.seat - b.ps.seat);
   const out = new Map();
   const used = new Set();
-  const award = (c) => out.set(c.ps.playerId, { id: c.t.id, name: c.t.name, picId: c.t.picId, text: c.t.text });
   for (const c of cands) {
     if (out.has(c.ps.playerId) || used.has(c.t.id)) continue;
-    award(c);
+    out.set(c.ps.playerId, { id: c.t.id, name: c.t.name, picId: c.t.picId, text: c.t.text });
     used.add(c.t.id);
   }
-  // more than 4 players (remake extension, gamedata.js largeRoom; 6 official titles cannot cover 7–8): a second pass
-  // gives every player still without one its best-ranked eligible title, which may repeat one already given
-  if (repeat && largeRoom(gd, players.length)) for (const c of cands) if (!out.has(c.ps.playerId)) award(c);
   return out;
-}
-
-/** Whether `n` players make a large co-op room (gamedata.js isLargeRoom; > 4 for a data view without it). */
-function largeRoom(gd, n) {
-  return gd && typeof gd.isLargeRoom === 'function' ? gd.isLargeRoom(n) : !gd?.isSolo && n > 4;
-}
-
-function trophiesFor(gd, roundsPassed, hiddenCleared) {
-  const tr = gd.config.trophies;
-  if (!tr || gd.isSolo) return 0;
-  let n = 0;
-  if (Array.isArray(tr.byRoundsPassed)) {
-    for (const row of tr.byRoundsPassed) {
-      if (roundsPassed <= row.maxRound) { n = Number(row[gd.difficulty]) || 0; break; }
-    }
-  }
-  if (hiddenCleared && tr.hiddenCore && Number.isFinite(tr.hiddenCore[gd.difficulty])) n = tr.hiddenCore[gd.difficulty];
-  return n;
 }
 
 function rewardFor(gd, roundsPassed) {
@@ -108,14 +78,23 @@ function rewardFor(gd, roundsPassed) {
 export function buildResult(m, outcome) {
   const gd = m.gd;
   const { victory, hiddenReached, hiddenCleared } = outcome;
+  const trophyPolicy = matchTrophyPolicy(m);
   const players = [...m.players.values()].sort((a, b) => a.seat - b.seat);
   const titles = assignTitles(gd, players, victory);
   const teamRounds = victory ? gd.bossRound + (hiddenCleared ? 1 : 0) : Math.max(0, Math.min(m.round, gd.bossRound) - 1);
   const rows = players.map((ps) => {
     const roundsPassed = !ps.alive && ps.eliminatedRound != null ? Math.max(0, ps.eliminatedRound - 1) : teamRounds;
-    const lineup = boardOrder(ps.board).filter((x) => x.piece.kind === 'chess').map(({ r, c, piece }) => ({
-      id: piece.id, golden: gd.isGolden(piece.id), tier: gd.tierOf(piece.id), row: r, col: c, items: (piece.items || []).map((i) => i.id),
-    }));
+    const lineup = boardOrder(ps.board).filter((x) => x.piece.kind === 'chess').map(({ r, c, piece }) => {
+      const e = { id: piece.id, golden: gd.isGolden(piece.id), tier: gd.tierOf(piece.id), row: r, col: c, items: (piece.items || []).map((i) => i.id) };
+      // 0.2.0 自选编队: a DIY slot's pick — the result screen names and draws the operator (shared/diy.js diyRecord)
+      const pick = typeof ps.diyPickOf === 'function' ? ps.diyPickOf(piece.id) : null;
+      if (pick) e.diy = { charId: pick.charId, skillIndex: pick.skillIndex, uniEquipId: pick.uniEquipId };
+      // 0.2.0 补位: a chess this player fielded as its stand-in — the result screen draws the stand-in (the owner's recall
+      // of the official mode, 2026-10-06); `standInFor` = the replaced operator's charId, like the sim's UnitInfo
+      const si = typeof ps.fieldsStandIn === 'function' && ps.fieldsStandIn(piece.id) ? gd.standIn(piece.id) : null;
+      if (si && si.standInFor) e.standInFor = si.standInFor;
+      return e;
+    });
     // the team's clear counts for the players still in; an eliminated / departed teammate did not pass the boss round
     const cleared = victory && ps.alive;
     return {
@@ -139,12 +118,19 @@ export function buildResult(m, outcome) {
         perfectRounds: ps.stats.perfectRounds,
       },
       title: titles.get(ps.playerId) ?? null,
-      trophies: trophiesFor(gd, roundsPassed, cleared && hiddenCleared),
+      trophies: resultTrophies(gd, { roundsPassed, hiddenCleared: cleared && hiddenCleared, cleared,
+        capacity: m.capacity, policy: trophyPolicy }),
       reward: rewardFor(gd, roundsPassed),
     };
   });
   return {
     t: 'm.result',
+    resultId: m.roomCode + ':' + m.battlePrefix + ':' + m.startedAt,
+    endedAt: m.sched.now(),
+    gameMode: m.gameMode,
+    capacity: m.capacity,
+    extensions: { ...m.extensions },
+    trophyPolicy,
     victory,
     roundsPassed: teamRounds,
     hiddenReached,

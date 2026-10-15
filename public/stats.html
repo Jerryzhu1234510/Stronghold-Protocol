@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="卫戍协议服务器的在线人数、保留房间与游戏流量统计。">
+  <title>服务器统计 · 卫戍协议</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/css/stats.css?v=20261007-latency1">
+  <script type="module" src="/js/stats.js?v=20261009-network1"></script>
+</head>
+<body>
+  <a class="skip" href="#main">跳到统计内容</a>
+  <header>
+    <div><p class="eyebrow">卫戍协议 / 运行情况</p><h1>服务器统计</h1></div>
+    <a class="button" href="/">返回游戏</a>
+  </header>
+  <main id="main">
+    <section class="server" aria-labelledby="server-heading">
+      <h2 id="server-heading">当前查看的服务器</h2>
+      <p><strong id="server-address">正在读取地址…</strong> <span class="badge" id="environment">当前服务</span></p>
+      <p id="environment-note">数据来自此页面地址上的游戏服务，累计统计从服务本次启动开始。</p>
+      <div class="toolbar">
+        <button id="refresh" type="button">立即刷新</button>
+        <label><input id="auto" type="checkbox" checked> 每 10 秒自动刷新</label>
+        <p id="status" role="status" aria-live="polite">正在读取数据…</p>
+      </div>
+    </section>
+    <div id="error" class="error" role="alert" hidden></div>
+    <section aria-labelledby="network-heading">
+      <h2 id="network-heading">整台服务器的出口流量</h2>
+      <div class="traffic-summary">
+        <div><span>今日已记录发送量（北京时间）</span><strong id="network-today">—</strong></div>
+        <div><span>最近约一分钟实际出口速度</span><strong id="network-rate">—</strong></div>
+        <div><span>今日已记录接收量</span><strong id="network-in">—</strong></div>
+      </div>
+      <p class="reading" id="network-status">正在读取服务器网卡计数…</p>
+      <p class="note">读取宿主机出口网卡，包含各游戏版本、Caddy 素材下载、加密和协议开销，以及 SSH 等其他服务；也可能包含内网通信。热更不归零，按北京时间记录最近 14 天。首次安装、计数重置或跨日采样中断会标记为不完整；不能补算此前流量。跨日边界精度约 2 秒。云平台计费仍以平台面板为准。</p>
+    </section>
+    <section aria-labelledby="performance-heading">
+      <h2 id="performance-heading">延迟与拥堵记录</h2>
+      <p class="note">服务器每秒采样，保留一分钟内峰值。前台玩家延迟随原有心跳上报，切到后台的页面不计入玩家延迟样本。</p>
+      <div class="cards">
+        <article><h3>最近一次发送速度</h3><p class="number" id="perf-out">—</p><p id="perf-out-peak">一分钟内峰值：—</p></article>
+        <article><h3>前台玩家最高延迟</h3><p class="number" id="perf-rtt">—</p><p id="perf-reports">尚未收到前台玩家样本</p></article>
+        <article><h3>服务器最长停顿</h3><p class="number" id="perf-loop">—</p><p id="perf-loop-peak">一分钟内峰值：—</p></article>
+        <article><h3>单连接最大消息积压</h3><p class="number" id="perf-queue">—</p><p id="perf-queue-peak">一分钟内峰值：—</p></article>
+      </div>
+      <p class="reading" id="perf-reading">正在收集第一秒的数据…</p>
+      <dl class="details">
+        <div><dt>进程 CPU（100% 约为一个核心）</dt><dd id="perf-cpu">—</dd></div>
+        <div><dt>主线程忙碌比例</dt><dd id="perf-busy">—</dd></div>
+        <div><dt>本次采样跳过的画面快照</dt><dd id="perf-skipped">—</dd></div>
+        <div><dt>前台页面最长停顿估计</dt><dd id="perf-client-stall">—</dd></div>
+      </dl>
+      <div class="toolbar"><a id="perf-export" class="button" href="/diagnostics-data" download hidden>下载卡顿诊断记录</a><p id="perf-sampled">尚未采样</p></div>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="卡顿记录表，可以横向滚动">
+        <table class="diagnostic-table">
+          <caption>最近十组异常；同一段 30 秒内的异常合并，数字为该组异常的最大值</caption>
+          <thead><tr><th scope="col">发生时间</th><th scope="col">记录到的现象</th><th scope="col">玩家延迟</th><th scope="col">服务器停顿</th><th scope="col">连接积压</th><th scope="col">发送速度</th></tr></thead>
+          <tbody id="diagnostic-rows"><tr><td colspan="6">尚未记录到异常。</td></tr></tbody>
+        </table>
+      </div>
+      <p class="note">超过 500 毫秒的玩家延迟、100 毫秒的停顿或消息积压会留下记录。玩家延迟包括线路、服务器和浏览器等待，不能单凭一个数字判断原因。发送速度统计的是程序写出的正文与消息，不是网络确认送达速度。</p>
+      <p class="note">不需要保持此页面打开。内存中保留最近 120 次采样与最多 64 组异常，异常摘要也写入服务器日志；重启后本页历史归零。诊断记录不包含玩家姓名、IP、房间号或聊天内容。</p>
+    </section>
+    <section aria-labelledby="overview-heading">
+      <h2 id="overview-heading">现在有多少人在用</h2>
+      <div class="cards">
+        <article><h3>在线玩家</h3><p class="number" id="online-players">—</p><p>当前已连接的玩家身份，包含大厅和观战。</p></article>
+        <article><h3>有人在线的房间</h3><p class="number" id="online-rooms">—</p><p>至少有一位真人玩家或观战者在线。</p></article>
+        <article><h3>全员离线房间</h3><p class="number" id="offline-rooms">—</p><p>为重连保留；目前没有在线成员接收同步。</p></article>
+        <article><h3>AI 队友</h3><p class="number" id="bots">—</p><p>不占玩家连接，不会下载图片或音频。</p></article>
+      </div>
+      <details>
+        <summary>查看房间和玩家的详细数量</summary>
+        <dl class="details">
+          <div><dt>大厅在线</dt><dd id="lobby-online">—</dd></div>
+          <div><dt>房间内在线真人</dt><dd id="humans-online">—</dd></div>
+          <div><dt>在线观战</dt><dd id="spectators-online">—</dd></div>
+          <div><dt>保留的离线真人席位</dt><dd id="humans-offline">—</dd></div>
+          <div><dt>全部房间 / 等待开局</dt><dd id="rooms-detail">—</dd></div>
+          <div><dt>对局有人在线 / 全员离线</dt><dd id="matches-detail">—</dd></div>
+          <div><dt>AI 所在房间有人在线 / 全员离线</dt><dd id="bots-detail">—</dd></div>
+          <div><dt>打开的连接 / 保留的身份</dt><dd id="sessions-detail">—</dd></div>
+        </dl>
+      </details>
+      <p class="note">“保留的身份”与“真人席位”包含离线玩家，不能当成在线人数。一个人用不同身份开多个页面也会重复计数。</p>
+    </section>
+    <section aria-labelledby="traffic-heading">
+      <h2 id="traffic-heading">当前游戏进程的内部流量分类</h2>
+      <div class="traffic-summary">
+        <div><span>当前进程累计正文 / 消息量</span><strong id="total-out">—</strong></div>
+        <div><span>最近约 60 秒进程写出速度</span><strong id="rate-out">—</strong></div>
+        <div><span>收到的游戏消息</span><strong id="total-in">—</strong></div>
+      </div>
+      <p class="note" id="since">累计统计从本次服务启动开始，重启后归零。</p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="流量分类表，可以横向滚动">
+        <table>
+          <caption>仅当前游戏进程；用于观察变化，不能代表公网流量占比。分类不含 Caddy 直发素材及其他保留版本。</caption>
+          <thead><tr><th scope="col">用途</th><th scope="col">累计发送</th><th scope="col">占比</th><th scope="col">最近约 60 秒</th><th scope="col">请求 / 消息数</th></tr></thead>
+          <tbody id="traffic-rows">
+            <tr><th scope="row">图片</th><td>—</td><td class="share">—<div class="bar" aria-hidden="true"><span></span></div></td><td>—</td><td>—</td></tr>
+            <tr><th scope="row">角色模型 / 骨骼</th><td>—</td><td class="share">—<div class="bar" aria-hidden="true"><span></span></div></td><td>—</td><td>—</td></tr>
+            <tr><th scope="row">音乐 / 语音</th><td>—</td><td class="share">—<div class="bar" aria-hidden="true"><span></span></div></td><td>—</td><td>—</td></tr>
+            <tr><th scope="row">程序 / 字体</th><td>—</td><td class="share">—<div class="bar" aria-hidden="true"><span></span></div></td><td>—</td><td>—</td></tr>
+            <tr><th scope="row">游戏数据</th><td>—</td><td class="share">—<div class="bar" aria-hidden="true"><span></span></div></td><td>—</td><td>—</td></tr>
+            <tr><th scope="row">其他 HTTP</th><td>—</td><td class="share">—<div class="bar" aria-hidden="true"><span></span></div></td><td>—</td><td>—</td></tr>
+            <tr><th scope="row">游戏同步</th><td>—</td><td class="share">—<div class="bar" aria-hidden="true"><span></span></div></td><td>—</td><td>—</td></tr>
+            <tr><th scope="row">好友房间聊天</th><td>—</td><td class="share">—<div class="bar" aria-hidden="true"><span></span></div></td><td>—</td><td>—</td></tr>
+            <tr><th scope="row">连接 / 房间消息</th><td>—</td><td class="share">—<div class="bar" aria-hidden="true"><span></span></div></td><td>—</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p id="traffic-reading" class="reading">等有玩家访问游戏后，就能看到图片下载和游戏同步各占多少。</p>
+      <details>
+        <summary>查看资源请求与监测开销</summary>
+        <dl class="details">
+          <div><dt>资源请求 / 返回 304</dt><dd id="requests-detail">—</dd></div>
+          <div><dt>错误响应 / 中断请求</dt><dd id="errors-detail">—</dd></div>
+          <div><dt>统计页及健康检查发送量</dt><dd id="monitor-detail">—</dd></div>
+          <div><dt>含监测页的总发送量</dt><dd id="all-out">—</dd></div>
+        </dl>
+      </details>
+      <p class="note">这里统计当前游戏进程写出的 HTTP 正文和 WebSocket 消息。热更网关向进程请求未压缩正文，外层还会压缩，因此这里的 HTTP 数字可能大于实际下载量；Caddy 直发的素材又不会进入此表。请用上方网卡统计观察整个服务器出口，不能把此表的总量或占比当成账单依据。浏览器直接使用本地缓存时，不产生资源正文流量。</p>
+      <p class="note">离线房间可能占用内存或 CPU，但没有在线成员就没有人接收房间同步。AI 的动作会给同房间在线玩家带来同步消息，已计入“游戏同步”。</p>
+    </section>
+  </main>
+  <footer>汇总统计只显示数量和字节数，不展示玩家姓名、IP、房间号或聊天内容。</footer>
+</body>
+</html>

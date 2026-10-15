@@ -5,6 +5,7 @@
 // Official rule: band 变形者集群 "与特定装备一同装备时装备者将视为特定盟约成员"; the item's talent (character_table
 // trap_1073_acarm073) lists the 14 pairings "“维式重锤”系列装备→【维多利亚】盟约 …".
 
+import { snapshotComponent } from '../helpers/componentSnapshot.js';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -126,7 +127,8 @@ globalThis.fetch = async (url) => {
 };
 const { data } = await import('../../public/js/data.js');
 await data.loadAll('bonds', 'chess', 'items', 'assets', 'garrisons');
-const { BondPopup } = await import('../../public/js/ui/bondStrip.js');
+const { BondPopup: BondPopupComponent } = await import('../../public/js/ui/bondStrip.js');
+const BondPopup = snapshotComponent(BondPopupComponent);
 const { BondChips, ChessDetail, resolveDetail } = await import('../../public/js/ui/detailPanel.js');
 
 function* walk(v) {

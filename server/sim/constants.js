@@ -38,7 +38,7 @@ export const BLOCK_RADIUS_SQ = Object.freeze({ ground: 0.49999037, fly: 0.799951
 /**
  * An enemy's 隐匿 after a block ends (s): PRTS 作战机制 §隐匿 "对于绝大部分可隐匿的敌人而言，在被我方单位阻挡后会解除隐匿，不被
  * 阻挡的3秒后重新进入隐匿" / §隐匿与Buff的关系 "阻挡状态解除后3s开关重新被开启而恢复隐匿". An enemy page's "（解除阻挡N秒后
- * 恢复）" overrides it per 隐匿 source (buff `data.stealthRestore`: content/enemies.js). Battle._stealthSwitch; our
+ * 恢复）" overrides it per 隐匿 source (buff `data.stealthRestore`: content/enemies/helpers.js STEALTH_RESTORE_BY_KEY). Battle._stealthSwitch; our
  * operators' 隐匿 / 迷彩 are never lifted by blocking ("我方干员并不会因为阻挡而解除隐匿").
  */
 export const STEALTH_RESTORE = 3;
@@ -48,7 +48,7 @@ export const PROJECTILE_SPEED = 12;
  * Projectile speeds per visual kind (tiles/s). `none`/`beam` are instant. `boomerang` (回环射手 跃跃) is the OUTBOUND
  * flight to the target — PRTS 跃跃 特性 note "投射物飞行速度15，返回时飞行速度3.75"; the way back is
  * BOOMERANG_RETURN_SPEED (ai.js throwBoomerang). `droneBomb` = 暴鸰's bomb (the official projectile_bombd `_speed` 5;
- * content/enemies.js kitBombd).
+ * content/enemies/fly.js kitBombd).
  */
 export const PROJECTILE_SPEEDS = Object.freeze({ arrow: 14, bolt: 11, bomb: 8, lob: 8, orb: 10, drone: 16, enemy: 10, boomerang: 15, droneBomb: 5 });
 /** 回环射手: speed (tiles/s) of a boomerang flying back from its hit point to its thrower (PRTS "返回时飞行速度3.75"). */
@@ -198,11 +198,22 @@ export const EVENT_BUFFER_CAP = 50000;
 
 /** Nested hook emits deeper than this are skipped (content recursion, e.g. a `damaged` handler dealing damage). */
 export const MAX_HOOK_DEPTH = 32;
+/** Total content callbacks in one outer hook/callback chain (also bounds shallow fan-out). */
+export const MAX_HOOK_WORK = 4096;
 /** spawnEnemy refuses to exceed this many living enemies on one field (runaway content spawn loops). */
 export const MAX_ALIVE_ENEMIES = 600;
 
 /** Heal-over-time / regen events are aggregated and only emitted when they reach this amount. */
 export const REGEN_EVENT_MIN = 1;
+
+/**
+ * How far inside the field rectangle an enemy is held (tiles; Battle._clampPos). [ASSUMED] The rectangle's edge lies
+ * exactly halfway between two tiles, where the tile of a position — rounded half to even (body.js; PRTS 作战机制
+ * 四舍六入五成双) — would depend on whether the row or column number is even. Held this little inside, an enemy at the
+ * edge stays on the edge tile. 2^-20 is exact in binary and too small to move a slide of 0.1-tile steps; a 1/1024 inset
+ * did move those steps.
+ */
+export const FIELD_EDGE_INSET = 1 / 1048576;
 
 /** Row offset mapping board rows (9..12) onto boss-field rows (2..5). */
 export const BOSS_ROW_OFFSET = -7;

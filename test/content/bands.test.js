@@ -8,7 +8,7 @@ import { makeMatch, give, giveItem, DATA } from '../match/harness.js';
 import { createRegistry } from '../../server/match/effectsMeta.js';
 import { hasBattlePart, amedicCharsFor, PRIO_BAND_REVIVE } from '../../server/sim/content/bands/battle.js';
 import { bandMetaHandler, duckReplace } from '../../server/sim/content/bands/meta.js';
-import { PRIO_REVIVE } from '../../server/sim/content/items/battle.js';
+import { PRIO_RESPAWN } from '../../server/sim/content/items/battle.js';
 import * as bands from '../../server/sim/content/bands.js';
 
 const QUIET = { warn() {}, error() {}, info() {} };
@@ -223,16 +223,16 @@ test('绮良 通关奖励: every 20 funds spent ⇒ 1 random operator of tier �
   cover('band_kirara');
 });
 
-test('佩佩 博学多通: upgrading to 2 / 4 / 6 gives 1 special (free) refresh whose operators are <萨尔贡> first', () => {
+test('佩佩 博学多通: upgrading to 2 / 4 / 6 makes the next refresh special (paid as usual) — its operators are <萨尔贡> first', () => {
   const seed = seedWithBond('sargonShip', 2, 2);
   const { m, ps } = setup({ band: 'band_pepe', seed });
   ps.shop.upgradePrice = 0;
   assert.deepEqual(m.handle('p_0', { t: 'g.levelUp' }), OK);
   assert.equal(ps.shop.level, 2);
-  assert.equal(ps.shop.freeRefreshes, 1);
+  assert.equal(ps.shop.freeRefreshes, 0, 'no free refresh comes with it (community report of 2026-10-06)');
   const f0 = ps.funds;
   assert.deepEqual(m.handle('p_0', { t: 'g.refresh' }), OK);
-  assert.equal(ps.funds, f0, 'free');
+  assert.equal(ps.funds, f0 - m.gd.refreshPrice, 'the usual refresh price');
   const chess = ps.shop.slots.filter((sl) => sl && sl.kind === 'chess');
   assert.ok(chess.length >= 3 && chess.every((sl) => DATA.chess[sl.id].bonds.includes('sargonShip')), 'all 萨尔贡');
   assert.equal(ps.counters['band:pepe:special'], 0, 'consumed');
@@ -302,7 +302,7 @@ test('余 文火慢炖: R8 round start — exactly 1 active bond +36 layers, oth
   cover('band_yu');
 });
 
-test('凯瑟琳 定向投放: every shop upgrade offers 3 different items (tier ≤ new level), 1 free pick', () => {
+test('凯瑟琳 定向投放: every shop upgrade offers 3 different shop items (any tier — community report of 2026-10-06), 1 free pick', () => {
   const { m, ps } = setup({ band: 'band_cathy', seed: 9 });
   for (const lvl of [2, 3]) {
     ps.shop.upgradePrice = 0;
@@ -313,7 +313,7 @@ test('凯瑟琳 定向投放: every shop upgrade offers 3 different items (tier 
     const ids = offer.slots.map((sl) => sl.id);
     assert.equal(ids.length, 3);
     assert.equal(new Set(ids).size, 3);
-    for (const id of ids) assert.ok(offer.slots[0].kind === 'item' && DATA.items[id].tier <= lvl && !DATA.items[id].isGolden, id);
+    for (const id of ids) assert.ok(offer.slots[0].kind === 'item' && !DATA.items[id].shopExcluded && !DATA.items[id].isGolden, id);
   }
   const f0 = ps.funds;
   const pick = ps.offers[0].slots[2].id;
@@ -532,9 +532,12 @@ test('阿米娅 众志合一: 3 / 4 / ≥ 5 active bonds ⇒ every operator ATK 
   cover('band_amiya');
 });
 
-test('埃芒加德 命结之秘: the first 3 knock-downs of the battle revive at full HP (after the operators\' own revive items)', () => {
+test('埃芒加德 命结之秘: the first 3 knock-downs of the battle revive at full HP (after the operators\' own revive items) — a knock-out and a free redeploy', () => {
   const ops = { t_op: op('t_op'), t_b: op('t_b') };
   const h = fight({ band: 'band_ermengard', ops, units: [{ chessId: 't_op', row: 10, col: 4, items: [A('4_12')] }, { chessId: 't_b', row: 11, col: 4 }], foes: [[10, 9]] });
+  const log = [];
+  h.b.on('death', (c) => log.push(['death', c.unit.defId, c.revivedBy ?? null]), { priority: -1000 });
+  h.b.on('deploy', (c) => { if (!c.initial && c.unit.side === 'ally') log.push(['deploy', c.unit.defId]); }, { priority: -1000 });
   h.step(1);
   const [a, b] = [h.unit('t_op'), h.unit('t_b')];
   const kill = (u) => h.b.dealDamage(foe(h), u, { amount: 1e6, type: 'true' });
@@ -543,9 +546,13 @@ test('埃芒加德 命结之秘: the first 3 knock-downs of the battle revive at
   kill(a); kill(b); kill(b); // band revives 1, 2, 3
   assert.ok(a.alive && b.alive);
   close(b.hp, 2000, 'full HP');
+  // PRTS 备注 "“复活”的实现方式为：受益者因移动之外的原因退场时下次部署的再部署时间和费用归零": each revive is a knock-out
+  // (death hooks — 被击倒时 effects) and an immediate free redeploy where it lies (deploy hooks — 部署时 effects)
+  assert.deepEqual(log.filter((x) => x[0] === 'death').map((x) => x.slice(1)), [['t_op', 'item'], ['t_op', 'band'], ['t_b', 'band'], ['t_b', 'band']]);
+  assert.deepEqual(log.filter((x) => x[0] === 'deploy').map((x) => x[1]), ['t_op', 't_op', 't_b', 't_b'], 'each knock-out redeployed at once');
   kill(a);
   assert.equal(a.alive, false, '4th knock-down of the band: dies');
-  assert.ok(PRIO_BAND_REVIVE < PRIO_REVIVE);
+  assert.ok(PRIO_BAND_REVIVE < PRIO_RESPAWN, 'the band after the item revive (both death hooks, after every fatal saver)');
   cover('band_ermengard');
 });
 
@@ -670,6 +677,91 @@ test('Touch 外勤医疗: every player of a match with the band gets 预备干�
   assert.deepEqual(run(['t_n'], { band: null, matchBands: ['band_bldsk', 'band_amedic'] }), [['char_605_cmedic', 10, 2]], 'a teammate holds it');
   assert.deepEqual(run(['t_n'], { band: null }), [], 'nobody holds it');
   cover('band_amedic');
+});
+
+test('外勤医疗: 预备干员-医疗 and Touch keep preplaced targeting order against a flying 守墓石像', () => {
+  const defs = {
+    harold: chessRec({ id: 'harold', profession: 'TANK', skill: null, stats: { atk: 0, maxHp: 1e7, blockCnt: 0 } }),
+    elite1: chessRec({ id: 'elite1', golden: true, profession: 'TANK', skill: null, stats: { atk: 0, maxHp: 1e7, blockCnt: 0 } }),
+    elite2: chessRec({ id: 'elite2', golden: true, profession: 'TANK', skill: null, stats: { atk: 0, maxHp: 1e7, blockCnt: 0 } }),
+  };
+  for (const [eliteCount, mapCharId] of [[1, 'char_605_cmedic'], [2, 'char_613_acmedc']]) {
+    const h = makeBattle({
+      stageId: 'act2autochess_m01', bandId: 'band_amedic', autoFinish: false, timeLimit: 100,
+      defs: { chess: defs }, units: [
+        { chessId: 'harold', row: 11, col: 3 },
+        { chessId: 'elite1', row: 12, col: 8 },
+        ...(eliteCount === 2 ? [{ chessId: 'elite2', row: 9, col: 8 }] : []),
+      ],
+    });
+    h.step();
+    const medic = h.unit(mapCharId), harold = h.unit('harold');
+    const ops = h.allies().filter((u) => u.kind === 'op');
+    assert.ok(medic?.alive && harold?.alive, mapCharId);
+    assert.ok(ops.every((u) => medic.deploySeq > u.deploySeq), 'battleStart creates the map character after initial deployment');
+    assert.ok(ops.every((u) => medic.aggroSeq < u.aggroSeq), 'its targeting order precedes every initial operator');
+    assert.equal(medic.s.taunt, harold.s.taunt, 'the two targets have equal taunt');
+
+    const gargoyle = h.spawn('enemy_1172_dugago', { pos: [10, 3], routeIndex: 0, mods: { speedMul: 0 } });
+    assert.ok(gargoyle);
+    h.b.kill(gargoyle, null); // first knock-out changes 守墓石像 into its flying form
+    assert.ok(gargoyle.alive);
+    const attacks = [];
+    h.b.on('enemyAttackStart', ({ enemy, targets }) => {
+      if (enemy === gargoyle && gargoyle.motion === 'FLY') attacks.push({ target: targets[0], x: enemy.x, y: enemy.y });
+    });
+    assert.ok(h.runUntil(() => attacks.length > 0, 20), 'flying gargoyle starts an attack');
+    const { target, x, y } = attacks[0];
+    const reach = gargoyle.base.rangeRadius + 0.25;
+    for (const u of [harold, medic]) assert.ok((u.x - x) ** 2 + (u.y - y) ** 2 <= reach ** 2, `${u.defId} is in range at target lock`);
+    assert.equal(gargoyle.blockedBy, null);
+    assert.equal(target, harold, `${mapCharId}: the later ordinary operator is selected`);
+    h.b.addBuff(medic, { key: 'test:taunt', mods: { taunt: 1 }, persist: true });
+    assert.ok(h.runUntil(() => attacks.length > 1, 20), 'gargoyle starts another attack');
+    assert.equal(attacks[1].target, medic, 'higher taunt still takes precedence over deployment order');
+    checkInvariants(h.b);
+  }
+});
+
+test('外勤医疗: 联防右侧 Touch retains its prepared targeting order', () => {
+  const defs = {
+    harold: chessRec({ id: 'harold', profession: 'TANK', skill: null, stats: { atk: 0, maxHp: 1e7, blockCnt: 0 } }),
+    elite1: chessRec({ id: 'elite1', golden: true, profession: 'TANK', skill: null, stats: { atk: 0, maxHp: 1e7, blockCnt: 0 } }),
+    elite2: chessRec({ id: 'elite2', golden: true, profession: 'TANK', skill: null, stats: { atk: 0, maxHp: 1e7, blockCnt: 0 } }),
+  };
+  const players = [
+    { playerId: 'L', seat: 0, side: 'L', colOffset: 0, bandId: 'band_amedic', bonds: {}, playerEffects: [], units: [] },
+    { playerId: 'R', seat: 1, side: 'R', colOffset: 8, bandId: 'band_amedic', bonds: {}, playerEffects: [], units: [
+      { uid: 1, kind: 'chess', chessId: 'harold', row: 11, col: 3 },
+      { uid: 2, kind: 'chess', chessId: 'elite1', row: 12, col: 8 },
+      { uid: 3, kind: 'chess', chessId: 'elite2', row: 9, col: 8 },
+    ] },
+  ];
+  const h = makeBattle({ kind: 'unite', stageId: 'act2autochess_m01', players, defs: { chess: defs }, autoFinish: false });
+  h.step();
+  const leftMedic = h.allies().find((u) => u.ownerId === 'L' && u.defId === 'char_605_cmedic');
+  const rightTouch = h.allies().find((u) => u.ownerId === 'R' && u.defId === 'char_613_acmedc');
+  const harold = h.allies().find((u) => u.ownerId === 'R' && u.defId === 'harold');
+  assert.ok(leftMedic && rightTouch && harold);
+  assert.deepEqual([leftMedic.tileR, leftMedic.tileC], [10, 2]);
+  assert.deepEqual([rightTouch.tileR, rightTouch.tileC], [10, 10]);
+  assert.ok(leftMedic.aggroSeq < rightTouch.aggroSeq && rightTouch.aggroSeq < harold.aggroSeq);
+  assert.ok(rightTouch.deploySeq > harold.deploySeq);
+
+  const gargoyle = h.spawn('enemy_1172_dugago', { pos: [10, 11], routeIndex: 0, mods: { speedMul: 0 } });
+  assert.ok(gargoyle);
+  h.b.kill(gargoyle, null);
+  const attacks = [];
+  h.b.on('enemyAttackStart', ({ enemy, targets }) => {
+    if (enemy === gargoyle && enemy.motion === 'FLY') attacks.push({ target: targets[0], x: enemy.x, y: enemy.y });
+  });
+  assert.ok(h.runUntil(() => attacks.length > 0, 20));
+  const { target, x, y } = attacks[0];
+  const reach = gargoyle.base.rangeRadius + 0.25;
+  for (const u of [harold, rightTouch]) assert.ok((u.x - x) ** 2 + (u.y - y) ** 2 <= reach ** 2);
+  assert.equal(gargoyle.blockedBy, null);
+  assert.equal(target, harold);
+  checkInvariants(h.b);
 });
 
 test('coverage: every band is exercised by a test above', () => {

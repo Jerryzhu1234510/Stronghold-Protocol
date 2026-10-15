@@ -6,7 +6,6 @@
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { installFakePixi, fakeViewCtx } from './fakepixi.js';
 import { presetCamera } from '../../public/js/render/projection.js';
 
@@ -50,9 +49,6 @@ const share = (v, x, y, z) => { const f = cam.project(x, y, v.z); return (f.y - 
 
 test('an arrow leaves the shooter at its hands and flies at the target\'s chest (SHOT_HEIGHT), not at the hips', () => {
   assert.deepEqual({ ...FX.SHOT_HEIGHT }, { launch: 0.45, aim: 0.5 });
-  // fxsustain.js (held links, channelled beams) keeps a copy: fx.js imports that module, it cannot import fx.js back
-  const copy = readFileSync(new URL('../../public/js/render/fxsustain.js', import.meta.url), 'utf8').match(/const LAUNCH = ([\d.]+), AIM = ([\d.]+);/);
-  assert.deepEqual([Number(copy[1]), Number(copy[2])], [FX.SHOT_HEIGHT.launch, FX.SHOT_HEIGHT.aim]);
   const fx = makeFx();
   const src = unit(1, 3, 10), tgt = unit(2, 7, 11, { isEnemy: true, _headTiles: 1.6 });
   fx.attack(src, tgt, 'arrow');

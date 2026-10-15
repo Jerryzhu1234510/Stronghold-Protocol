@@ -1,0 +1,19 @@
+{
+  "format": 3,
+  "id": "rain-love-teammate-zero",
+  "name": "雨爱 · 生命归零",
+  "version": "1.0.2",
+  "server": "8443",
+  "description": "自己或任意队友（含AI）生命值由正数降为0时播放《雨爱》（DJ.Lee版）。只在本机播放；不因重复同步或重连重播，播放中不叠加。音频由用户提供。需要PC客户端1.0.3。",
+  "files": [],
+  "events": [
+    {
+      "event": "teammate-zero-lp",
+      "path": "audio/rain-love.mp3",
+      "volume": 0.8,
+      "startSeconds": 0,
+      "includeBots": true,
+      "includeSelf": true
+    }
+  ]
+}

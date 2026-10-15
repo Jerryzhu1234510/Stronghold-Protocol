@@ -1,4 +1,5 @@
 // server/match/audit.js — rule auditor for sweeps and tests (tools/matchrun.mjs --check, test/match/fullmatch.test.js).
+// (i18n-ignore-file: developer reports in English with the game's terms, never shown to players — docs/I18N.md)
 //
 // attachAudit(m) wraps a live Match's phase transitions and a few prep handlers (instance-level wrappers; the engine
 // is untouched) and records every rule violation it observes, next to the structural invariants of invariants.js:
@@ -23,38 +24,29 @@
 //   combat start  nothing overdue in temp, everyone ready, funds lost (carry bands excepted), unfrozen shop cleared,
 //                 one field per alive player
 //   drafts        every seat holds an allowed band with LP = totalHp; 机变: one card per alive player, card ↔ picker
-//                 maps consistent, at most choices.js spDraftCardCount cards (6 co-op / 3 solo; alive + 2 above 4 alive)
+//                 maps consistent, 6 (co-op) / 3 (solo) cards
 //   联防          decided after the COMBAT_END pause from the players still in: runs iff co-op with ≥ 1 leaker and
 //                 ≥ 1 perfect player; helpers = unite.js helperOrder (PRTS: units > active bond > layers > standing
-//                 units > seat, research 08 §5); leakers = players with counted leaks; one field 'u' up to 4 alive —
-//                 above 4 alive ≤ min(⌈alive / 4⌉, leakers) fields 'u', 'u2', … (1–2 helpers and ≥ 1 leaker each, never an empty
-//                 one), every leaker on exactly one field by the greedy balance of counted leaks, a field holding only
-//                 its own leakers' enemies, m.fields = the plan's fields
+//                 units > seat, research 08 §5); leakers = players with counted leaks
 //   settle        no unite ⇒ loss = min(cap, counted leaks); after 联防 a leaker loses ≤ cap (its leaked enemies'
-//                 offspring count too; billed from its own field — one whose battle could not run: exactly its own
-//                 leaks), everybody else ≤ min(cap, own counted leaks); LP ≤ 0 ⇔ eliminated
-//   final assault fields pair alive players by seat, team LP = Σ alive LP, boss pool = bossPoolHp() (× alive / 4 above 4
-//                 alive), the overtime factor's alive count; hidden core only after a win when hiddenEligible() holds
-//                 (threshold × players / 4 above 4 summed players)
-//   result        each title ≤ once (above 4 players: the one-each pass's titles kept, a repeat only for a player that
-//                 pass left without one), ≤ 1 title per player, onlyOnWin titles only on a win, roundsPassed per
-//                 player, Σ alive players' LP = the merged team LP after the Final Assault
+//                 offspring count too), everybody else ≤ min(cap, own counted leaks); LP ≤ 0 ⇔ eliminated
+//   final assault fields follow the saved per-match pairs, team LP = Σ alive LP, boss pool = bossPoolHp(); hidden core only
+//                 after a win when hiddenEligible() holds
+//   result        each title ≤ once, ≤ 1 title per player, onlyOnWin titles only on a win, roundsPassed per player,
+//                 Σ alive players' LP = the merged team LP after the Final Assault
 //   deadlines     every timed phase's m.public deadline equals its configured duration × timerScale; the co-op
-//                 strategy draft has one countdown: the deadline is the current turn's (Match.BAND_TURN_SECONDS; above 4
-//                 seats gamedata.js largeRoom.bandTurn); a later 机变 pick spTurn (above 4 alive largeRoom.spTurn). A match
+//                 strategy draft has one countdown: the deadline is the current turn's (Match.BAND_TURN_SECONDS). A match
 //                 with a single human (solo, or a 同盟 room with AI teammates only: Match.soloUntimed) times nothing
 //                 outside its battles — no INFO_CHECK / draft / 机变 / prep deadline, BATTLE_CHECK / ROUND_START / SETTLE
 //                 silent (deadline 0)
 // Checks never throw into the match: an exception inside a check is itself recorded as a violation.
 
-import { PHASE } from '../../shared/constants.js';
+import { PHASE, roomBossHp } from '../../shared/constants.js';
 import { collectViolations } from './invariants.js';
 import { mergeTile, pieceDir, canPlace, placeClass } from './board.js';
-import { pairPlayers, bossPoolHp, hiddenEligible } from './finalAssault.js';
-import { helperOrder, uniteHelperGroups, uniteFieldBudget, uniteFieldCount, uniteFieldId, uniteGroups, uniteFieldResults } from './unite.js';
+import { bossPoolHp, hiddenEligible } from './finalAssault.js';
+import { helperOrder } from './unite.js';
 import { BAND_TURN_SECONDS } from './Match.js';
-import { spDraftCardCount } from './choices.js';
-import { assignTitles } from './results.js';
 
 /**
  * @param {import('./Match.js').Match} m
@@ -136,7 +128,10 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
         check('shop roll', () => {
           const base = gd.baseIdOf(s.id);
           if (t > ps.shop.level) fail(`${ps.playerId}: rolled tier ${t} at shop level ${ps.shop.level}`);
-          if (!m.pool.has(base, ps.playerId)) fail(`${ps.playerId}: rolled ${s.id} outside its pool (banned/hidden, or another player's 甄选)`);
+          // (a slotted 自选 piece comes from the player's own stock, 0.2.0 player/diy.js — once the 调度中心 is at its level)
+          const diy = ps.diyStock && ps.diyStock.has(base) ? ps.diyStock.entries.get(base) : null;
+          if (!m.pool.has(base) && !diy) fail(`${ps.playerId}: rolled ${s.id} outside the match pool (banned/hidden)`);
+          if (diy && ps.shop.level < diy.shopLevel) fail(`${ps.playerId}: rolled 自选 ${s.id} at shop level ${ps.shop.level} < ${diy.shopLevel}`);
           if (s.basePrice !== gd.chessPrice(s.id)) fail(`${ps.playerId}: ${s.id} basePrice ${s.basePrice} != ${gd.chessPrice(s.id)}`);
         });
       }
@@ -226,12 +221,23 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       const price = ps.shop.upgradePrice;
       const f0 = ps.funds;
       const fx = hasSpendEffects(m, ps);
+      const slots0 = ps.shop.slots.slice();
+      const layout0 = ps.shop.layout || { chess: slots0.length, item: 0 };
       const res = orig();
       if (res && res.ok) check('levelUp', () => {
         if (ps.shop.level !== lv + 1) fail(`${ps.playerId}: level ${lv} → ${ps.shop.level}`);
         if (f0 - ps.funds !== price && !fx && !hasSpendEffects(m, ps)) fail(`${ps.playerId}: level-up paid ${f0 - ps.funds}, price ${price}`);
         const next = gd.upgradeBase(ps.shop.level) ?? 0;
         if (ps.shop.upgradePrice !== next) fail(`${ps.playerId}: upgrade price after level-up ${ps.shop.upgradePrice}, expected ${next}`);
+        // the new level's extra slots open at once (item 19 of 2026-10-06); the cards shown before stay in place
+        const { chess, item } = gd.shopSlots(ps.shop.level);
+        const want = Math.max(chess, layout0.chess) + Math.max(item, layout0.item);
+        if (ps.shop.slots.length !== want) fail(`${ps.playerId}: ${ps.shop.slots.length} shop slots after the level-up to ${ps.shop.level}, expected ${want}`);
+        const layout = ps.shop.layout || layout0;
+        slots0.forEach((s, i) => {
+          const at = i < layout0.chess ? i : layout.chess + (i - layout0.chess);
+          if (ps.shop.slots[at] !== s) fail(`${ps.playerId}: shop slot ${i} changed by the level-up`);
+        });
       });
       return res;
     });
@@ -252,7 +258,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
         if (ps.deployCount > deployed0) fail(`${id}: a merge of ${baseId} grew the deploy count ${deployed0} → ${ps.deployCount}`);
         // a pure read of the deploy field (Match.deployMapFor, as invariants.js): the audit must not refresh the cache
         const dmap = typeof m.deployMapFor === 'function' ? m.deployMapFor(ps) : ps.deployMap();
-        const pos = placeClass(ps, gd.chess(elite.id));
+        const pos = placeClass(ps, (ps.gd || gd).chess(elite.id));
         const want = mergeTile([...tiles.keys()].map((key) => ({ key })), (r, c) => canPlace(dmap, pos, r, c));
         if (want) {
           if (loc.area !== 'board' || loc.key !== want.key) fail(`${id}: the elite of ${baseId} went to ${loc.area} ${loc.key || ''}, expected the deployed copy's tile ${want.key}`);
@@ -296,9 +302,9 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       const ids = m.order.map((p) => p.playerId).sort();
       if (JSON.stringify(d.order.slice().sort()) !== JSON.stringify(ids)) fail(`draft order ${d.order} != seats ${ids}`);
       // one countdown (user playtest #4 item 4): the step's deadline IS the current turn's, BAND_TURN_SECONDS long
-      if (m.soloUntimed) { if (m.deadline || d.turnDeadline) fail('untimed band draft is timed'); } else {
+      if (m.soloUntimed && !m.isClone) { if (m.deadline || d.turnDeadline) fail('untimed band draft is timed'); } else {
         if (m.deadline !== d.turnDeadline) fail(`BAND_DRAFT: deadline ${m.deadline} is not the turn's ${d.turnDeadline}`);
-        expectDeadline(gd.bandTurnSeconds(m.order.length, BAND_TURN_SECONDS), 'BAND_DRAFT turn');
+        expectDeadline(BAND_TURN_SECONDS, 'BAND_DRAFT turn');
       }
     });
     return r;
@@ -332,7 +338,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       if (m.phase !== PHASE.SP_DRAFT || !m.sp) return;
       const s = m.sp;
       if (s.idx >= s.order.length) return;
-      if (m.soloUntimed) { if (m.deadline) fail('untimed 机变 is timed'); } else expectDeadline(s.idx === 0 ? gd.timer('spFirst') : gd.spTurnSeconds(s.order.length), `SP_DRAFT turn ${s.idx}`);
+      if (m.soloUntimed) { if (m.deadline) fail('untimed 机变 is timed'); } else expectDeadline(s.idx === 0 ? gd.timer('spFirst') : gd.timer('spTurn'), `SP_DRAFT turn ${s.idx}`);
     });
     return res;
   });
@@ -340,8 +346,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
     const s = m.sp;
     if (m.phase === PHASE.SP_DRAFT && s) check('sp draft', () => {
       const alive = m.alivePlayers().map((p) => p.playerId);
-      // 6 (co-op) / 3 (solo); alive + 2 when more than 4 were alive at the draft start (s.order)
-      const want = spDraftCardCount(gd, m.round, s.order.length);
+      const want = m.isSolo ? 3 : 6;
       if (s.cards.length > want) fail(`${s.cards.length} 机变 cards (max ${want})`);
       if (s.order.length !== alive.length) fail(`机变 order ${s.order.length} for ${alive.length} alive`);
       for (const pid of alive) {
@@ -397,56 +402,15 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       const alive = m.alivePlayers();
       const leakers = alive.filter((p) => counted(p.playerId) > 0).map((p) => p.playerId).sort();
       const perfect = alive.filter((p) => counted(p.playerId) === 0);
-      const ids = (list) => (list || []).map((p) => p.playerId);
-      // fields: 1 up to 4 alive (helperOrder, ≤ maxHelpers); above 4 alive (remake extension) min(⌈alive / 4⌉, leakers)
-      // at most, the top maxHelpers per field by the selection ranking, each field's helpers in the pair order
-      const budget = uniteFieldBudget(gd, alive.length);
-      if (budget !== (alive.length > gd.largeRoom.players ? Math.ceil(alive.length / gd.largeRoom.players) : 1)) fail(`联防 field budget ${budget} for ${alive.length} alive`);
-      const fieldCount = uniteFieldCount(gd, alive.length, leakers.length);
-      if (fieldCount !== Math.max(1, Math.min(budget, leakers.length))) fail(`联防 field count ${fieldCount} for ${alive.length} alive, ${leakers.length} leakers`);
-      const want = fieldCount > 1 ? uniteHelperGroups(m, perfect, res, fieldCount).map(ids) : [ids(helperOrder(m, perfect, res))];
-      const helpers = want.flat();
-      if (helpers.length > gd.unite.maxHelpers * fieldCount) fail(`${helpers.length} 联防 helpers (max ${gd.unite.maxHelpers} × ${fieldCount} fields)`);
+      const helpers = helperOrder(m, perfect, res).map((p) => p.playerId);
+      if (helpers.length > gd.unite.maxHelpers) fail(`${helpers.length} 联防 helpers (max ${gd.unite.maxHelpers})`);
       if (plan.helpers.some((p) => !p.alive || p.left)) fail(`联防 helper eliminated / departed: ${plan.helpers.filter((p) => !p.alive || p.left).map((p) => p.playerId)}`);
       if (m.isSolo) fail('联防 in solo');
       if (JSON.stringify(plan.leakers.map((p) => p.playerId).sort()) !== JSON.stringify(leakers)) fail(`联防 leakers ${plan.leakers.map((p) => p.playerId)} != ${leakers}`);
       if (JSON.stringify(plan.helpers.map((p) => p.playerId)) !== JSON.stringify(helpers)) fail(`联防 helpers ${plan.helpers.map((p) => p.playerId)} != ${helpers}`);
-      const groups = uniteGroups(plan);
-      if (groups.length !== want.length) fail(`${groups.length} 联防 fields, expected ${want.length} (${helpers.length} helpers, ${alive.length} alive)`);
-      if (groups.length > fieldCount || groups.length > Math.ceil(helpers.length / gd.unite.maxHelpers)) fail(`${groups.length} 联防 fields for ${helpers.length} helpers, ${alive.length} alive`);
-      groups.forEach((g, i) => {
-        if (g.fieldId !== uniteFieldId(i)) fail(`联防 field ${i} id ${g.fieldId}`);
-        if (!g.helpers.length || g.helpers.length > gd.unite.maxHelpers) fail(`联防 field ${g.fieldId}: ${g.helpers.length} helpers`);
-        if (!g.leakers.length) fail(`联防 field ${g.fieldId} has no leaker`);
-        if (want[i] && JSON.stringify(ids(g.helpers)) !== JSON.stringify(want[i])) fail(`联防 field ${g.fieldId} helpers ${ids(g.helpers)} != ${want[i]}`);
-        // a field fights only its own leakers' enemies
-        const own = new Set(ids(g.leakers));
-        if (g.leaked.some((l) => !own.has(l.sourcePlayerId))) fail(`联防 field ${g.fieldId} holds another field's leaks`);
-      });
-      // every leaker on exactly one field, spread by the greedy balance of counted leaks (largest first, then seat, to
-      // the least-loaded field, the lowest index on a tie)
-      const placed = groups.flatMap((g) => ids(g.leakers));
-      if (JSON.stringify(placed.slice().sort()) !== JSON.stringify(leakers)) fail(`联防 fields' leakers ${placed} != ${leakers}`);
-      if (groups.length > 1) {
-        const load = groups.map(() => 0);
-        const where = new Map();
-        for (const ps of plan.leakers.slice().sort((a, b) => counted(b.playerId) - counted(a.playerId) || a.seat - b.seat)) {
-          let best = 0;
-          for (let i = 1; i < load.length; i++) if (load[i] < load[best]) best = i;
-          where.set(ps.playerId, best);
-          load[best] += counted(ps.playerId);
-        }
-        groups.forEach((g, i) => { for (const pid of ids(g.leakers)) if (where.get(pid) !== i) fail(`联防 leaker ${pid} on ${g.fieldId}, the balance puts it on ${uniteFieldId(where.get(pid))}`); });
-      }
     });
     const r = orig(plan);
     runInvariants();
-    check('unite fields', () => {
-      const groups = uniteGroups(plan);
-      const want = groups.map((g) => `${g.fieldId}:${g.helpers.map((p) => p.playerId).join('+')}`);
-      const got = m.fields.map((f) => `${f.fieldId}:${f.kind}:${f.players.join('+')}`.replace(':unite:', ':'));
-      if (JSON.stringify(got) !== JSON.stringify(want)) fail(`联防 fields ${got.join(' | ')} != plan ${want.join(' | ')}`);
-    });
     return r;
   });
   wrap(m, 'settle', function (orig, plan, uniteResult) {
@@ -458,24 +422,18 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
     const res = orig(plan, uniteResult);
     check('settle', () => {
       const cap = gd.lpCapPerRound;
-      // per 联防 field (several above 4 alive): whether it ran (a real result) — its leakers are billed from it
-      const ran = new Map();
-      for (const { group, result } of uniteFieldResults(plan, uniteResult)) for (const ps of group.leakers || []) ran.set(ps, !!(result && !result.synthetic));
-      if (plan && uniteGroups(plan).length > 1 && !(Array.isArray(uniteResult) && uniteResult.length === uniteGroups(plan).length)) fail(`settle got ${Array.isArray(uniteResult) ? uniteResult.length : 'one'} 联防 result(s) for ${uniteGroups(plan).length} fields`);
-      const uniteRan = [...ran.values()].some(Boolean);
+      const uniteRan = !!(plan && uniteResult && !uniteResult.synthetic);
       for (const [ps, lp0] of before) {
         const r = m.lastResults.get(ps.playerId) || { leaked: [] };
         const counted = (r.leaked || []).filter((l) => l && l.counted !== false).length;
         // after 联防 a leaker pays for every surviving enemy of its source — enemies spawned by its leaked enemies
-        // (splitters, summoners) included — so only the cap bounds it; everybody else never exceeds own leaks. A leaker
-        // whose field could not run pays its own leaks exactly.
-        const billed = ran.get(ps) === true;
-        const max = billed ? cap : Math.min(cap, counted);
+        // (splitters, summoners) included — so only the cap bounds it; everybody else never exceeds own leaks
+        const max = uniteRan && plan.leakers.includes(ps) ? cap : Math.min(cap, counted);
         if (ps.alive) {
           const loss = lp0 - ps.lp;
           if (loss < 0) fail(`${ps.playerId}: LP rose in settle ${lp0} → ${ps.lp}`);
           if (loss > max) fail(`${ps.playerId}: lost ${loss} LP with ${counted} counted leaks (cap ${cap})`);
-          if ((!uniteRan || ran.get(ps) === false) && loss !== max) fail(`${ps.playerId}: lost ${loss} LP, expected min(${cap}, ${counted})`);
+          if (!uniteRan && loss !== max) fail(`${ps.playerId}: lost ${loss} LP, expected min(${cap}, ${counted})`);
           if (ps.lp <= 0) fail(`${ps.playerId}: alive with LP ${ps.lp}`);
         } else {
           // eliminated: LP is clamped to 0, so the loss was ≥ lp0 and still ≤ min(cap, counted)
@@ -491,22 +449,30 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
   });
   wrap(m, 'startFinalAssault', function (orig, hidden) {
     const alive = m.alivePlayers();
+    const before = m.bossPairs?.map(g => g.slice()) ?? null;
     const lpSum = alive.reduce((s, p) => s + Math.max(0, p.lp), 0);
     const teamLp0 = m.teamLp;
     const res = orig(hidden);
     runInvariants();
     check('final assault', () => {
       if (!alive.length) return;
-      const groups = pairPlayers(alive).map((g) => g.map((p) => p.playerId).join(','));
+      const pairs = m.bossPairs || [];
+      const memberIds = pairs.flat();
+      if (pairs.length !== Math.ceil(alive.length / 2) || pairs.some(g => g.length < 1 || g.length > 2)
+        || new Set(memberIds).size !== memberIds.length
+        || JSON.stringify([...memberIds].sort()) !== JSON.stringify(alive.map(p => p.playerId).sort())) fail('boss pairing does not cover every alive player once');
+      if (before && before.flat().every(id => alive.some(p => p.playerId === id)) && before.flat().length === alive.length
+        && JSON.stringify(before) !== JSON.stringify(pairs)) fail('boss pairing changed after preparation');
+      const groups = pairs.map(g => g.join(','));
       const fields = m.fields.map((f) => f.players.join(','));
-      if (JSON.stringify(groups) !== JSON.stringify(fields)) fail(`boss fields ${fields.join(' | ')} != seat pairs ${groups.join(' | ')}`);
+      if (JSON.stringify(groups) !== JSON.stringify(fields)) fail(`boss fields ${fields.join(' | ')} != saved pairs ${groups.join(' | ')}`);
       m.fields.forEach((f, i) => { if (f.fieldId !== `b${i + 1}`) fail(`boss field id ${f.fieldId}`); });
       if (!hidden && m.teamLp !== lpSum) fail(`team LP ${m.teamLp} != Σ alive LP ${lpSum}`);
       if (hidden && m.teamLp !== teamLp0) fail(`hidden core changed team LP ${teamLp0} → ${m.teamLp}`);
-      const want = bossPoolHp(gd, hidden ? m.hiddenBossId : m.bossId, alive.length);
+      const want = Math.round(bossPoolHp(gd, hidden ? m.hiddenBossId : m.bossId, alive.length)
+        * (m.isSolo ? 1 : roomBossHp(m.capacity))) * (m.isClone ? 3 : 1);
       if (!m.bossPool || m.bossPool.maxHp !== want) fail(`boss pool ${m.bossPool && m.bossPool.maxHp} != ${want}`);
-      if (m.bossAlive !== alive.length) fail(`overtime counts ${m.bossAlive} alive, ${alive.length} started the boss phase`);
-      if (hidden && !hiddenEligible(gd, { layerSum: m.hiddenLayerSum, teamLp: m.teamLp, players: m.hiddenLayerPlayers })) fail('hidden core entered while not eligible');
+      if (hidden && !hiddenEligible(gd, { layerSum: m.hiddenLayerSum, teamLp: m.teamLp })) fail('hidden core entered while not eligible');
       if (hidden && gd.difficulty === 'FUNNY') fail('hidden core on FUNNY');
     });
     return res;
@@ -517,17 +483,7 @@ export function attachAudit(m, { invariants = true, limit = 200 } = {}) {
       const r = m.lastResultMsg;
       if (!r) { fail('no m.result'); return; }
       const titles = r.players.map((p) => p.title && p.title.id).filter(Boolean);
-      // above 4 players (remake extension) a player the one-each pass left without a title may repeat one
-      const large = gd.isLargeRoom(r.players.length);
-      if (!large && new Set(titles).size !== titles.length) fail(`a title was given twice: ${titles}`);
-      const first = assignTitles(gd, [...m.players.values()].sort((a, b) => a.seat - b.seat), r.victory, { repeat: false });
-      const once = [...first.values()].map((t) => t.id);
-      if (new Set(once).size !== once.length) fail(`the one-each pass gave a title twice: ${once}`);
-      for (const p of r.players) {
-        const f = first.get(p.playerId);
-        if (f && (!p.title || p.title.id !== f.id)) fail(`${p.playerId}: title ${p.title && p.title.id}, the one-each pass gave ${f.id}`);
-        if (!f && p.title && !large) fail(`${p.playerId}: title ${p.title.id} outside the one-each pass`);
-      }
+      if (new Set(titles).size !== titles.length) fail(`a title was given twice: ${titles}`);
       const cfg = Array.isArray(gd.config.titles) ? gd.config.titles : [];
       for (const p of r.players) {
         const t = p.title && cfg.find((x) => x.id === p.title.id);

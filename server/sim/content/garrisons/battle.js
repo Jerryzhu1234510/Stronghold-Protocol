@@ -5,8 +5,10 @@
 //
 //   ADD_BOND            grants `give_garrison_id` to other operators before the first deployment (targets parsed from
 //                       the text: 身前一格 / 身前一格【X】/ 自身和身前一格 / 同一行最右边 / 所有【X】). A unit owns a garrison id
-//                       at most once (耀骑士临光 already carries the 144/159 it grants to itself). The 华法琳-granted trait
-//                       (garrison_95) is capped 12 / 24 per battle instead of the data's 7 / 14 (research 02 Addendum 1).
+//                       at most once for native/stat traits (耀骑士临光 already carries its self-grants). Skill-use grants
+//                       stack independently per grantor (owner 2026-10-09). A granted trait keeps
+//                       its data cap like a native one: 华法琳's garrison_95 stops at 7 / 14 layers per battle (PRTS 下半
+//                       3月27日更新#2: 「从 初始12/精锐24 降低至 初始7/精锐14」; GitHub #175, PR #192 by @kukiC).
 //   layer events        act1autochess_gar_event_useskill (skillStart) · _selfkillenemy (kill, every check_cnt) ·
 //                       _selfdead (death 'killed'; texts with 替身 also on every substitute ⇄ body swap, read from the
 //                       dollkeeper flag unit.trait.doll) · _consume_ammo (ammoUsed; range_id 0-1 self, 1-1 front tile,
@@ -15,11 +17,12 @@
 //                       act2autochess_gar_event_allyenemy_sleepstun_inrange (an enemy or operator in range ENTERS
 //                       sleep / stun). "进入…时": re-applying a running status (a refresh) is not a new entry
 //                       (engine statusApplied ctx.entered) — except a pulse that re-applies its own short status as a
-//                       fresh one (applyStatus `reenter`: 缇缇 S2's sleep ward, DESIGN §25.8).
+//                       fresh one (applyStatus `reenter`: 缇缇 S2's sleep ward, DESIGN §24.8).
 //                       Targets: bond_by_id / bond_self (own active bonds) / bond_actived_maxstack;
 //                       amounts: by_count / by_charcount_samerow / by_charlevel; conditions character_same_row /
 //                       character_same_col (≥ check_count incl. self). Gains go through support.gainLayers with
-//                       reason 'garrison', source = the trait's owner, cap = max_add_count_per_battle per (instance, bond).
+//                       reason 'garrison', source = the trait's owner, cap = max_add_count_per_battle per (instance, bond)
+//                       — per instance for bond_actived_maxstack (塑心: the highest bond may change, the cap does not).
 //   act1autochess_gar_event_addition_cnt (魔王)  layerGain: a 'garrison' gain whose source stands on the tile in front
 //                       of 魔王 (range_id 1-1) — or was knocked out there this instant (幽灵鲨 "被击倒时"; engine ctx.tile)
 //                       — gets +extra_cnt per bond (the extra does not count toward the source's per-battle cap).
@@ -42,9 +45,6 @@ import * as S from '../support/index.js';
 import { mitigate } from '../../damage.js';
 import { frontOf } from '../../dir.js';
 
-/** 华法琳's granted trait: per-battle cap override (research 02 Addendum 1: PRTS 3/27 "初始7/精锐14 → 初始12/精锐24"). */
-export const GRANTED_CAP_OVERRIDE = Object.freeze({ garrison_95_a: 12, garrison_95_b: 24 });
-
 const ids = (s) => String(s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 const EMPTY = Object.freeze([]);
 /** Status keys for check_ab_flag values used by the data (16 = 冻结). */
@@ -58,25 +58,28 @@ function garrisonIdsOf(u) {
 // ---------------------------------------------------------------------------------------------------------------------
 // install
 
-export function install(battle) {
+export function install(battle, units = battle.allyUnits) {
   const all = [];
   const owned = new Map(); // unit → Set(garrisonId)
   const add = (unit, g, grantedBy = null) => {
     let set = owned.get(unit);
     if (!set) { set = new Set(); owned.set(unit, set); }
-    if (set.has(g.garrisonId)) return null;
-    set.add(g.garrisonId);
+    // Owner feedback 2026-10-09: each caster grants its own skill-use trait and cap.
+    // Native/self-granted stat traits still deduplicate (e.g. Radiant Nearl).
+    const instance = grantedBy && g.effectKey === 'act1autochess_gar_event_useskill'
+      ? `${g.garrisonId}:${grantedBy.unit.id}` : g.garrisonId;
+    if (set.has(instance)) return null;
+    set.add(instance);
     const bb = g.bb || {};
-    const override = grantedBy ? GRANTED_CAP_OVERRIDE[g.garrisonId] : undefined;
-    const cap = override ?? (S.num(bb.max_add_count_per_battle, 0) > 0 ? S.num(bb.max_add_count_per_battle) : Infinity);
+    const cap = S.num(bb.max_add_count_per_battle, 0) > 0 ? S.num(bb.max_add_count_per_battle) : Infinity;
     const it = {
       unit, g, gid: g.garrisonId, key: g.effectKey, bb, bbStr: g.bbStr || {}, grantedBy,
-      cap, capKey: `gar:${g.garrisonId}:${unit.id}`, cnt: 0, k: -1,
+      cap, capKey: `gar:${instance}:${unit.id}`, cnt: 0, k: -1,
     };
     all.push(it);
     return it;
   };
-  for (const u of battle.allyUnits) {
+  for (const u of units) {
     if (!S.isOp(u)) continue;
     for (const gid of garrisonIdsOf(u)) {
       const g = S.garrisonRecord(gid);
@@ -191,10 +194,20 @@ export function fireGain(battle, it) {
   if (!conditionMet(battle, it)) return 0;
   const bonds = targetBonds(battle, it);
   if (!bonds.length) return 0;
-  const n = amountOf(battle, it);
+  let n = amountOf(battle, it);
+  // bond_actived_maxstack (塑心 garrison_90 "当前已激活且层数最多的盟约层数+1（每场作战至多10层）"): the cap is the instance's
+  // own over the battle, whichever bond is the highest at each gain — per (instance, bond) a change of the highest bond
+  // granted a fresh 10 (PR #178 review). The base amount counts toward it (魔王's extra does not, as in gainLayers).
+  const whole = it.bbStr.bond_type === 'bond_actived_maxstack' && Number.isFinite(it.cap);
+  if (whole) {
+    n = Math.min(Math.floor(n), Math.max(0, Math.floor(it.cap) - (it.wholeUsed ?? 0)));
+    if (!(n > 0)) return 0;
+  }
   const added = S.gainLayers(battle, {
-    playerId: it.unit.ownerId, bonds, n, requireActive: true, source: it.unit, reason: 'garrison', cap: it.cap, capKey: it.capKey,
+    playerId: it.unit.ownerId, bonds, n, requireActive: true, source: it.unit, reason: 'garrison',
+    cap: whole ? Infinity : it.cap, capKey: whole ? null : it.capKey,
   });
+  if (whole && added > 0) it.wholeUsed = (it.wholeUsed ?? 0) + n;
   if (added > 0) S.fxOn(battle, 'garrison', it.unit, `gar:${it.gid}`, it.key, { n: added });
   return added;
 }
@@ -233,6 +246,20 @@ function ammoScope(it, u) {
 }
 
 const INSTALLERS = {
+  // Custom Clementia trait: all friendly units share a counter while the holder is on field.
+  // Unlike selfkillenemy, allied operators/tokens may supply the kills. 联防 never grants layers.
+  custom_gar_allied_kills(battle, list) {
+    if (battle.kind === 'unite') return;
+    battle.on('kill', ({ killer, victim }) => {
+      if (killer?.side !== 'ally' || victim?.side !== 'enemy') return;
+      for (const it of list) {
+        if (!S.onField(it.unit) || it.unit.hidden) continue;
+        it.cnt++;
+        if (it.cnt % Math.max(1, S.num(it.bb.check_cnt, 1)) === 0) fireGain(battle, it);
+      }
+    });
+  },
+
   act1autochess_gar_event_useskill(battle, list) {
     const m = byUnit(list);
     battle.on('skillStart', ({ unit }) => {

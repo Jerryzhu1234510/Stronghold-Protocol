@@ -2,8 +2,7 @@
 // attack at the clip's own speed (faster only when the attacks come quicker than the clip) and then its resting clip —
 // Move while the sim walks it again (server/sim/ai.js attackStand stands it for exactly that clip). It used to stretch
 // the clip over the whole attack interval and loop it for 1.4 intervals, so a ranged enemy seemed to slide while it
-// attacked. An operator's one-shot clip is never stretched more than ATTACK_STRETCH either (render/spine.js, as the
-// original). Headless fake PIXI (test/render/fakepixi.js).
+// attacked. Operators retain rhythm scaling but stop after each attack (#506). Headless fake PIXI.
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,10 +17,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const assets = JSON.parse(readFileSync(path.join(ROOT, 'data/assets.json'), 'utf8'));
 const JSHOOT = 'enemy_1019_jshoot';   // 隐形弩手: Attack 1.0 s, strike at 0.533 s; attacks every 2.7 s
 
-let fake, SpineActor, UnitView, ATTACK_STRETCH;
+let fake, SpineActor, UnitView;
 before(async () => {
   fake = installFakePixi();
-  ({ SpineActor, ATTACK_STRETCH } = await import('../../public/js/render/spine.js'));
+  ({ SpineActor } = await import('../../public/js/render/spine.js'));
   ({ UnitView } = await import('../../public/js/render/units.js'));
 });
 after(() => fake.restore());
@@ -72,16 +71,65 @@ test('an enemy attacking quicker than its clip plays it faster, one clip per att
   assert.equal(a.current, 'Move', 'the rest of the clip at 2×: 0.23 s');
 });
 
-test('an operator plays a one-shot clip once per attack too, stretched at most ATTACK_STRETCH over a longer interval', () => {
+test('an operator keeps rhythm scaling but stops after this attack recovery instead of swinging twice', () => {
   const a = actor(JSHOOT, false);
   a.attack(2.7);
-  assert.equal(track(a).loop, false, 'one clip per attack');
-  assert.ok(Math.abs(track(a).timeScale - ATTACK_STRETCH) < 1e-9, 'at most ×1.25 slower, not stretched over the 2.7 s interval');
+  assert.equal(track(a).loop, false);
+  assert.ok(Math.abs(track(a).timeScale - 1 / 2.7) < 1e-9);
   run(a, 2);
-  assert.equal(a.current, 'Move', 'then the resting state (it used to loop the attack for 1.4 intervals)');
+  assert.equal(a.current, 'Move', 'no second swing without a second actual attack');
+  assert.ok(a.windUp(2.7, 0.2)); run(a, 0.2); const prepared = track(a);
+  a.attack(2.7); assert.equal(track(a), prepared, 'consume the prepared attack without replaying it');
+  assert.equal(track(a).loop, false); run(a, 2); assert.equal(a.current, 'Move');
 });
 
-test('UnitView: enemy models play a clip per attack, operator models do not', async () => {
+test('operator attacks with no look-ahead restart once each, including attacks faster than recovery', () => {
+  const a = actor(JSHOOT, false);
+  a.attack(0.08); const first = track(a); run(a, 0.08);
+  a.attack(0.08); assert.notEqual(track(a), first, 'the next real attack starts a new clip');
+  assert.equal(track(a).loop, false); run(a, 0.4); assert.equal(a.current, 'Move');
+  a.windUp(0.08, 0.02); run(a, 0.02); a.attack(0.08); run(a, 0.02);
+  assert.ok(a.windUp(0.08, 0.02), 'the next queued attack can interrupt the preceding recovery');
+});
+
+test('Provence: one real attack has one visual clip across slow/fast rhythms; late events keep the strike frame', () => {
+  const entry = assets.chars.char_145_prove.spine.front;
+  for (const interval of [0.08, 1.6, 8]) {
+    const a = new SpineActor(dataOf(entry), entry);
+    const clip = entry.anims.attack.loop, hit = entry.hits[clip][0];
+    a.attack(interval);
+    assert.equal(track(a).loop, false); assert.equal(track(a).trackTime, hit);
+    run(a, interval + 4); assert.notEqual(a.current, clip, 'no extra swing without an attack');
+    assert.ok(a.windUp(interval, 0.1)); run(a, 0.1); const prepared = track(a);
+    a.attack(interval); assert.equal(track(a), prepared); assert.equal(track(a).loop, false);
+    run(a, interval + 4); assert.notEqual(a.current, clip);
+    a.destroy();
+  }
+});
+
+test('real Spine timeline: batched wind-up updates retain operator hit-phase correction', async () => {
+  const { AnimationState, AnimationStateData, SkeletonData, Skeleton, Animation } = await import('@pixi-spine/runtime-3.8');
+  const FakeSpine = fake.P.spine.Spine;
+  fake.P.spine.Spine = class extends FakeSpine {
+    constructor(data) { super(data); this.skeleton = new Skeleton(data); this.stateData = new AnimationStateData(data); this.state = new AnimationState(this.stateData); }
+    update(dt) { this.state.update(dt); this.state.apply(this.skeleton); }
+  };
+  try {
+    const entry = assets.chars.char_145_prove.spine.front;
+    for (const dt of [1 / 60, 1 / 15, 0.1, 0.2]) {
+      const data = new SkeletonData(); data.animations = Object.entries(entry.animations).map(([name, duration]) => new Animation(name, [], duration));
+      const a = new SpineActor(data, entry);
+      assert.ok(a.windUp(1.6, 0.2)); run(a, 0.2, dt); const prepared = track(a);
+      a.attack(1.6);
+      const hit = entry.hits[entry.anims.attack.loop][0];
+      assert.ok(Math.abs(hit - track(a).trackTime) / track(a).timeScale <= 0.065, `dt ${dt}: the prepared strike must stay near the real attack`);
+      assert.equal(track(a), prepared); assert.equal(track(a).loop, false);
+      run(a, 3); assert.notEqual(a.current, entry.anims.attack.loop); a.destroy();
+    }
+  } finally { fake.P.spine.Spine = FakeSpine; }
+});
+
+test('UnitView: enemy models retain clipPerAttack speed rules; operators retain rhythm scaling', async () => {
   const entry = entryOf(JSHOOT);
   const store = { picture: () => null, image: async () => null, spineEntry: () => entry, spine: { acquire: async () => dataOf(entry), release() {} } };
   const cam = () => presetCamera('normal', { width: 1280, height: 720 });

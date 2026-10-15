@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c1415">
+  <meta name="description" content="卫戍协议联机大厅。选择 8443服或 icu服，查看站点状态，开始你的联机对局。">
+  <title>联机大厅 · 卫戍协议</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23152324'/%3E%3Cpath d='M12 9h16v14l-8 8-8-8z' fill='none' stroke='%23a9efd2' stroke-width='2'/%3E%3Cpath d='m15 19 4 4 7-9' fill='none' stroke='%23a9efd2' stroke-width='2'/%3E%3C/svg%3E">
+  <style>:root{color-scheme:dark;--bg:#0c1415;--panel:#142122;--panel-soft:#122021;--line:#2b3d3d;--line-soft:#233333;--text:#e8f0ed;--muted:#9eafaa;--mint:#abefd1;--mint-soft:#76c4a7;--gold:#d0bf87;--radius:15px;font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-synthesis:none;scroll-behavior:smooth;scroll-padding-top:28px}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse 80% 30% at 50% -8%,#1b363035,transparent 75%),var(--bg);color:var(--text);font-size:14px;line-height:1.65}button,a{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button{color:inherit;cursor:pointer}a{color:inherit;text-decoration:none}button:focus-visible,a:focus-visible{outline:2px solid var(--mint);outline-offset:5px}button:disabled{cursor:wait}h1,h2,h3,p{margin:0}h1,h2,h3{line-height:1.25}button{border:0}.icon-library{position:absolute;width:0;height:0;overflow:hidden}.icon{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;vertical-align:middle}.icon.small{width:16px;height:16px}.shell{width:min(1180px,calc(100% - 64px));margin:auto}.topbar{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:76px;padding:12px 20px;margin-top:22px;border:1px solid var(--line);border-radius:var(--radius);background:#142121b8}.brand{display:flex;align-items:center;gap:13px;white-space:nowrap}.brand-mark{display:grid;place-items:center;width:44px;height:44px;border-radius:11px;border:1px solid #466058;background:linear-gradient(145deg,#253b33,#14231e);box-shadow:inset 0 0 16px #abeed108;color:var(--mint)}.brand-mark .icon{width:26px;height:26px}.brand strong{font-size:17px;letter-spacing:.02em}.brand-dot{color:#79b59b}.brand small{display:block;font-size:9px;letter-spacing:.22em;color:#b4cac0;margin-top:3px}.main-nav{display:flex;align-items:center;gap:5px;padding:4px;background:#0d1617;border:1px solid var(--line-soft);border-radius:12px}.nav-link{display:flex;align-items:center;justify-content:center;gap:7px;font-size:13px;color:#acbbb5;padding:9px 16px;border-radius:8px;border:1px solid transparent;transition:.2s}.nav-link .icon{width:17px;height:17px}.nav-link:hover{background:#1b2b2a;color:var(--text)}.nav-link.is-active{background:#223330;color:var(--mint);border-color:#405b50}.topbar-label{display:flex;gap:9px;align-items:center;color:#adbbb4;font-size:12px;white-space:nowrap}.status-dot{display:inline-block;background:var(--mint);width:6px;height:6px;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px #a9efd125}.status-dot.pending{background:#a4aca9;box-shadow:none}.status-dot.unknown{background:var(--gold);box-shadow:none}.hero{display:flex;justify-content:space-between;align-items:center;gap:36px;padding:47px 0 39px;position:relative}.eyebrow{display:flex;align-items:center;gap:10px;font-size:10px;color:var(--mint);letter-spacing:.12em;font-weight:600}.eyebrow .line{height:1px;width:28px;background:var(--mint-soft)}.eyebrow .slash{color:#547d6b;margin:0 1px}h1{font-size:42px;letter-spacing:-.055em;margin-top:15px;font-weight:760}h1 span{font-weight:500;color:#c2cec8}.hero-description{color:var(--muted);margin-top:14px;font-size:14px}.hero-readout{display:flex;align-items:center;justify-content:space-between;gap:26px;border:1px solid #2b4439;border-radius:13px;padding:21px 29px;min-width:300px;position:relative;overflow:hidden;background:linear-gradient(120deg,#1a2d27aa,#15232070)}.hero-readout>div{position:relative;z-index:1;min-width:70px}.hero-readout strong{display:block;line-height:1.05;font-size:31px;color:var(--mint);font-weight:500}.hero-readout span:not(.readout-divider){display:block;font-size:11px;color:#a6b8ae;margin-top:10px;white-space:nowrap}.readout-divider{height:43px;width:1px;background:#365345}.readout-emblem{position:absolute;right:-32px;top:-26px;width:165px;height:165px;stroke:#97d0b3;stroke-width:1;fill:none;opacity:.065;transform:rotate(15deg)}.number{font-family:Bahnschrift,"DIN Alternate","Segoe UI",sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"tnum";letter-spacing:-.035em}.section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:17px}.section-heading h2{font-size:26px;font-weight:720;letter-spacing:-.025em}.section-heading.compact{align-items:center;margin-bottom:13px}.section-heading.compact h2{display:flex;align-items:center;gap:9px;font-size:19px;letter-spacing:0}.section-heading.compact .icon{color:var(--mint);width:21px;height:21px}.section-note{font-size:10px;color:#81978d;letter-spacing:.08em}.notice-grid{display:grid;grid-template-columns:1.65fr 1fr;gap:16px}.notice-card,.reminder-card{border:1px solid var(--line);background:var(--panel);border-radius:var(--radius);padding:23px 25px}.notice-card{position:relative;overflow:hidden}.notice-card:after{content:"";position:absolute;top:0;right:0;bottom:0;width:80px;background:repeating-linear-gradient(135deg,transparent 0 10px,#b4eed603 10px 11px);pointer-events:none}.notice-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}.tag{display:inline-flex;vertical-align:middle;align-items:center;justify-content:center;border:1px solid;border-radius:5px;padding:2px 7px;font-size:10px;line-height:1.6;letter-spacing:.025em;font-weight:500}.tag.mint{color:var(--mint);background:#a9efd107;border-color:#446c58}.tag.neutral{color:#adbbb4;background:#ffffff02;border-color:#40514b}.notice-top time{font-family:Consolas,monospace;font-size:10px;color:#879d93}.notice-card h3{font-size:21px;letter-spacing:-.02em}.notice-card>p{max-width:540px;margin-top:13px;color:#afbeb6;font-size:12px;line-height:1.95}.notice-card p strong{font-weight:500;color:#d5e7da}.notice-bottom{display:flex;align-items:center;gap:8px;margin-top:18px;color:#7f9e8b;font-size:11px}.tiny-square{height:5px;width:5px;background:#75a98e}.reminder-card{background:linear-gradient(125deg,#182722,#152221);padding:24px}.reminder-card h3{font-size:13px;color:var(--gold);margin-bottom:17px}.reminder-card p{display:flex;align-items:flex-start;gap:11px;font-size:12px;color:#b5c1b7;line-height:1.95}.reminder-card p+p{margin-top:13px}.reminder-card .icon{color:#a69c6a;flex-shrink:0;width:17px;height:17px;margin-top:4px}.servers-section{padding-top:37px}.section-eyebrow{font-size:9px;letter-spacing:.1em;margin-bottom:9px;gap:8px}.section-eyebrow>span{color:#547e67}.server-tools{display:flex;align-items:center;gap:13px;padding-bottom:2px}.status-summary{display:flex;align-items:center;gap:8px;font-size:11px;color:#9eb5a8}.icon-button{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:7px;background:#172724;color:#a0b8a8;transition:.2s}.icon-button:hover{border-color:#81bd9a;color:var(--mint);background:#22372d}.icon-button .icon{width:16px;height:16px}.icon-button.is-loading .icon{animation:rotate 1s linear infinite}.server-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.server-card{border:1px solid #3a5149;border-radius:var(--radius);padding:23px 25px 25px;background:linear-gradient(135deg,#1b2b28,#162321 75%);position:relative;transition:border-color .2s,transform .2s;overflow:hidden}.server-card:hover{border-color:#779b88;transform:translateY(-2px)}.server-card.recommended{border-color:#5b8870;box-shadow:inset 0 1px #bdf9da13}.server-card.recommended:before{content:"";position:absolute;top:0;left:25px;width:42px;height:2px;background:var(--mint)}.card-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}.node-code{font-family:Consolas,monospace;display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.14em;color:#97afa1}.node-code b{font-weight:400;color:#d7e5db}.node-rule{height:1px;width:31px;background:#3e5b4c;margin-left:5px}.node-state{display:flex;align-items:center;gap:8px;font-size:11px;color:#bacdc0}.server-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.server-name{display:flex;gap:12px;min-width:0}.server-symbol{width:38px;height:42px;display:grid;place-items:center;color:#a9cdb8;border:1px solid #476051;border-radius:8px;background:#263c2f50;flex-shrink:0}.server-symbol .icon{width:20px;height:20px}.server-name h3{display:flex;align-items:center;gap:9px;font-size:23px;letter-spacing:-.04em;line-height:1.2}.server-name p{font:10px/1.7 Consolas,monospace;color:#88a290;margin-top:6px;overflow-wrap:anywhere}.latency{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;border:1px solid #49624f;border-radius:20px;padding:4px 8px;font-size:10px;color:#b0c9b5;margin-top:2px}.latency .icon{width:12px;height:12px}.latency.slow{color:#d4b48f;border-color:#78634e}.latency.unknown{color:#99a99f;border-color:#45554c}.server-metrics{display:grid;grid-template-columns:1.65fr 1fr 1fr 1fr;gap:12px;align-items:end;margin-top:26px;padding-bottom:21px;border-bottom:1px solid #31483a}.metric strong{display:block;font-size:23px;font-weight:500;color:#e4ece5;line-height:1.15}.metric.primary strong{font-size:45px;color:#eff7ee;line-height:1}.metric span{font-size:10px;color:#9fb3a5;display:block;margin-top:8px;white-space:nowrap}.card-status-line{min-height:43px;display:flex;align-items:center;justify-content:space-between;gap:10px;color:#89a995;font-size:10px;padding-top:2px}.node-info{min-width:0;line-height:1.6}.last-server{display:inline-flex;align-items:center;gap:4px;color:#bed9c6;white-space:nowrap;font-size:9px}.last-server .icon{width:11px;height:11px}[hidden]{display:none!important}.enter-button{display:flex;align-items:center;justify-content:space-between;gap:15px;width:100%;min-height:45px;border-radius:8px;padding:11px 15px;font-size:13px;font-weight:650;transition:.2s}.enter-button .icon{width:18px;height:18px}.primary-button{color:#102b20;background:var(--mint);border:1px solid #b0f6d7;box-shadow:0 2px 14px #a7efca0b}.primary-button:hover{background:#c4f9e1;box-shadow:0 3px 18px #a7efca18}.secondary-button{color:#b9e6cb;background:#213a2c;border:1px solid #4b6d56}.secondary-button:hover{background:#2b4c36;border-color:#85bc94}.selection-bottom{display:flex;justify-content:space-between;align-items:center;gap:18px;padding-top:15px}.selection-bottom p{display:flex;align-items:center;gap:7px;color:#7f9989;font-size:10px}.selection-bottom p .icon{width:13px;height:13px}.random-button{display:flex;align-items:center;gap:8px;background:transparent;color:#bbd9c4;padding:7px 2px;font-size:11px;white-space:nowrap}.random-button>.icon:first-child{width:16px;height:16px}.random-button:hover{color:var(--mint)}.guide-section{padding-top:36px}.guide-section .section-heading h2{font-size:22px}.guide-grid{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:var(--radius);background:#14221d90;padding:24px 5px}.guide-grid article{display:flex;gap:14px;padding:0 22px}.guide-grid article+article{border-left:1px solid #2b4234}.step-index{font:17px/1.3 Bahnschrift,Consolas,monospace;color:#709b7c;padding-top:2px}.guide-grid h3{font-size:13px;font-weight:600;color:#ccdcd0}.guide-grid p{font-size:11px;color:#90a694;margin-top:8px;line-height:1.85}.community{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:25px;padding:23px 26px;border:1px solid #35543f;border-radius:var(--radius);margin-top:22px;background:linear-gradient(110deg,#1b3022,#15251c);position:relative;overflow:hidden}.community-heading{display:flex;align-items:center;gap:15px}.community-icon{width:39px;height:39px;display:grid;place-items:center;background:#9dddaf0b;color:#a0d0a9;border:1px solid #4a6c50;border-radius:10px}.community-icon .icon{width:20px;height:20px}.community h2{font-size:17px;color:#d5e9d7}.community p{font-size:11px;color:#92af96;margin-top:5px}.qq-button{display:flex;align-items:center;gap:22px;min-height:43px;border:1px solid #547c59;border-radius:8px;padding:9px 14px;background:#24422b;color:#c2e1c5;font-size:10px;white-space:nowrap;transition:.2s}.qq-button strong{font:17px/1 Bahnschrift,"Segoe UI",sans-serif;margin-left:10px;color:#d1eed4;letter-spacing:.025em}.qq-button .icon{width:15px;height:15px;color:#a7cdae}.qq-button:hover{background:#30563a;border-color:#8bb897}footer{display:flex;align-items:center;justify-content:space-between;gap:25px;padding:27px 0 30px;margin-top:16px;border-top:1px solid #24382b;font-size:10px;color:#708d76}.footer-brand{font-size:11px;letter-spacing:.03em;color:#94b49c}.footer-brand>span{margin:0 7px;color:#4a7151}footer p{margin-top:4px;font-size:9px}footer>a{display:flex;gap:6px;align-items:center;color:#9bbb9f}footer>a:hover{color:var(--mint)}.footer-code{font:9px/1.4 Consolas,monospace;letter-spacing:.08em;color:#5e7d64}.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);padding:11px 20px;max-width:calc(100% - 32px);background:#254333;border:1px solid #81b596;box-shadow:0 8px 30px #0006;border-radius:9px;color:#d9f8e3;z-index:50;text-align:center;font-size:13px}.skip-link{position:fixed;left:16px;top:-80px;background:var(--mint);color:#102419;padding:12px 20px;border-radius:8px;z-index:100}.skip-link:focus{top:16px}.no-script{font-size:12px;color:var(--gold);padding-top:14px}dialog{color:var(--text);background:#182b20;border:1px solid #62926e;border-radius:16px;padding:35px;max-width:420px;width:calc(100% - 36px);box-shadow:0 25px 100px #0008}dialog::backdrop{background:#030a06ba;backdrop-filter:blur(6px)}dialog h2{font-size:25px;margin:20px 0 11px}dialog p{color:#a2b6a6;font-size:13px;margin-bottom:25px}dialog .dialog-close{position:absolute;right:14px;top:14px;font-size:22px;background:transparent}.dialog-again{width:100%;margin-top:14px;padding:8px;background:transparent;color:#a8c4af;font-size:12px}.dialog-again:hover{color:var(--mint)}@keyframes rotate{to{transform:rotate(360deg)}}
+@media(min-width:1600px){.shell{width:1180px}.hero{padding-top:52px}}
+@media(max-width:1000px){.topbar-label{display:none}.topbar{gap:15px}.nav-link{padding:9px 12px}.hero-readout{min-width:260px;padding:21px;gap:20px}h1{font-size:36px}.server-card{padding:21px}.server-name{gap:10px}.server-name h3{font-size:21px}.server-symbol{width:32px;height:38px}.latency{font-size:9px;padding:4px 6px}.server-name p{font-size:9px}.guide-grid article{padding:0 17px;gap:10px}}
+@media(max-width:760px){.shell{width:calc(100% - 36px)}.topbar{padding:13px 14px;margin-top:16px;flex-wrap:wrap;gap:14px}.brand-mark{width:39px;height:39px}.brand strong{font-size:16px}.brand small{font-size:8px}.main-nav{margin-left:auto}.nav-link{padding:8px 10px}.nav-link .icon{display:none}.hero{padding:31px 0 27px;gap:20px}.hero-copy{min-width:0}h1{font-size:30px;letter-spacing:-.06em}h1 span{display:block;margin-top:6px}.eyebrow{font-size:8px;gap:6px}.eyebrow .line{width:15px}.hero-description{font-size:12px;max-width:240px;margin-top:12px}.hero-readout{min-width:0;gap:16px;padding:18px 16px}.hero-readout>div{min-width:42px}.hero-readout strong{font-size:26px}.hero-readout span:not(.readout-divider){font-size:9px}.readout-divider{height:36px}.notice-grid{grid-template-columns:1fr}.notice-card{padding:20px}.reminder-card{padding:17px 20px}.reminder-card h3{margin-bottom:11px}.reminder-card p{font-size:11px}.reminder-card p+p{margin-top:8px}.notice-card>p{font-size:12px;max-width:100%}.notice-card h3{font-size:20px}.notice-bottom{margin-top:14px}.section-note{font-size:9px}.servers-section{padding-top:29px}.section-heading h2{font-size:24px}.server-grid{gap:14px}.server-title-row{flex-wrap:wrap;position:relative}.server-name{width:100%;padding-bottom:18px}.server-name p{font-size:9px}.latency{position:absolute;left:0;bottom:-8px;margin-left:42px}.server-metrics{grid-template-columns:1.35fr 1fr;row-gap:17px;margin-top:28px;padding-bottom:17px}.metric.primary strong{font-size:37px}.metric strong{font-size:22px}.metric span{font-size:10px}.server-card{padding:21px 18px}.server-name h3{font-size:21px;gap:7px}.tag{font-size:9px;padding:2px 5px}.card-top{margin-bottom:18px}.node-code{font-size:9px}.node-rule{display:none}.node-state{font-size:10px}.server-tools{gap:9px}.status-summary{font-size:10px;max-width:155px}.card-status-line{align-items:flex-start;flex-direction:column;justify-content:center;gap:3px;min-height:54px}.last-server{font-size:8px}.enter-button{font-size:12px;padding:10px 12px}.selection-bottom{align-items:flex-start}.selection-bottom p{font-size:9px;line-height:1.8;max-width:70%;align-items:flex-start}.selection-bottom p .icon{margin-top:3px}.random-button{padding-top:1px;font-size:10px}.guide-section{padding-top:29px}.guide-section .section-heading h2{font-size:21px}.guide-grid{padding:19px 0;grid-template-columns:1fr;gap:20px}.guide-grid article{padding:0 20px;gap:15px}.guide-grid article+article{border-left:none}.guide-grid p{margin-top:5px;font-size:11px}.step-index{font-size:19px}.community{padding:20px;gap:18px;align-items:flex-start;flex-direction:column}.community h2{font-size:16px}.community p{font-size:11px}.qq-button{width:100%;justify-content:space-between;min-height:45px}.qq-button strong{font-size:18px}footer{padding:23px 0;gap:20px;flex-wrap:wrap}.footer-code{width:100%;font-size:8px}}
+@media(max-width:480px){.topbar{gap:13px}.brand{gap:10px}.main-nav{width:100%;justify-content:space-between;border-top:1px solid #2b4030}.nav-link{flex:1;font-size:12px}.nav-link .icon{display:block;width:14px;height:14px}.hero{gap:13px}.hero-readout{padding:15px 13px;gap:12px}.hero-readout>div{min-width:38px}.hero-readout strong{font-size:23px}.hero-readout span:not(.readout-divider){font-size:8px}.hero-description{max-width:185px}.hero .eyebrow{letter-spacing:.025em}.hero .eyebrow .line{display:none}h1{font-size:27px}.notice-top time{font-size:9px}.section-heading.compact h2{font-size:18px}.section-note{letter-spacing:0}.server-grid{grid-template-columns:1fr}.server-card{padding:23px}.server-title-row{flex-wrap:nowrap}.server-name{width:auto;padding-bottom:0;gap:12px}.server-symbol{width:37px;height:41px}.server-name h3{font-size:25px}.server-name p{font-size:10px}.latency{position:static;margin-left:0;margin-top:2px;font-size:9px}.card-top{margin-bottom:22px}.node-code{font-size:10px}.node-rule{display:block}.node-state{font-size:11px}.server-metrics{grid-template-columns:1.55fr 1fr 1fr 1fr;column-gap:8px;row-gap:0;margin-top:26px;padding-bottom:20px}.metric.primary strong{font-size:43px}.metric strong{font-size:22px}.metric span{font-size:9px}.card-status-line{flex-direction:row;align-items:center;min-height:43px}.enter-button{font-size:13px;min-height:46px}.selection-bottom p{max-width:68%}.section-eyebrow{font-size:8px}.section-heading h2{font-size:24px}.server-tools{padding-bottom:1px}.status-summary{max-width:145px;font-size:9px}.icon-button{height:29px;width:29px}.guide-section .section-note{display:none}.community{margin-top:18px}.community-heading{gap:12px}.community-icon{width:35px;height:35px;flex-shrink:0}.community p{font-size:10px}}
+@media(prefers-reduced-motion:reduce){:root{scroll-behavior:auto}*,*:before,*:after{animation:none!important;transition:none!important}}
+
+.pack-card{padding:26px;overflow:visible}.pack-card>p{max-width:none}.pack-actions{display:flex;gap:15px;align-items:center;flex-wrap:wrap;margin-top:22px}.pack-picker{display:grid;gap:9px;color:var(--mint);font-weight:600}.pack-picker input{font-size:12px;color:var(--muted);max-width:100%}.pack-picker input::file-selector-button{padding:10px 16px;background:var(--mint);color:#102419;border:0;border-radius:7px;margin-right:12px;cursor:pointer}.pack-stop{width:auto;height:auto;padding:10px 13px;font-size:12px;border:1px solid var(--line);border-radius:7px}.pack-stop:disabled{opacity:.4;cursor:default}#pack-progress{width:100%;height:9px;margin-top:20px;accent-color:var(--mint)}#pack-status{overflow-wrap:anywhere;min-height:2em}@media(max-width:480px){.pack-card{padding:20px}.pack-picker{width:100%}.pack-picker input{width:100%}}
+.sp-local-banner{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:900;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;width:max-content;max-width:94vw;padding:10px 16px;background:#14291ff5;border:1px solid #f0be64;border-radius:8px;color:#eaf9ef;font:13px/1.6 system-ui,sans-serif;box-shadow:0 5px 24px #0008}.sp-local-banner[hidden]{display:none}.sp-local-banner strong{color:#ffd38a}.sp-local-banner a,.sp-local-announcement a{color:#94f0cc;text-decoration:underline}.sp-local-banner button{font:inherit;background:#94f0cc;color:#10251d;border:0;border-radius:4px;padding:4px 9px;cursor:pointer}.sp-local-announcement{border:2px solid #ffd38a;background:#382f1d;padding:16px;margin:0 0 18px;color:#fff1d5;font-size:15px;line-height:1.8}.sp-local-announcement>strong{display:block;font-size:20px;color:#ffd38a}.sp-local-announcement p{margin:9px 0}.sp-local-dialog{box-sizing:border-box;width:min(580px,94vw);max-height:90dvh;overflow:auto;background:#14251f;color:#e5f4ed;border:2px solid #ffd38a;border-radius:12px;padding:28px;font:15px/1.8 system-ui,sans-serif;box-shadow:0 20px 90px #000a}.sp-local-dialog::backdrop{background:#000b}.sp-local-dialog h2{color:#ffd38a;font-size:23px;line-height:1.45;margin:10px 0 16px}.sp-local-dialog a{color:#a1f3d2}.sp-local-dialog form{margin:0}.sp-local-close{float:right;background:none;border:0;color:#e5f4ed;font-size:26px;cursor:pointer;padding:0 7px}.sp-local-eyebrow{color:#94cfb6;font-size:12px;margin:0;letter-spacing:1px}.sp-local-dialog progress{width:100%;height:9px;accent-color:#94f0cc}.sp-local-status{min-height:3.6em;color:#ffd38a;overflow-wrap:anywhere}.sp-local-actions{display:flex;gap:12px;flex-wrap:wrap}.sp-local-primary,.sp-local-retry{box-sizing:border-box;font:600 14px/1.5 system-ui,sans-serif;padding:10px 14px;border:1px solid #94f0cc;border-radius:6px;cursor:pointer;text-decoration:none}.sp-local-dialog .sp-local-primary{color:#10251d;background:#94f0cc}.sp-local-retry{color:#e5f4ed;background:#203a2f}.sp-local-retry:disabled{opacity:.45;cursor:wait}.sp-local-resume{font-size:13px}.sp-local-required{border:2px solid #ffd38a!important;background:#2b291b!important}.sp-local-required h3{color:#ffd38a}.sp-local-required strong{color:#ffd38a}@media(max-width:600px){.sp-local-banner{font-size:11px;gap:6px;padding:8px 10px;bottom:5px}.sp-local-banner span{display:none}.sp-local-dialog{padding:20px}.sp-local-dialog h2{font-size:20px}.sp-local-announcement>strong{font-size:17px}}
+.sp-local-banner{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:900;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;width:max-content;max-width:94vw;padding:10px 16px;background:#14291ff5;border:1px solid #f0be64;border-radius:8px;color:#eaf9ef;font:13px/1.6 system-ui,sans-serif;box-shadow:0 5px 24px #0008}.sp-local-banner[hidden]{display:none}.sp-local-banner strong{color:#ffd38a}.sp-local-banner a,.sp-local-announcement a{color:#94f0cc;text-decoration:underline}.sp-local-banner button{font:inherit;background:#94f0cc;color:#10251d;border:0;border-radius:4px;padding:4px 9px;cursor:pointer}.sp-local-announcement{border:2px solid #ffd38a;background:#382f1d;padding:16px;margin:0 0 18px;color:#fff1d5;font-size:15px;line-height:1.8}.sp-local-announcement>strong{display:block;font-size:20px;color:#ffd38a}.sp-local-announcement p{margin:9px 0}.sp-local-dialog{box-sizing:border-box;width:min(580px,94vw);max-height:90dvh;overflow:auto;background:#14251f;color:#e5f4ed;border:2px solid #ffd38a;border-radius:12px;padding:28px;font:15px/1.8 system-ui,sans-serif;box-shadow:0 20px 90px #000a}.sp-local-dialog::backdrop{background:#000b}.sp-local-dialog h2{color:#ffd38a;font-size:23px;line-height:1.45;margin:10px 0 16px}.sp-local-dialog a{color:#a1f3d2}.sp-local-dialog form{margin:0}.sp-local-close{float:right;background:none;border:0;color:#e5f4ed;font-size:26px;cursor:pointer;padding:0 7px}.sp-local-eyebrow{color:#94cfb6;font-size:12px;margin:0;letter-spacing:1px}.sp-local-dialog progress{width:100%;height:9px;accent-color:#94f0cc}.sp-local-status{min-height:3.6em;color:#ffd38a;overflow-wrap:anywhere}.sp-local-actions{display:flex;gap:12px;flex-wrap:wrap}.sp-local-primary,.sp-local-retry{box-sizing:border-box;font:600 14px/1.5 system-ui,sans-serif;padding:10px 14px;border:1px solid #94f0cc;border-radius:6px;cursor:pointer;text-decoration:none}.sp-local-dialog .sp-local-primary{color:#10251d;background:#94f0cc}.sp-local-retry{color:#e5f4ed;background:#203a2f}.sp-local-retry:disabled{opacity:.45;cursor:wait}.sp-local-resume{font-size:13px}.sp-local-required{border:2px solid #ffd38a!important;background:#2b291b!important}.sp-local-required h3{color:#ffd38a}.sp-local-required strong{color:#ffd38a}@media(max-width:600px){.sp-local-banner{font-size:11px;gap:6px;padding:8px 10px;bottom:5px}.sp-local-banner span{display:none}.sp-local-dialog{padding:20px}.sp-local-dialog h2{font-size:20px}.sp-local-announcement>strong{font-size:17px}}
+.sp-local-dialog{max-height:90vh;max-height:90dvh}.sp-local-close{min-width:44px;min-height:44px}.sp-local-dialog button,.sp-local-actions a{min-height:44px}.sp-local-banner{bottom:max(8px,env(safe-area-inset-bottom));max-width:calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 16px)}@media(pointer:coarse){.sp-local-banner button,.sp-local-banner a{min-height:44px;display:inline-flex;align-items:center}.sp-local-dialog{font-size:16px;padding:18px}.sp-local-banner{font-size:12px;padding:4px 10px;gap:6px}.sp-local-banner span{display:none}}@media(pointer:coarse) and (max-height:500px){.sp-local-banner{bottom:env(safe-area-inset-bottom);padding:2px 8px}.sp-local-dialog{max-height:94vh;max-height:94dvh}.sp-local-dialog h2{font-size:19px;margin:0 0 8px}}
+
+body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom)}input,select{font-size:16px}#pack-file{max-width:100%;min-height:44px}.mobile-resource-help{margin:16px 0;border:1px solid #94f0cc;padding:14px;border-radius:8px;line-height:1.8}.sp-local-changelog{border-top:1px solid #7b744f;border-bottom:1px solid #7b744f;padding:10px 0;margin:10px 0}.sp-local-changelog>strong{font-size:16px}.sp-local-changelog p{font-size:13px;line-height:1.9}</style>
+  <script>
+// Early compatibility for older mobile browser engines.
+(()=>{
+// Small polyfills for the older browsers the client supports (Safari / iOS 15.0–15.3, Firefox ESR, older Chromium on
+// Android tablets). Imported first by main.js (and the dev harnesses), so every later module — including the ones
+// loaded on demand (render engine, battle sim) — sees them. Each one is installed only when the browser lacks it
+// (feature detection, never UA sniffing) and is a faithful subset of the standard behaviour:
+//   Object.hasOwn                       Safari < 15.4, Firefox < 92
+//   Array/String/TypedArray .at()       Safari < 15.4, Firefox < 90
+//   Array .findLast / .findLastIndex    Safari < 15.4, Firefox < 104
+//   structuredClone                     Safari < 15.4, Firefox < 94 (JSON-safe values + Map/Set/Date; enough for
+//                                       the plain state objects the client clones)
+//   globalThis.queueMicrotask           very old WebViews
+// `installCompat(target)` is exported for tests (it patches the given global object instead).
+
+/**
+ * Install the polyfills on `g` (default globalThis). Returns the names that were missing and got installed.
+ * @param {any} [g]
+ * @returns {string[]}
+ */
+function installCompat(g = globalThis) {
+  const added = [];
+  const def = (obj, name, fn) => {
+    if (!obj || typeof obj[name] === 'function') return;
+    try {
+      Object.defineProperty(obj, name, { value: fn, writable: true, configurable: true, enumerable: false });
+      added.push(name);
+    } catch { /* frozen: leave it */ }
+  };
+  const O = g.Object || Object;
+  def(O, 'hasOwn', function hasOwn(obj, key) {
+    if (obj == null) throw new TypeError('Cannot convert undefined or null to object');
+    return Object.prototype.hasOwnProperty.call(Object(obj), key);
+  });
+  function at(i) {
+    const len = this.length >>> 0;
+    let k = Math.trunc(Number(i)) || 0;
+    if (k < 0) k += len;
+    if (k < 0 || k >= len) return undefined;
+    return typeof this === 'string' || this instanceof String ? String(this).charAt(k) : this[k];
+  }
+  def((g.Array || Array).prototype, 'at', at);
+  def((g.String || String).prototype, 'at', at);
+  const TA = g.Int8Array ? Object.getPrototypeOf(g.Int8Array.prototype) : null;
+  if (TA) def(TA, 'at', at);
+  def((g.Array || Array).prototype, 'findLast', function findLast(fn, thisArg) {
+    for (let i = (this.length >>> 0) - 1; i >= 0; i--) if (fn.call(thisArg, this[i], i, this)) return this[i];
+    return undefined;
+  });
+  def((g.Array || Array).prototype, 'findLastIndex', function findLastIndex(fn, thisArg) {
+    for (let i = (this.length >>> 0) - 1; i >= 0; i--) if (fn.call(thisArg, this[i], i, this)) return i;
+    return -1;
+  });
+  def(g, 'structuredClone', function structuredClone(value) { return cloneValue(value, new Map()); });
+  def(g, 'queueMicrotask', function queueMicrotask(fn) { Promise.resolve().then(fn).catch((err) => setTimeout(() => { throw err; })); });
+  const P = g.Promise || Promise;
+  def(P, 'allSettled', function allSettled(values) {
+    return P.all(Array.from(values, value => P.resolve(value).then(
+      result => ({ status: 'fulfilled', value: result }),
+      reason => ({ status: 'rejected', reason }),
+    )));
+  });
+  if (g.AbortController) def(g.AbortSignal, 'timeout', function timeout(ms) {
+    if (!Number.isSafeInteger(ms) || ms < 0) throw new RangeError('Invalid timeout');
+    const controller = new g.AbortController();
+    (g.setTimeout || setTimeout)(() => controller.abort(), ms);
+    return controller.signal;
+  });
+  if (g.crypto?.getRandomValues) def(g.crypto, 'randomUUID', function randomUUID() {
+    const bytes = g.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  });
+  for (const ctor of [g.Element, g.Document, g.DocumentFragment]) {
+    if (!ctor) continue;
+    def(ctor.prototype, 'replaceChildren', function replaceChildren(...children) {
+      const fragment = (this.ownerDocument || this).createDocumentFragment();
+      for (const child of children) fragment.appendChild(child instanceof g.Node ? child : (this.ownerDocument || this).createTextNode(String(child)));
+      while (this.firstChild) this.removeChild(this.firstChild);
+      this.appendChild(fragment);
+    });
+  }
+  return added;
+}
+
+/** Deep clone of plain data (objects, arrays, Map, Set, Date, RegExp, typed arrays), cycles preserved. */
+function cloneValue(v, seen) {
+  if (v === null || typeof v !== 'object') {
+    if (typeof v === 'function' || typeof v === 'symbol') throw new TypeError('structuredClone: value could not be cloned');
+    return v;
+  }
+  if (seen.has(v)) return seen.get(v);
+  let out;
+  if (v instanceof Date) out = new Date(v.getTime());
+  else if (v instanceof RegExp) out = new RegExp(v.source, v.flags);
+  else if (ArrayBuffer.isView(v)) out = new v.constructor(v);
+  else if (v instanceof ArrayBuffer) out = v.slice(0);
+  else if (v instanceof Map) {
+    out = new Map();
+    seen.set(v, out);
+    for (const [k, x] of v) out.set(cloneValue(k, seen), cloneValue(x, seen));
+    return out;
+  } else if (v instanceof Set) {
+    out = new Set();
+    seen.set(v, out);
+    for (const x of v) out.add(cloneValue(x, seen));
+    return out;
+  } else if (Array.isArray(v)) {
+    out = new Array(v.length);
+    seen.set(v, out);
+    for (let i = 0; i < v.length; i++) out[i] = cloneValue(v[i], seen);
+    return out;
+  } else {
+    out = {};
+    seen.set(v, out);
+    for (const k of Object.keys(v)) out[k] = cloneValue(v[k], seen);
+    return out;
+  }
+  seen.set(v, out);
+  return out;
+}
+
+const installedPolyfills = installCompat();
+
+})();
+window.SP_LOBBY_CONFIG = {
+  "version": "l09",
+  "qq": "455814975",
+  "statusEndpoint": "https://weishuxieyiwangye.cn:8443/lobby/status.json",
+  "nodes": [
+    {
+      "id": "8443",
+      "name": "8443服",
+      "url": "https://weishuxieyiwangye.cn:8443/game.html",
+      "ping": "https://weishuxieyiwangye.cn:8443/lobby/ping"
+    },
+    {
+      "id": "icu",
+      "name": "icu服",
+      "url": "https://weishuxieyi.icu/",
+      "ping": "https://weishuxieyi.icu/healthz"
+    }
+  ]
+};</script>
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="卫戍协议"></head>
+<body><script>(()=>{
+// Keep the r25 cache readable. New writes are sharded so Cache.keys() queries
+// stay below Chromium's per-query result-size limit, even with 20,000+ assets.
+const native=globalThis.caches,LEGACY='sp-resource-content-v1',PREFIX='sp-resource-content-v2-';
+const shardName=name=>new RegExp('^'+PREFIX+'[a-f0-9]$').test(name);
+const opened=new Map();
+const open=name=>{if(!opened.has(name))opened.set(name,native.open(name).catch(error=>{opened.delete(name);throw error;}));return opened.get(name);};
+function destination(request){const url=new URL(typeof request==='string'?request:request.url,globalThis.location?.href);const hash=/\/__sp_resource_content\/([a-f0-9]{64})$/.exec(url.pathname)?.[1];if(!hash)throw Error('Invalid resource cache key');return PREFIX+hash[0];}
+async function names(){return(await native.keys()).filter(name=>name===LEGACY||shardName(name));}
+const content={
+ async match(request,options){const cache=await open(destination(request)),value=await cache.match(request,options);return value||await(await open(LEGACY)).match(request,options);},
+ async put(request,response){return(await open(destination(request))).put(request,response);},
+ async delete(request,options){const results=await Promise.all([destination(request),LEGACY].map(async name=>(await open(name)).delete(request,options)));return results.some(Boolean);},
+ async keys(request,options){
+  const list=await names(),keys=[];let cursor=0;
+  await Promise.all(Array.from({length:Math.min(4,list.length)},async()=>{while(cursor<list.length){const cache=await open(list[cursor++]);keys.push(...await cache.keys(request,options));}}));
+  return [...new Map(keys.map(key=>[key.url,key])).values()];
+ }
+};
+const resourceCaches={
+ open(name){return name===LEGACY?Promise.resolve(content):native.open(name);},
+ async delete(name){if(name!==LEGACY)return native.delete(name);const list=await names();list.forEach(key=>opened.delete(key));const results=await Promise.all(list.map(key=>native.delete(key)));return results.some(Boolean);},
+ keys(){return native.keys();},
+ has(name){return name===LEGACY?names().then(list=>list.length>0):native.has(name);}
+};
+
+window.SPResourceCacheOpen=async name=>resourceCaches.open(name);
+})();</script>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M7 7h1m-1 10h1m4-10h5m-5 10h5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-signal" viewBox="0 0 24 24"><path d="M5 19v-4m5 4v-8m5 8V7m5 12V3"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6c-3-3-9-2-9-2v15s6-1 9 2c3-3 9-2 9-2V4s-6-1-9 2zm0 0v15"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M3 5h3c5 0 7 14 12 14h3m-5-4 5 4-5 3M3 19h3c2 0 4-4 5-7m3-5c1-2 3-2 7-2m-5-3 5 3-5 4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 10a8 8 0 0 0-14-4L3 9m0-6v6h6m-5 5a8 8 0 0 0 14 4l3-3m0 6v-6h-6"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3m1-17a3 3 0 0 1 0 6m2 5a5 5 0 0 1 3 5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="8" width="11" height="13" rx="2"/><path d="M15 8V3H4v13h5"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6m0-6L10 14m0-9H4v15h15v-6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  </svg>
+  <a class="skip-link" href="#servers">跳到服务器列表</a>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="卫戍协议联机大厅首页">
+        <span class="brand-mark"><svg class="icon"><use href="#i-shield"/></svg></span>
+        <span><strong>卫戍协议<span class="brand-dot"> · </span>盟约</strong><small>STRONGHOLD PROTOCOL</small></span>
+      </a>
+      <nav class="main-nav" aria-label="主导航">
+        <a class="nav-link is-active" href="#servers"><svg class="icon"><use href="#i-server"/></svg><span>服务器</span></a>
+        <a class="nav-link" href="#announcements"><svg class="icon"><use href="#i-shield"/></svg><span>公告</span></a>
+        <a class="nav-link" href="#guide"><svg class="icon"><use href="#i-book"/></svg><span>游玩指南</span></a>
+      </nav>
+      <span class="topbar-label"><span class="status-dot"></span>联机入口</span>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="line"></span> STRONGHOLD NETWORK <span class="slash">/</span> 联机大厅</p>
+          <h1 id="hero-title">集结，<span>下一场盟约。</span></h1>
+          <p class="hero-description">选择熟悉的服务器，与同伴并肩出发。</p>
+        </div>
+        <div class="hero-readout" aria-label="大厅概览">
+          <div><strong class="number">02</strong><span>联机节点</span></div>
+          <span class="readout-divider"></span>
+          <div><strong class="number" id="total-online">—</strong><span id="total-label">正在获取人数</span></div>
+          <svg class="readout-emblem" viewBox="0 0 120 120" aria-hidden="true"><path d="M60 5 105 31v58l-45 26L15 89V31zM60 20l32 19v42l-32 19-32-19V39z"/><path d="M60 34v52M37 47l46 27M37 74l46-27"/></svg>
+        </div>
+      </section>
+
+      <section id="announcements" class="announcement-section" aria-labelledby="announcement-title">
+        <div class="section-heading compact"><h2 id="announcement-title"><svg class="icon"><use href="#i-shield"/></svg>站点公告</h2><span class="section-note">联机情报 / BULLETIN</span></div>
+        <div class="notice-grid">
+          <article class="notice-card">
+            <div class="sp-local-announcement" role="note"><strong>【8443服 0.2.6 · r05 更新】</strong><p>新增好友邀请、申请加入及观战；房主可在房间扩展面板设置Boss／其他敌人血量、取消Boss限伤与鸭爵增强。</p><p><strong>正常4～8人终极通关8杯；仅增强敌人血量不减杯。</strong>克隆模式、取消Boss限伤或鸭爵增强计杯减半，多个设置不重复减半。累计杯数从本次更新后结算开始，旧战绩不追补。</p><p><strong>旧完整资源包v2＋0.2.5核心素材补全包继续有效，无需重下。</strong>网页须在选服大厅导入并检查资源；电脑端完整解压后使用PC1.0.8程序更新（1.0.6完整版为基底），安卓完整版1.0.2继续可用。PC本地音乐、外观及小人动作Mod保持兼容。</p><p>本次维护后请从选服大厅或客户端重新进入，原账号、好友和历史记录保留。客户端、APK及资源文件请以服主实际发布的群文件为准。</p><p><strong>QQ群：455814975 ／ 1127927007，两个群同时使用。</strong></p><a href="#resource-pack">导入并检查资源 →</a></div><div class="notice-top"><span class="tag mint">大厅公告</span><time datetime="2026-10-14">2026.10.14</time></div>
+            <h3>两个站点，随你选择。</h3>
+            <p><strong>8443服</strong> 与 <strong>icu服</strong> 已接入联机大厅。查看站点状态，选择你的目的地，开启下一场对局。</p>
+            <div class="notice-bottom"><span class="tiny-square"></span><span>账号与游戏进度以各服为准</span></div>
+          </article>
+          <aside class="reminder-card" aria-labelledby="reminder-title">
+            <h3 id="reminder-title">出发前须知</h3>
+            <p><svg class="icon"><use href="#i-users"/></svg><span>各服账号独立，切换服务器后请使用对应账号登录。</span></p>
+            <p><svg class="icon"><use href="#i-clock"/></svg><span>进行中的对局请在原服务器完成；首次进入需加载游戏素材。</span></p>
+          </aside>
+        </div>
+      </section>
+
+      <section id="servers" class="servers-section" aria-labelledby="servers-title">
+        <div class="section-heading">
+          <div><p class="eyebrow section-eyebrow">01 <span>/</span> SELECT YOUR SERVER</p><h2 id="servers-title">选择服务器</h2></div>
+          <div class="server-tools"><span id="status-summary" class="status-summary"><span class="status-dot pending"></span>正在确认站点状态</span><button id="refresh-status" class="icon-button" type="button" aria-label="刷新服务器状态" title="刷新服务器状态"><svg class="icon"><use href="#i-refresh"/></svg></button></div>
+        </div>
+        <div class="server-grid">
+          <article class="server-card recommended" data-server="8443" aria-labelledby="name-8443">
+            <div class="card-top"><span class="node-code">NODE <b>01</b><span class="node-rule"></span></span><span class="node-state" id="state-8443"><span class="status-dot pending"></span>检测中</span></div>
+            <div class="server-title-row"><div class="server-name"><span class="server-symbol"><svg class="icon"><use href="#i-server"/></svg></span><div><h3 id="name-8443">8443服 <span class="tag mint">推荐</span></h3><p>weishuxieyiwangye.cn:8443</p></div></div><span class="latency" id="latency-8443" title="你的浏览器到站点的请求耗时，非游戏内延迟"><svg class="icon"><use href="#i-signal"/></svg><span>测量中</span></span></div>
+            <div class="server-metrics"><div class="metric primary"><strong class="number" id="online-8443">—</strong><span>当前在线</span></div><div class="metric"><strong class="number" id="rooms-8443">—</strong><span>活跃房间</span></div><div class="metric"><strong class="number" id="matches-8443">—</strong><span>进行对局</span></div><div class="metric"><strong class="number" id="waiting-8443">—</strong><span>等待房间</span></div></div>
+            <div class="card-status-line"><span class="node-info" id="info-8443">正在获取站点信息</span><span class="last-server" id="last-8443" hidden><svg class="icon"><use href="#i-clock"/></svg>上次选择</span></div>
+            <a class="enter-button primary-button" data-enter="8443" href="https://weishuxieyiwangye.cn:8443/game.html" rel="noreferrer"><span>进入 8443服</span><svg class="icon"><use href="#i-arrow"/></svg></a>
+          </article>
+
+          <article class="server-card" data-server="icu" aria-labelledby="name-icu">
+            <div class="card-top"><span class="node-code">NODE <b>02</b><span class="node-rule"></span></span><span class="node-state" id="state-icu"><span class="status-dot pending"></span>检测中</span></div>
+            <div class="server-title-row"><div class="server-name"><span class="server-symbol"><svg class="icon"><use href="#i-server"/></svg></span><div><h3 id="name-icu">icu服 <span class="tag neutral">联机节点</span></h3><p>weishuxieyi.icu</p></div></div><span class="latency" id="latency-icu" title="你的浏览器到站点的请求耗时，非游戏内延迟"><svg class="icon"><use href="#i-signal"/></svg><span>测量中</span></span></div>
+            <div class="server-metrics"><div class="metric primary"><strong class="number" id="online-icu">—</strong><span>当前在线</span></div><div class="metric"><strong class="number" id="rooms-icu">—</strong><span>活跃房间</span></div><div class="metric"><strong class="number" id="matches-icu">—</strong><span>进行对局</span></div><div class="metric"><strong class="number" id="waiting-icu">—</strong><span>等待房间</span></div></div>
+            <div class="card-status-line"><span class="node-info" id="info-icu">正在获取站点信息</span><span class="last-server" id="last-icu" hidden><svg class="icon"><use href="#i-clock"/></svg>上次选择</span></div>
+            <a class="enter-button secondary-button" data-enter="icu" href="https://weishuxieyi.icu/" rel="noreferrer"><span>进入 icu服</span><svg class="icon"><use href="#i-arrow"/></svg></a>
+          </article>
+        </div>
+        <div class="selection-bottom"><p><svg class="icon"><use href="#i-signal"/></svg><span>响应时间仅供选服参考，实际体验以游戏内为准。</span></p><button class="random-button" id="random-server" type="button"><svg class="icon"><use href="#i-shuffle"/></svg>随机选服<svg class="icon small"><use href="#i-arrow"/></svg></button></div>
+        <noscript><p class="no-script">浏览器已关闭 JavaScript，仍可点击上方按钮进入服务器。</p></noscript>
+      </section>
+
+      <section id="guide" class="guide-section" aria-labelledby="guide-title">
+        <div class="section-heading"><div><p class="eyebrow section-eyebrow">02 <span>/</span> BEFORE DEPLOYMENT</p><h2 id="guide-title">准备就绪，即刻出发</h2></div><span class="section-note">游玩指南</span></div>
+        <div class="guide-grid"><article><span class="step-index">01</span><div><h3>选择站点</h3><p>挑选响应合适的服务器。已有账号的玩家，建议回到熟悉的站点。</p></div></article><article><span class="step-index">02</span><div><h3>进入游戏</h3><p>按站点提示登录或进入大厅。首次加载素材时，请稍作等待。</p></div></article><article><span class="step-index">03</span><div><h3>邀请同伴</h3><p>与朋友进入同一服务器，再通过房间邀请链接加入对局。</p></div></article></div>
+      </section>
+
+      <section id="resource-pack" class="guide-section" aria-labelledby="pack-title">
+        <div class="section-heading"><div><p class="eyebrow section-eyebrow">03 <span>/</span> LOCAL RESOURCES</p><h2 id="pack-title">本机素材包</h2></div><span class="tag mint">网页必需 · 电脑端内置</span></div>
+        <div class="notice-card pack-card">
+          <h3>电脑端内置素材 · 网页先检查资源</h3><div class="mobile-resource-help"><strong>安卓：</strong>从 QQ 群 455814975 或 1127927007 获取服主发布的文件，获取「卫戍协议-安卓完整版-v1.0.2.apk」，安装后直接进入8443服，无需另外导入素材。<br><strong>iPhone／iPad：</strong>用Safari打开本站，将旧完整资源包v2和0.2.5核心素材补全包下载到“文件”，再在下方选择ZIP导入，通过检查后进入游戏。导入时保持页面在前台；完成后可通过Safari分享菜单“添加到主屏幕”。<br><strong>Windows电脑端：</strong>从QQ群455814975或1127927007获取服主发布的文件，下载完整客户端，全部解压后运行EXE，在客户端选服后直接进入。<br>完整客户端、APK与ZIP请以服主发布的群文件／网盘文件为准。账号、房间与模拟数据仍需联网；内置素材仅适用于8443服。</div><p class="sp-local-downloads"><strong>0.2.5新版资源补全包：请先从 QQ 群 455814975 或 1127927007 获取服主发布的文件，下载。</strong>旧完整资源包 v2 仍有效，已有素材继续复用；首次游玩请先导入旧完整包，再导入新版补全包。不要清空缓存。原夸克网盘用于获取旧包，新版请以群文件为准。</p>
+          <p>选择电脑里已有的素材 ZIP，或服主提供的“卫戍协议-8443服-完整资源包-v2.zip”（可通过 QQ 群 <strong>455814975 / 1127927007</strong> 接收），无需解压。本服发布的完整包v2、旧基础包和补全包直接在本机核验，无需先下载服务器清单；其他标准 ZIP 和包含 public/assets 的游戏整合包会联网校验。仅保存经过校验的美术、模型、音频和字体；联机和游戏程序仍需联网。</p>
+          <p>请使用正常模式的 Edge 或 Chrome，并在游玩的同一浏览器导入。素材只保存到当前站点的浏览器缓存，更新后相同素材可继续复用；更换浏览器或清除站点数据后，需要在本大厅重新导入并检查。</p>
+          <div class="pack-actions"><label class="pack-picker">选择 ZIP 素材包<input id="pack-file" type="file" accept=".zip,application/zip" aria-label="选择 ZIP 素材包"></label><button id="pack-check" class="sp-local-retry" type="button">检查资源并进入8443服</button><button id="pack-cancel" class="icon-button pack-stop" type="button" disabled>停止导入</button></div>
+          <progress id="pack-progress" max="1" value="0" hidden aria-label="素材导入进度"></progress>
+          <p id="pack-status" role="status" aria-live="polite">选择后会逐个校验素材并保存。中途停止时已完成的素材保留，下次导入会跳过已有文件。</p>
+        </div>
+      </section>
+      <section class="community" aria-labelledby="community-title"><div class="community-heading"><span class="community-icon"><svg class="icon"><use href="#i-users"/></svg></span><div><h2 id="community-title">找到你的同伴</h2><p>交流阵容、组队联机，也欢迎反馈游戏问题。</p></div></div><button id="copy-qq" class="qq-button" type="button" aria-label="复制 QQ 交流群号 455814975"><span>QQ 交流群 <strong id="qq-number">455814975</strong></span><svg class="icon"><use href="#i-copy"/></svg></button><button id="copy-qq2" class="qq-button" type="button" aria-label="复制 QQ 交流群号 1127927007"><span>QQ 交流群 <strong id="qq-number2">1127927007</strong></span><svg class="icon"><use href="#i-copy"/></svg></button></section>
+    </main>
+    <footer><div><span class="footer-brand">SP <span>/</span> 联机大厅</span><p>卫戍协议 · 盟约 / 非官方同人作品</p></div><a href="https://github.com/sganggs/Stronghold-Protocol" target="_blank" rel="noopener noreferrer">项目主页<svg class="icon small"><use href="#i-external"/></svg></a><span class="footer-code">CONNECT · COOPERATE · DEFEND</span></footer>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="random-dialog" aria-labelledby="random-title"><button class="dialog-close icon-button" type="button" aria-label="关闭">×</button><span class="tag mint">目的地已选定</span><h2 id="random-title">这次，去 8443服。</h2><p>确认后进入所选服务器。</p><a id="random-enter" class="enter-button primary-button" href="https://weishuxieyiwangye.cn:8443/game.html" rel="noreferrer"><span>进入 8443服</span><svg class="icon"><use href="#i-arrow"/></svg></a><button class="dialog-again" id="random-again" type="button">再选一次</button></dialog>
+  <script>(() => {
+  'use strict';
+  const config = window.SP_LOBBY_CONFIG;
+  if (!config || !Array.isArray(config.nodes)) return;
+  const byId = id => document.getElementById(id);
+  const safeUrl = value => { try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password ? u.href : null; } catch { return null; } };
+  const nodes = config.nodes.filter(n => /^(8443|icu)$/.test(n.id) && safeUrl(n.url));
+  let snapshot = {}, busy = false, lastRefresh = 0, toastTimer, randomId;
+  const storageKey = 'sp-lobby:last-server:v1';
+  const count = n => Number.isSafeInteger(n) && n >= 0 ? n.toLocaleString('zh-CN') : '—';
+  const toast = message => { clearTimeout(toastTimer); byId('toast').textContent = message; byId('toast').hidden = false; toastTimer = setTimeout(() => { byId('toast').hidden = true; }, 3500); };
+  function remember(id) { try { localStorage.setItem(storageKey, id); } catch {} markLast(id); }
+  function markLast(id) { nodes.forEach(n => { byId('last-' + n.id).hidden = n.id !== id; }); }
+  nodes.forEach(n => {
+    const title = byId('name-' + n.id);
+    title.firstChild.textContent = n.name + ' ';
+    title.closest('.server-name').querySelector('p').textContent = new URL(n.url).host;
+    document.querySelectorAll('[data-enter="' + n.id + '"]').forEach(a => {
+      a.href = n.url; a.querySelector('span').textContent = '进入 ' + n.name;
+      a.addEventListener('click', () => remember(n.id));
+    });
+  });
+  const notice = document.querySelector('.notice-card > p');
+  if (nodes.length === 2) {
+    notice.replaceChildren();
+    nodes.forEach((n, i) => { if (i) notice.append(' 与 '); const strong = document.createElement('strong'); strong.textContent = n.name; notice.append(strong); });
+    notice.append(' 已接入联机大厅。查看站点状态，选择你的目的地，开启下一场对局。');
+  }
+  try { markLast(localStorage.getItem(storageKey)); } catch {}
+  byId('qq-number').textContent = String(config.qq || '455814975');
+  byId('copy-qq').setAttribute('aria-label', '复制 QQ 交流群号 ' + byId('qq-number').textContent);
+  byId('copy-qq').addEventListener('click', async () => {
+    const qq = byId('qq-number').textContent;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(qq); toast('群号已复制：' + qq);
+    } catch {
+      const range = document.createRange(); range.selectNodeContents(byId('qq-number'));
+      const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+      toast('群号：' + qq + '，请长按或按 Ctrl+C 复制');
+    }
+  });
+  byId('copy-qq2').addEventListener('click', async () => {
+    const qq = byId('qq-number2').textContent;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(qq); toast('群号已复制：' + qq);
+    } catch {
+      const range = document.createRange(); range.selectNodeContents(byId('qq-number2'));
+      const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+      toast('群号：' + qq + '，请长按或按 Ctrl+C 复制');
+    }
+  });
+  function renderStatus(data) {
+    snapshot = data && typeof data.nodes === 'object' ? data.nodes : {};
+    let known = 0, total = 0, onlineNodes = 0;
+    nodes.forEach(n => {
+      const s = snapshot[n.id] || {};
+      const healthy = s.state === 'online', reachable = s.state === 'reachable';
+      if (healthy) onlineNodes++;
+      const el = byId('state-' + n.id), dot = document.createElement('span');
+      dot.className = 'status-dot' + (healthy || reachable ? '' : ' unknown');
+      el.replaceChildren(dot, document.createTextNode(healthy ? '在线' : reachable ? '可访问' : '状态未知'));
+      for (const metric of ['online', 'rooms', 'matches', 'waiting']) byId(metric + '-' + n.id).textContent = count(s[metric]);
+      if (Number.isSafeInteger(s.online) && s.online >= 0) { known++; total += s.online; }
+      byId('info-' + n.id).textContent = s.partial ? '部分版本暂未返回，人数仅含已确认版本' : healthy ? '站点运行中 · 数据约每 30 秒更新' : reachable ? '站点可访问 · 暂未提供人数数据' : '暂未获取状态 · 仍可尝试进入';
+    });
+    byId('total-online').textContent = known ? count(total) : '—';
+    byId('total-label').textContent = known === nodes.length ? '当前在线玩家' : known ? '已确认在线玩家' : '暂未获取人数';
+    const summary = byId('status-summary'), dot = document.createElement('span');
+    dot.className = 'status-dot' + (onlineNodes === nodes.length ? '' : ' unknown');
+    summary.replaceChildren(dot, document.createTextNode(onlineNodes === nodes.length ? '全部节点状态正常' : onlineNodes ? onlineNodes + ' 个节点已确认在线' : '站点状态暂不可用'));
+  }
+  async function latency(n) {
+    const el = byId('latency-' + n.id), started = performance.now();
+    try {
+      const url = safeUrl(n.ping);
+      if (!url) throw new Error('no ping');
+      const r = await fetch(url, { mode: 'no-cors', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', signal: AbortSignal.timeout(6500) });
+      if (r.type !== 'opaque' && !r.ok) throw new Error('ping unavailable');
+      const ms = Math.max(1, Math.round(performance.now() - started));
+      el.querySelector('span').textContent = ms.toLocaleString('zh-CN') + ' ms';
+      el.classList.toggle('slow', ms > 300); el.classList.remove('unknown');
+    } catch { el.querySelector('span').textContent = '未测得'; el.classList.add('unknown'); el.classList.remove('slow'); }
+  }
+  async function refresh(manual = false) {
+    if (busy || Date.now() - lastRefresh < 5000) return;
+    busy = true; lastRefresh = Date.now();
+    const button = byId('refresh-status'); button.disabled = true; button.classList.add('is-loading');
+    try {
+      const endpoint = safeUrl(config.statusEndpoint);
+      if (!endpoint) throw new Error('no endpoint');
+      const r = await fetch(endpoint, { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error('unavailable');
+      renderStatus(await r.json());
+      if (manual) toast('站点状态已刷新');
+    } catch { renderStatus(null); if (manual) toast('暂时无法获取状态，选服入口仍可使用'); }
+    finally { await Promise.allSettled(nodes.map(latency)); busy = false; button.disabled = false; button.classList.remove('is-loading'); }
+  }
+  byId('refresh-status').addEventListener('click', () => { void refresh(true); });
+  const dialog = byId('random-dialog');
+  function selectRandom() {
+    let eligible = nodes.filter(n => snapshot[n.id]?.state === 'online');
+    if (!eligible.length) eligible = nodes;
+    if (eligible.length > 1 && randomId) eligible = eligible.filter(n => n.id !== randomId);
+    const n = eligible[Math.floor(Math.random() * eligible.length)]; if (!n) return;
+    randomId = n.id; byId('random-title').textContent = '这次，去 ' + n.name + '。';
+    const a = byId('random-enter'); a.href = n.url; a.querySelector('span').textContent = '进入 ' + n.name;
+  }
+  byId('random-server').addEventListener('click', () => { selectRandom(); dialog.showModal(); });
+  byId('random-again').addEventListener('click', selectRandom);
+  byId('random-enter').addEventListener('click', () => remember(randomId));
+  dialog.querySelector('.dialog-close').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', e => { if (e.target === dialog) { const b = dialog.getBoundingClientRect(); if (e.clientX < b.left || e.clientX > b.right || e.clientY < b.top || e.clientY > b.bottom) dialog.close(); } });
+  document.querySelectorAll('.nav-link').forEach(a => a.addEventListener('click', () => { document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('is-active', link === a)); }));
+  renderStatus(null); void refresh();
+  setInterval(() => { if (!document.hidden) void refresh(); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastRefresh > 30000) void refresh(); });
+})();
+</script>
+<script>!function(f){typeof module!='undefined'&&typeof exports=='object'?module.exports=f():typeof define!='undefined'&&define.amd?define(f):(typeof self!='undefined'?self:this).fflate=f()}(function(){var _e={};"use strict";var t=(typeof module!='undefined'&&typeof exports=='object'?function(_f){"use strict";var e,t=";var __w=require('worker_threads');__w.parentPort.on('message',function(m){onmessage({data:m})}),postMessage=function(m,t){__w.parentPort.postMessage(m,t)},close=process.exit;self=global";try{e=require("worker_threads").Worker}catch(e){}exports.default=e?function(r,n,o,a,s){var u=!1,i=new e(r+t,{eval:!0}).on("error",(function(e){return s(e,null)})).on("message",(function(e){return s(null,e)})).on("exit",(function(e){e&&!u&&s(Error("exited with code "+e),null)}));return i.postMessage(o,a),i.terminate=function(){return u=!0,e.prototype.terminate.call(i)},i}:function(e,t,r,n,o){setImmediate((function(){return o(Error("async operations unsupported - update to Node 12+ (or Node 10-11 with the --experimental-worker CLI flag)"),null)}));var a=function(){};return{terminate:a,postMessage:a}};return _f}:function(_f){"use strict";var e={};_f.default=function(r,t,s,a,n){var o=new Worker(e[t]||(e[t]=URL.createObjectURL(new Blob([r+';addEventListener("error",function(e){e=e.error;postMessage({$e$:[e.message,e.code,e.stack]})})'],{type:"text/javascript"}))));return o.onmessage=function(e){var r=e.data,t=r.$e$;if(t){var s=Error(t[0]);s.code=t[1],s.stack=t[2],n(s,null)}else n(null,r)},o.postMessage(s,a),o};return _f})({}),n=Uint8Array,r=Uint16Array,e=Int32Array,i=new n([0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0,0,0,0]),o=new n([0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13,0,0]),s=new n([16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15]),a=function(t,n){for(var i=new r(31),o=0;o<31;++o)i[o]=n+=1<<t[o-1];var s=new e(i[30]);for(o=1;o<30;++o)for(var a=i[o];a<i[o+1];++a)s[a]=a-i[o]<<5|o;return{b:i,r:s}},u=a(i,2),h=u.b,f=u.r;h[28]=258,f[258]=28;for(var l=a(o,0),c=l.b,p=l.r,v=new r(32768),d=0;d<32768;++d){var g=(43690&d)>>1|(21845&d)<<1;v[d]=((65280&(g=(61680&(g=(52428&g)>>2|(13107&g)<<2))>>4|(3855&g)<<4))>>8|(255&g)<<8)>>1}var y=function(t,n,e){for(var i=t.length,o=0,s=new r(n);o<i;++o)t[o]&&++s[t[o]-1];var a,u=new r(n);for(o=1;o<n;++o)u[o]=u[o-1]+s[o-1]<<1;if(e){a=new r(1<<n);var h=15-n;for(o=0;o<i;++o)if(t[o])for(var f=o<<4|t[o],l=n-t[o],c=u[t[o]-1]++<<l,p=c|(1<<l)-1;c<=p;++c)a[v[c]>>h]=f}else for(a=new r(i),o=0;o<i;++o)t[o]&&(a[o]=v[u[t[o]-1]++]>>15-t[o]);return a},m=new n(288);for(d=0;d<144;++d)m[d]=8;for(d=144;d<256;++d)m[d]=9;for(d=256;d<280;++d)m[d]=7;for(d=280;d<288;++d)m[d]=8;var b=new n(32);for(d=0;d<32;++d)b[d]=5;var w=y(m,9,0),x=y(m,9,1),z=y(b,5,0),k=y(b,5,1),M=function(t){for(var n=t[0],r=1;r<t.length;++r)t[r]>n&&(n=t[r]);return n},S=function(t,n,r){var e=n/8|0;return(t[e]|t[e+1]<<8)>>(7&n)&r},A=function(t,n){var r=n/8|0;return(t[r]|t[r+1]<<8|t[r+2]<<16)>>(7&n)},T=function(t){return(t+7)/8|0},D=function(t,r,e){return(null==r||r<0)&&(r=0),(null==e||e>t.length)&&(e=t.length),new n(t.subarray(r,e))};_e.FlateErrorCode={UnexpectedEOF:0,InvalidBlockType:1,InvalidLengthLiteral:2,InvalidDistance:3,StreamFinished:4,NoStreamHandler:5,InvalidHeader:6,NoCallback:7,InvalidUTF8:8,ExtraFieldTooLong:9,InvalidDate:10,FilenameTooLong:11,StreamFinishing:12,InvalidZipData:13,UnknownCompressionMethod:14};var C=["unexpected EOF","invalid block type","invalid length/literal","invalid distance","stream finished","no stream handler",,"no callback","invalid UTF-8 data","extra field too long","date not in range 1980-2099","filename too long","stream finishing","invalid zip data"],I=function(t,n,r){var e=Error(n||C[t]);if(e.code=t,Error.captureStackTrace&&Error.captureStackTrace(e,I),!r)throw e;return e},U=function(t,r,e,a){var u=t.length,f=a?a.length:0;if(!u||r.f&&!r.l)return e||new n(0);var l=!e,p=l||2!=r.i,v=r.i;l&&(e=new n(3*u));var d=function(t){var r=e.length;if(t>r){var i=new n(Math.max(2*r,t));i.set(e),e=i}},g=r.f||0,m=r.p||0,b=r.b||0,w=r.l,z=r.d,C=r.m,U=r.n,F=8*u;do{if(!w){g=S(t,m,1);var E=S(t,m+1,3);if(m+=3,!E){var Z=t[(J=T(m)+4)-4]|t[J-3]<<8,q=J+Z;if(q>u){v&&I(0);break}p&&d(b+Z),e.set(t.subarray(J,q),b),r.b=b+=Z,r.p=m=8*q,r.f=g;continue}if(1==E)w=x,z=k,C=9,U=5;else if(2==E){var O=S(t,m,31)+257,G=S(t,m+10,15)+4,L=O+S(t,m+5,31)+1;m+=14;for(var H=new n(L),j=new n(19),N=0;N<G;++N)j[s[N]]=S(t,m+3*N,7);m+=3*G;var P=M(j),B=(1<<P)-1,Y=y(j,P,1);for(N=0;N<L;){var J,K=Y[S(t,m,B)];if(m+=15&K,(J=K>>4)<16)H[N++]=J;else{var Q=0,R=0;for(16==J?(R=3+S(t,m,3),m+=2,Q=H[N-1]):17==J?(R=3+S(t,m,7),m+=3):18==J&&(R=11+S(t,m,127),m+=7);R--;)H[N++]=Q}}var V=H.subarray(0,O),W=H.subarray(O);C=M(V),U=M(W),w=y(V,C,1),z=y(W,U,1)}else I(1);if(m>F){v&&I(0);break}}p&&d(b+131072);for(var X=(1<<C)-1,$=(1<<U)-1,_=m;;_=m){var tt=(Q=w[A(t,m)&X])>>4;if((m+=15&Q)>F){v&&I(0);break}if(Q||I(2),tt<256)e[b++]=tt;else{if(256==tt){_=m,w=null;break}var nt=tt-254;tt>264&&(nt=S(t,m,(1<<(it=i[N=tt-257]))-1)+h[N],m+=it);var rt=z[A(t,m)&$],et=rt>>4;if(rt||I(3),m+=15&rt,W=c[et],et>3){var it=o[et];W+=A(t,m)&(1<<it)-1,m+=it}if(m>F){v&&I(0);break}p&&d(b+131072);var ot=b+nt;if(b<W){var st=f-W,at=Math.min(W,ot);for(st+b<0&&I(3);b<at;++b)e[b]=a[st+b]}for(;b<ot;++b)e[b]=e[b-W]}}r.l=w,r.p=_,r.b=b,r.f=g,w&&(g=1,r.m=C,r.d=z,r.n=U)}while(!g);return b!=e.length&&l?D(e,0,b):e.subarray(0,b)},F=function(t,n,r){var e=n/8|0;t[e]|=r<<=7&n,t[e+1]|=r>>8},E=function(t,n,r){var e=n/8|0;t[e]|=r<<=7&n,t[e+1]|=r>>8,t[e+2]|=r>>16},Z=function(t,e){for(var i=[],o=0;o<t.length;++o)t[o]&&i.push({s:o,f:t[o]});var s=i.length,a=i.slice();if(!s)return{t:N,l:0};if(1==s){var u=new n(i[0].s+1);return u[i[0].s]=1,{t:u,l:1}}i.sort((function(t,n){return t.f-n.f})),i.push({s:-1,f:25001});var h=i[0],f=i[1],l=0,c=1,p=2;for(i[0]={s:-1,f:h.f+f.f,l:h,r:f};c!=s-1;)h=i[i[l].f<i[p].f?l++:p++],f=i[l!=c&&i[l].f<i[p].f?l++:p++],i[c++]={s:-1,f:h.f+f.f,l:h,r:f};var v=a[0].s;for(o=1;o<s;++o)a[o].s>v&&(v=a[o].s);var d=new r(v+1),g=q(i[c-1],d,0);if(g>e){o=0;var y=0,m=g-e,b=1<<m;for(a.sort((function(t,n){return d[n.s]-d[t.s]||t.f-n.f}));o<s;++o){var w=a[o].s;if(!(d[w]>e))break;y+=b-(1<<g-d[w]),d[w]=e}for(y>>=m;y>0;){var x=a[o].s;d[x]<e?y-=1<<e-d[x]++-1:++o}for(;o>=0&&y;--o){var z=a[o].s;d[z]==e&&(--d[z],++y)}g=e}return{t:new n(d),l:g}},q=function(t,n,r){return-1==t.s?Math.max(q(t.l,n,r+1),q(t.r,n,r+1)):n[t.s]=r},O=function(t){for(var n=t.length;n&&!t[--n];);for(var e=new r(++n),i=0,o=t[0],s=1,a=function(t){e[i++]=t},u=1;u<=n;++u)if(t[u]==o&&u!=n)++s;else{if(!o&&s>2){for(;s>138;s-=138)a(32754);s>2&&(a(s>10?s-11<<5|28690:s-3<<5|12305),s=0)}else if(s>3){for(a(o),--s;s>6;s-=6)a(8304);s>2&&(a(s-3<<5|8208),s=0)}for(;s--;)a(o);s=1,o=t[u]}return{c:e.subarray(0,i),n:n}},G=function(t,n){for(var r=0,e=0;e<n.length;++e)r+=t[e]*n[e];return r},L=function(t,n,r){var e=r.length,i=T(n+2);t[i]=255&e,t[i+1]=e>>8,t[i+2]=255^t[i],t[i+3]=255^t[i+1];for(var o=0;o<e;++o)t[i+o+4]=r[o];return 8*(i+4+e)},H=function(t,n,e,a,u,h,f,l,c,p,v){F(n,v++,e),++u[256];for(var d=Z(u,15),g=d.t,x=d.l,k=Z(h,15),M=k.t,S=k.l,A=O(g),T=A.c,D=A.n,C=O(M),I=C.c,U=C.n,q=new r(19),H=0;H<T.length;++H)++q[31&T[H]];for(H=0;H<I.length;++H)++q[31&I[H]];for(var j=Z(q,7),N=j.t,P=j.l,B=19;B>4&&!N[s[B-1]];--B);var Y,J,K,Q,R=p+5<<3,V=G(u,m)+G(h,b)+f,W=G(u,g)+G(h,M)+f+14+3*B+G(q,N)+2*q[16]+3*q[17]+7*q[18];if(c>=0&&R<=V&&R<=W)return L(n,v,t.subarray(c,c+p));if(F(n,v,1+(W<V)),v+=2,W<V){Y=y(g,x,0),J=g,K=y(M,S,0),Q=M;var X=y(N,P,0);for(F(n,v,D-257),F(n,v+5,U-1),F(n,v+10,B-4),v+=14,H=0;H<B;++H)F(n,v+3*H,N[s[H]]);v+=3*B;for(var $=[T,I],_=0;_<2;++_){var tt=$[_];for(H=0;H<tt.length;++H)F(n,v,X[rt=31&tt[H]]),v+=N[rt],rt>15&&(F(n,v,tt[H]>>5&127),v+=tt[H]>>12)}}else Y=w,J=m,K=z,Q=b;for(H=0;H<l;++H){var nt=a[H];if(nt>255){var rt;E(n,v,Y[257+(rt=nt>>18&31)]),v+=J[rt+257],rt>7&&(F(n,v,nt>>23&31),v+=i[rt]);var et=31&nt;E(n,v,K[et]),v+=Q[et],et>3&&(E(n,v,nt>>5&8191),v+=o[et])}else E(n,v,Y[nt]),v+=J[nt]}return E(n,v,Y[256]),v+J[256]},j=new e([65540,131080,131088,131104,262176,1048704,1048832,2114560,2117632]),N=new n(0),P=function(t,s,a,u,h,l){var c=l.z||t.length,v=new n(u+c+5*(1+Math.ceil(c/7e3))+h),d=v.subarray(u,v.length-h),g=l.l,y=7&(l.r||0);if(s){y&&(d[0]=l.r>>3);for(var m=j[s-1],b=m>>13,w=8191&m,x=(1<<a)-1,z=l.p||new r(32768),k=l.h||new r(x+1),M=Math.ceil(a/3),S=2*M,A=function(n){return(t[n]^t[n+1]<<M^t[n+2]<<S)&x},C=new e(25e3),I=new r(288),U=new r(32),F=0,E=0,Z=l.i||0,q=0,O=l.w||0,G=0;Z+2<c;++Z){var N=A(Z),P=32767&Z,B=k[N];if(z[P]=B,k[N]=P,O<=Z){var Y=c-Z;if((F>7e3||q>24576)&&(Y>423||!g)){y=H(t,d,0,C,I,U,E,q,G,Z-G,y),q=F=E=0,G=Z;for(var J=0;J<286;++J)I[J]=0;for(J=0;J<30;++J)U[J]=0}var K=2,Q=0,R=w,V=P-B&32767;if(Y>2&&N==A(Z-V))for(var W=Math.min(b,Y)-1,X=Math.min(32767,Z),$=Math.min(258,Y);V<=X&&--R&&P!=B;){if(t[Z+K]==t[Z+K-V]){for(var _=0;_<$&&t[Z+_]==t[Z+_-V];++_);if(_>K){if(K=_,Q=V,_>W)break;var tt=Math.min(V,_-2),nt=0;for(J=0;J<tt;++J){var rt=Z-V+J&32767,et=rt-z[rt]&32767;et>nt&&(nt=et,B=rt)}}}V+=(P=B)-(B=z[P])&32767}if(Q){C[q++]=268435456|f[K]<<18|p[Q];var it=31&f[K],ot=31&p[Q];E+=i[it]+o[ot],++I[257+it],++U[ot],O=Z+K,++F}else C[q++]=t[Z],++I[t[Z]]}}for(Z=Math.max(Z,O);Z<c;++Z)C[q++]=t[Z],++I[t[Z]];y=H(t,d,g,C,I,U,E,q,G,Z-G,y),g||(l.r=7&y|d[y/8|0]<<3,y-=7,l.h=k,l.p=z,l.i=Z,l.w=O)}else{for(Z=l.w||0;Z<c+g;Z+=65535){var st=Z+65535;st>=c&&(d[y/8|0]=g,st=c),y=L(d,y+1,t.subarray(Z,st))}l.i=c}return D(v,0,u+T(y)+h)},B=function(){for(var t=new Int32Array(256),n=0;n<256;++n){for(var r=n,e=9;--e;)r=(1&r&&-306674912)^r>>>1;t[n]=r}return t}(),Y=function(){var t=-1;return{p:function(n){for(var r=t,e=0;e<n.length;++e)r=B[255&r^n[e]]^r>>>8;t=r},d:function(){return~t}}},J=function(){var t=1,n=0;return{p:function(r){for(var e=t,i=n,o=0|r.length,s=0;s!=o;){for(var a=Math.min(s+2655,o);s<a;++s)i+=e+=r[s];e=(65535&e)+15*(e>>16),i=(65535&i)+15*(i>>16)}t=e,n=i},d:function(){return(255&(t%=65521))<<24|(65280&t)<<8|(255&(n%=65521))<<8|n>>8}}},K=function(t,r,e,i,o){if(!o&&(o={l:1},r.dictionary)){var s=r.dictionary.subarray(-32768),a=new n(s.length+t.length);a.set(s),a.set(t,s.length),t=a,o.w=s.length}return P(t,null==r.level?6:r.level,null==r.mem?o.l?Math.ceil(1.5*Math.max(8,Math.min(13,Math.log(t.length)))):20:12+r.mem,e,i,o)},Q=function(t,n){var r={};for(var e in t)r[e]=t[e];for(var e in n)r[e]=n[e];return r},R=function(t,n,r){for(var e=t(),i=""+t,o=i.slice(i.indexOf("[")+1,i.lastIndexOf("]")).replace(/\s+/g,"").split(","),s=0;s<e.length;++s){var a=e[s],u=o[s];if("function"==typeof a){n+=";"+u+"=";var h=""+a;if(a.prototype)if(-1!=h.indexOf("[native code]")){var f=h.indexOf(" ",8)+1;n+=h.slice(f,h.indexOf("(",f))}else for(var l in n+=h,a.prototype)n+=";"+u+".prototype."+l+"="+a.prototype[l];else n+=h}else r[u]=a}return n},V=[],W=function(t){var n=[];for(var r in t)t[r].buffer&&n.push((t[r]=new t[r].constructor(t[r])).buffer);return n},X=function(n,r,e,i){if(!V[e]){for(var o="",s={},a=n.length-1,u=0;u<a;++u)o=R(n[u],o,s);V[e]={c:R(n[a],o,s),e:s}}var h=Q({},V[e].e);return(0,t.default)(V[e].c+";onmessage=function(e){for(var k in e.data)self[k]=e.data[k];onmessage="+r+"}",e,h,W(h),i)},$=function(){return[n,r,e,i,o,s,h,c,x,k,v,C,y,M,S,A,T,D,I,U,Tt,it,ot]},_=function(){return[n,r,e,i,o,s,f,p,w,m,z,b,v,j,N,y,F,E,Z,q,O,G,L,H,T,D,P,K,kt,it]},tt=function(){return[pt,gt,ct,Y,B]},nt=function(){return[vt,dt]},rt=function(){return[yt,ct,J]},et=function(){return[mt]},it=function(t){return postMessage(t,[t.buffer])},ot=function(t){return t&&{out:t.size&&new n(t.size),dictionary:t.dictionary}},st=function(t,n,r,e,i,o){var s=X(r,e,i,(function(t,n){s.terminate(),o(t,n)}));return s.postMessage([t,n],n.consume?[t.buffer]:[]),function(){s.terminate()}},at=function(t){return t.ondata=function(t,n){return postMessage([t,n],[t.buffer])},function(n){n.data.length?(t.push(n.data[0],n.data[1]),postMessage([n.data[0].length])):t.flush()}},ut=function(t,n,r,e,i,o,s){var a,u=X(t,e,i,(function(t,r){t?(u.terminate(),n.ondata.call(n,t)):Array.isArray(r)?1==r.length?(n.queuedSize-=r[0],n.ondrain&&n.ondrain(r[0])):(r[1]&&u.terminate(),n.ondata.call(n,t,r[0],r[1])):s(r)}));u.postMessage(r),n.queuedSize=0,n.push=function(t,r){n.ondata||I(5),a&&n.ondata(I(4,0,1),null,!!r),n.queuedSize+=t.length,u.postMessage([t,a=r],[t.buffer])},n.terminate=function(){u.terminate()},o&&(n.flush=function(){u.postMessage([])})},ht=function(t,n){return t[n]|t[n+1]<<8},ft=function(t,n){return(t[n]|t[n+1]<<8|t[n+2]<<16|t[n+3]<<24)>>>0},lt=function(t,n){return ft(t,n)+4294967296*ft(t,n+4)},ct=function(t,n,r){for(;r;++n)t[n]=r,r>>>=8},pt=function(t,n){var r=n.filename;if(t[0]=31,t[1]=139,t[2]=8,t[8]=n.level<2?4:9==n.level?2:0,t[9]=3,0!=n.mtime&&ct(t,4,Math.floor(new Date(n.mtime||Date.now())/1e3)),r){t[3]=8;for(var e=0;e<=r.length;++e)t[e+10]=r.charCodeAt(e)}},vt=function(t){31==t[0]&&139==t[1]&&8==t[2]||I(6,"invalid gzip data");var n=t[3],r=10;4&n&&(r+=2+(t[10]|t[11]<<8));for(var e=(n>>3&1)+(n>>4&1);e>0;e-=!t[r++]);return r+(2&n)},dt=function(t){var n=t.length;return(t[n-4]|t[n-3]<<8|t[n-2]<<16|t[n-1]<<24)>>>0},gt=function(t){return 10+(t.filename?t.filename.length+1:0)},yt=function(t,n){var r=n.level,e=0==r?0:r<6?1:9==r?3:2;if(t[0]=120,t[1]=e<<6|(n.dictionary&&32),t[1]|=31-(t[0]<<8|t[1])%31,n.dictionary){var i=J();i.p(n.dictionary),ct(t,2,i.d())}},mt=function(t,n){return(8!=(15&t[0])||t[0]>>4>7||(t[0]<<8|t[1])%31)&&I(6,"invalid zlib data"),(t[1]>>5&1)==+!n&&I(6,"invalid zlib data: "+(32&t[1]?"need":"unexpected")+" dictionary"),2+(t[1]>>3&4)};function bt(t,n){return"function"==typeof t&&(n=t,t={}),this.ondata=n,t}var wt=function(){function t(t,r){if("function"==typeof t&&(r=t,t={}),this.ondata=r,this.o=t||{},this.s={l:0,i:32768,w:32768,z:32768},this.b=new n(98304),this.o.dictionary){var e=this.o.dictionary.subarray(-32768);this.b.set(e,32768-e.length),this.s.i=32768-e.length}}return t.prototype.p=function(t,n){this.ondata(K(t,this.o,0,0,this.s),n)},t.prototype.push=function(t,r){this.ondata||I(5),this.s.l&&I(4);var e=t.length+this.s.z;if(e>this.b.length){if(e>2*this.b.length-32768){var i=new n(-32768&e);i.set(this.b.subarray(0,this.s.z)),this.b=i}var o=this.b.length-this.s.z;this.b.set(t.subarray(0,o),this.s.z),this.s.z=this.b.length,this.p(this.b,!1),this.b.set(this.b.subarray(-32768)),this.b.set(t.subarray(o),32768),this.s.z=t.length-o+32768,this.s.i=32766,this.s.w=32768}else this.b.set(t,this.s.z),this.s.z+=t.length;this.s.l=1&r,(this.s.z>this.s.w+8191||r)&&(this.p(this.b,r||!1),this.s.w=this.s.i,this.s.i-=2)},t.prototype.flush=function(){this.ondata||I(5),this.s.l&&I(4),this.p(this.b,!1),this.s.w=this.s.i,this.s.i-=2},t}();_e.Deflate=wt;var xt=function(){return function(t,n){ut([_,function(){return[at,wt]}],this,bt.call(this,t,n),(function(t){var n=new wt(t.data);onmessage=at(n)}),6,1)}}();function zt(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[_],(function(t){return it(kt(t.data[0],t.data[1]))}),0,r)}function kt(t,n){return K(t,n||{},0,0)}_e.AsyncDeflate=xt,_e.deflate=zt,_e.deflateSync=kt;var Mt=function(){function t(t,r){"function"==typeof t&&(r=t,t={}),this.ondata=r;var e=t&&t.dictionary&&t.dictionary.subarray(-32768);this.s={i:0,b:e?e.length:0},this.o=new n(32768),this.p=new n(0),e&&this.o.set(e)}return t.prototype.e=function(t){if(this.ondata||I(5),this.d&&I(4),this.p.length){if(t.length){var r=new n(this.p.length+t.length);r.set(this.p),r.set(t,this.p.length),this.p=r}}else this.p=t},t.prototype.c=function(t){this.s.i=+(this.d=t||!1);var n=this.s.b,r=U(this.p,this.s,this.o);this.ondata(D(r,n,this.s.b),this.d),this.o=D(r,this.s.b-32768),this.s.b=this.o.length,this.p=D(this.p,this.s.p/8|0),this.s.p&=7},t.prototype.push=function(t,n){this.e(t),this.c(n)},t}();_e.Inflate=Mt;var St=function(){return function(t,n){ut([$,function(){return[at,Mt]}],this,bt.call(this,t,n),(function(t){var n=new Mt(t.data);onmessage=at(n)}),7,0)}}();function At(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[$],(function(t){return it(Tt(t.data[0],ot(t.data[1])))}),1,r)}function Tt(t,n){return U(t,{i:2},n&&n.out,n&&n.dictionary)}_e.AsyncInflate=St,_e.inflate=At,_e.inflateSync=Tt;var Dt=function(){function t(t,n){this.c=Y(),this.l=0,this.v=1,wt.call(this,t,n)}return t.prototype.push=function(t,n){this.c.p(t),this.l+=t.length,wt.prototype.push.call(this,t,n)},t.prototype.p=function(t,n){var r=K(t,this.o,this.v&&gt(this.o),n&&8,this.s);this.v&&(pt(r,this.o),this.v=0),n&&(ct(r,r.length-8,this.c.d()),ct(r,r.length-4,this.l)),this.ondata(r,n)},t.prototype.flush=function(){wt.prototype.flush.call(this)},t}();_e.Gzip=Dt,_e.Compress=Dt;var Ct=function(){return function(t,n){ut([_,tt,function(){return[at,wt,Dt]}],this,bt.call(this,t,n),(function(t){var n=new Dt(t.data);onmessage=at(n)}),8,1)}}();function It(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[_,tt,function(){return[Ut]}],(function(t){return it(Ut(t.data[0],t.data[1]))}),2,r)}function Ut(t,n){n||(n={});var r=Y(),e=t.length;r.p(t);var i=K(t,n,gt(n),8),o=i.length;return pt(i,n),ct(i,o-8,r.d()),ct(i,o-4,e),i}_e.AsyncGzip=Ct,_e.AsyncCompress=Ct,_e.gzip=It,_e.compress=It,_e.gzipSync=Ut,_e.compressSync=Ut;var Ft=function(){function t(t,n){this.v=1,this.r=0,Mt.call(this,t,n)}return t.prototype.push=function(t,r){if(Mt.prototype.e.call(this,t),this.r+=t.length,this.v){var e=this.p.subarray(this.v-1),i=e.length>3?vt(e):4;if(i>e.length){if(!r)return}else this.v>1&&this.onmember&&this.onmember(this.r-e.length);this.p=e.subarray(i),this.v=0}Mt.prototype.c.call(this,r),!this.s.f||this.s.l||r||(this.v=T(this.s.p)+9,this.s={i:0},this.o=new n(0),this.push(new n(0),r))},t}();_e.Gunzip=Ft;var Et=function(){return function(t,n){var r=this;ut([$,nt,function(){return[at,Mt,Ft]}],this,bt.call(this,t,n),(function(t){var n=new Ft(t.data);n.onmember=function(t){return postMessage(t)},onmessage=at(n)}),9,0,(function(t){return r.onmember&&r.onmember(t)}))}}();function Zt(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[$,nt,function(){return[qt]}],(function(t){return it(qt(t.data[0],t.data[1]))}),3,r)}function qt(t,r){var e=vt(t);return e+8>t.length&&I(6,"invalid gzip data"),U(t.subarray(e,-8),{i:2},r&&r.out||new n(dt(t)),r&&r.dictionary)}_e.AsyncGunzip=Et,_e.gunzip=Zt,_e.gunzipSync=qt;var Ot=function(){function t(t,n){this.c=J(),this.v=1,wt.call(this,t,n)}return t.prototype.push=function(t,n){this.c.p(t),wt.prototype.push.call(this,t,n)},t.prototype.p=function(t,n){var r=K(t,this.o,this.v&&(this.o.dictionary?6:2),n&&4,this.s);this.v&&(yt(r,this.o),this.v=0),n&&ct(r,r.length-4,this.c.d()),this.ondata(r,n)},t.prototype.flush=function(){wt.prototype.flush.call(this)},t}();_e.Zlib=Ot;var Gt=function(){return function(t,n){ut([_,rt,function(){return[at,wt,Ot]}],this,bt.call(this,t,n),(function(t){var n=new Ot(t.data);onmessage=at(n)}),10,1)}}();function Lt(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[_,rt,function(){return[Ht]}],(function(t){return it(Ht(t.data[0],t.data[1]))}),4,r)}function Ht(t,n){n||(n={});var r=J();r.p(t);var e=K(t,n,n.dictionary?6:2,4);return yt(e,n),ct(e,e.length-4,r.d()),e}_e.AsyncZlib=Gt,_e.zlib=Lt,_e.zlibSync=Ht;var jt=function(){function t(t,n){Mt.call(this,t,n),this.v=t&&t.dictionary?2:1}return t.prototype.push=function(t,n){if(Mt.prototype.e.call(this,t),this.v){if(this.p.length<6&&!n)return;this.p=this.p.subarray(mt(this.p,this.v-1)),this.v=0}n&&(this.p.length<4&&I(6,"invalid zlib data"),this.p=this.p.subarray(0,-4)),Mt.prototype.c.call(this,n)},t}();_e.Unzlib=jt;var Nt=function(){return function(t,n){ut([$,et,function(){return[at,Mt,jt]}],this,bt.call(this,t,n),(function(t){var n=new jt(t.data);onmessage=at(n)}),11,0)}}();function Pt(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[$,et,function(){return[Bt]}],(function(t){return it(Bt(t.data[0],ot(t.data[1])))}),5,r)}function Bt(t,n){return U(t.subarray(mt(t,n&&n.dictionary),-4),{i:2},n&&n.out,n&&n.dictionary)}_e.AsyncUnzlib=Nt,_e.unzlib=Pt,_e.unzlibSync=Bt;var Yt=function(){function t(t,n){this.o=bt.call(this,t,n)||{},this.G=Ft,this.I=Mt,this.Z=jt}return t.prototype.i=function(){var t=this;this.s.ondata=function(n,r){t.ondata(n,r)}},t.prototype.push=function(t,r){if(this.ondata||I(5),this.s)this.s.push(t,r);else{if(this.p&&this.p.length){var e=new n(this.p.length+t.length);e.set(this.p),e.set(t,this.p.length)}else this.p=t;this.p.length>2&&(this.s=31==this.p[0]&&139==this.p[1]&&8==this.p[2]?new this.G(this.o):8!=(15&this.p[0])||this.p[0]>>4>7||(this.p[0]<<8|this.p[1])%31?new this.I(this.o):new this.Z(this.o),this.i(),this.s.push(this.p,r),this.p=null)}},t}();_e.Decompress=Yt;var Jt=function(){function t(t,n){Yt.call(this,t,n),this.queuedSize=0,this.G=Et,this.I=St,this.Z=Nt}return t.prototype.i=function(){var t=this;this.s.ondata=function(n,r,e){t.ondata(n,r,e)},this.s.ondrain=function(n){t.queuedSize-=n,t.ondrain&&t.ondrain(n)}},t.prototype.push=function(t,n){this.queuedSize+=t.length,Yt.prototype.push.call(this,t,n)},t}();function Kt(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),31==t[0]&&139==t[1]&&8==t[2]?Zt(t,n,r):8!=(15&t[0])||t[0]>>4>7||(t[0]<<8|t[1])%31?At(t,n,r):Pt(t,n,r)}function Qt(t,n){return 31==t[0]&&139==t[1]&&8==t[2]?qt(t,n):8!=(15&t[0])||t[0]>>4>7||(t[0]<<8|t[1])%31?Tt(t,n):Bt(t,n)}_e.AsyncDecompress=Jt,_e.decompress=Kt,_e.decompressSync=Qt;var Rt=function(t,r,e,i){for(var o in t){var s=t[o],a=r+o,u=i;Array.isArray(s)&&(u=Q(i,s[1]),s=s[0]),s instanceof n?e[a]=[s,u]:(e[a+="/"]=[new n(0),u],Rt(s,a,e,i))}},Vt="undefined"!=typeof TextEncoder&&new TextEncoder,Wt="undefined"!=typeof TextDecoder&&new TextDecoder,Xt=0;try{Wt.decode(N,{stream:!0}),Xt=1}catch(t){}var $t=function(t){for(var n="",r=0;;){var e=t[r++],i=(e>127)+(e>223)+(e>239);if(r+i>t.length)return{s:n,r:D(t,r-1)};i?3==i?(e=((15&e)<<18|(63&t[r++])<<12|(63&t[r++])<<6|63&t[r++])-65536,n+=String.fromCharCode(55296|e>>10,56320|1023&e)):n+=String.fromCharCode(1&i?(31&e)<<6|63&t[r++]:(15&e)<<12|(63&t[r++])<<6|63&t[r++]):n+=String.fromCharCode(e)}},_t=function(){function t(t){this.ondata=t,Xt?this.t=new TextDecoder:this.p=N}return t.prototype.push=function(t,r){if(this.ondata||I(5),r=!!r,this.t)return this.ondata(this.t.decode(t,{stream:!0}),r),void(r&&(this.t.decode().length&&I(8),this.t=null));this.p||I(4);var e=new n(this.p.length+t.length);e.set(this.p),e.set(t,this.p.length);var i=$t(e),o=i.s,s=i.r;r?(s.length&&I(8),this.p=null):this.p=s,this.ondata(o,r)},t}();_e.DecodeUTF8=_t;var tn=function(){function t(t){this.ondata=t}return t.prototype.push=function(t,n){this.ondata||I(5),this.d&&I(4),this.ondata(nn(t),this.d=n||!1)},t}();function nn(t,r){if(r){for(var e=new n(t.length),i=0;i<t.length;++i)e[i]=t.charCodeAt(i);return e}if(Vt)return Vt.encode(t);var o=t.length,s=new n(t.length+(t.length>>1)),a=0,u=function(t){s[a++]=t};for(i=0;i<o;++i){if(a+5>s.length){var h=new n(a+8+(o-i<<1));h.set(s),s=h}var f=t.charCodeAt(i);f<128||r?u(f):f<2048?(u(192|f>>6),u(128|63&f)):f>55295&&f<57344?(u(240|(f=65536+(1047552&f)|1023&t.charCodeAt(++i))>>18),u(128|f>>12&63),u(128|f>>6&63),u(128|63&f)):(u(224|f>>12),u(128|f>>6&63),u(128|63&f))}return D(s,0,a)}function rn(t,n){if(n){for(var r="",e=0;e<t.length;e+=16384)r+=String.fromCharCode.apply(null,t.subarray(e,e+16384));return r}if(Wt)return Wt.decode(t);var i=$t(t),o=i.s;return(r=i.r).length&&I(8),o}_e.EncodeUTF8=tn,_e.strToU8=nn,_e.strFromU8=rn;var en=function(t){return 1==t?3:t<6?2:9==t?1:0},on=function(t,n){return n+30+ht(t,n+26)+ht(t,n+28)},sn=function(t,n,r){var e=ht(t,n+28),i=rn(t.subarray(n+46,n+46+e),!(2048&ht(t,n+8))),o=n+46+e,s=ft(t,n+20),a=r&&4294967295==s?an(t,o):[s,ft(t,n+24),ft(t,n+42)],u=a[0],h=a[1],f=a[2];return[ht(t,n+10),u,h,i,o+ht(t,n+30)+ht(t,n+32),f]},an=function(t,n){for(;1!=ht(t,n);n+=4+ht(t,n+2));return[lt(t,n+12),lt(t,n+4),lt(t,n+20)]},un=function(t){var n=0;if(t)for(var r in t){var e=t[r].length;e>65535&&I(9),n+=e+4}return n},hn=function(t,n,r,e,i,o,s,a){var u=e.length,h=r.extra,f=a&&a.length,l=un(h);ct(t,n,null!=s?33639248:67324752),n+=4,null!=s&&(t[n++]=20,t[n++]=r.os),t[n]=20,n+=2,t[n++]=r.flag<<1|(o<0&&8),t[n++]=i&&8,t[n++]=255&r.compression,t[n++]=r.compression>>8;var c=new Date(null==r.mtime?Date.now():r.mtime),p=c.getFullYear()-1980;if((p<0||p>119)&&I(10),ct(t,n,p<<25|c.getMonth()+1<<21|c.getDate()<<16|c.getHours()<<11|c.getMinutes()<<5|c.getSeconds()>>1),n+=4,-1!=o&&(ct(t,n,r.crc),ct(t,n+4,o<0?-o-2:o),ct(t,n+8,r.size)),ct(t,n+12,u),ct(t,n+14,l),n+=16,null!=s&&(ct(t,n,f),ct(t,n+6,r.attrs),ct(t,n+10,s),n+=14),t.set(e,n),n+=u,l)for(var v in h){var d=h[v],g=d.length;ct(t,n,+v),ct(t,n+2,g),t.set(d,n+4),n+=4+g}return f&&(t.set(a,n),n+=f),n},fn=function(t,n,r,e,i){ct(t,n,101010256),ct(t,n+8,r),ct(t,n+10,r),ct(t,n+12,e),ct(t,n+16,i)},ln=function(){function t(t){this.filename=t,this.c=Y(),this.size=0,this.compression=0}return t.prototype.process=function(t,n){this.ondata(null,t,n)},t.prototype.push=function(t,n){this.ondata||I(5),this.c.p(t),this.size+=t.length,n&&(this.crc=this.c.d()),this.process(t,n||!1)},t}();_e.ZipPassThrough=ln;var cn=function(){function t(t,n){var r=this;n||(n={}),ln.call(this,t),this.d=new wt(n,(function(t,n){r.ondata(null,t,n)})),this.compression=8,this.flag=en(n.level)}return t.prototype.process=function(t,n){try{this.d.push(t,n)}catch(t){this.ondata(t,null,n)}},t.prototype.push=function(t,n){ln.prototype.push.call(this,t,n)},t}();_e.ZipDeflate=cn;var pn=function(){function t(t,n){var r=this;n||(n={}),ln.call(this,t),this.d=new xt(n,(function(t,n,e){r.ondata(t,n,e)})),this.compression=8,this.flag=en(n.level),this.terminate=this.d.terminate}return t.prototype.process=function(t,n){this.d.push(t,n)},t.prototype.push=function(t,n){ln.prototype.push.call(this,t,n)},t}();_e.AsyncZipDeflate=pn;var vn=function(){function t(t){this.ondata=t,this.u=[],this.d=1}return t.prototype.add=function(t){var r=this;if(this.ondata||I(5),2&this.d)this.ondata(I(4+8*(1&this.d),0,1),null,!1);else{var e=nn(t.filename),i=e.length,o=t.comment,s=o&&nn(o),a=i!=t.filename.length||s&&o.length!=s.length,u=i+un(t.extra)+30;i>65535&&this.ondata(I(11,0,1),null,!1);var h=new n(u);hn(h,0,t,e,a,-1);var f=[h],l=function(){for(var t=0,n=f;t<n.length;t++)r.ondata(null,n[t],!1);f=[]},c=this.d;this.d=0;var p=this.u.length,v=Q(t,{f:e,u:a,o:s,t:function(){t.terminate&&t.terminate()},r:function(){if(l(),c){var t=r.u[p+1];t?t.r():r.d=1}c=1}}),d=0;t.ondata=function(e,i,o){if(e)r.ondata(e,i,o),r.terminate();else if(d+=i.length,f.push(i),o){var s=new n(16);ct(s,0,134695760),ct(s,4,t.crc),ct(s,8,d),ct(s,12,t.size),f.push(s),v.c=d,v.b=u+d+16,v.crc=t.crc,v.size=t.size,c&&v.r(),c=1}else c&&l()},this.u.push(v)}},t.prototype.end=function(){var t=this;2&this.d?this.ondata(I(4+8*(1&this.d),0,1),null,!0):(this.d?this.e():this.u.push({r:function(){1&t.d&&(t.u.splice(-1,1),t.e())},t:function(){}}),this.d=3)},t.prototype.e=function(){for(var t=0,r=0,e=0,i=0,o=this.u;i<o.length;i++)e+=46+(h=o[i]).f.length+un(h.extra)+(h.o?h.o.length:0);for(var s=new n(e+22),a=0,u=this.u;a<u.length;a++){var h;hn(s,t,h=u[a],h.f,h.u,-h.c-2,r,h.o),t+=46+h.f.length+un(h.extra)+(h.o?h.o.length:0),r+=h.b}fn(s,t,this.u.length,e,r),this.ondata(null,s,!0),this.d=2},t.prototype.terminate=function(){for(var t=0,n=this.u;t<n.length;t++)n[t].t();this.d=2},t}();function dn(t,r,e){e||(e=r,r={}),"function"!=typeof e&&I(7);var i={};Rt(t,"",i,r);var o=Object.keys(i),s=o.length,a=0,u=0,h=s,f=Array(s),l=[],c=function(){for(var t=0;t<l.length;++t)l[t]()},p=function(t,n){xn((function(){e(t,n)}))};xn((function(){p=e}));var v=function(){var t=new n(u+22),r=a,e=u-a;u=0;for(var i=0;i<h;++i){var o=f[i];try{var s=o.c.length;hn(t,u,o,o.f,o.u,s);var l=30+o.f.length+un(o.extra),c=u+l;t.set(o.c,c),hn(t,a,o,o.f,o.u,s,u,o.m),a+=16+l+(o.m?o.m.length:0),u=c+s}catch(t){return p(t,null)}}fn(t,a,f.length,e,r),p(null,t)};s||v();for(var d=function(t){var n=o[t],r=i[n],e=r[0],h=r[1],d=Y(),g=e.length;d.p(e);var y=nn(n),m=y.length,b=h.comment,w=b&&nn(b),x=w&&w.length,z=un(h.extra),k=0==h.level?0:8,M=function(r,e){if(r)c(),p(r,null);else{var i=e.length;f[t]=Q(h,{size:g,crc:d.d(),c:e,f:y,m:w,u:m!=n.length||w&&b.length!=x,compression:k}),a+=30+m+z+i,u+=76+2*(m+z)+(x||0)+i,--s||v()}};if(m>65535&&M(I(11,0,1),null),k)if(g<16e4)try{M(null,kt(e,h))}catch(t){M(t,null)}else l.push(zt(e,h,M));else M(null,e)},g=0;g<h;++g)d(g);return c}function gn(t,r){r||(r={});var e={},i=[];Rt(t,"",e,r);var o=0,s=0;for(var a in e){var u=e[a],h=u[0],f=u[1],l=0==f.level?0:8,c=(M=nn(a)).length,p=f.comment,v=p&&nn(p),d=v&&v.length,g=un(f.extra);c>65535&&I(11);var y=l?kt(h,f):h,m=y.length,b=Y();b.p(h),i.push(Q(f,{size:h.length,crc:b.d(),c:y,f:M,m:v,u:c!=a.length||v&&p.length!=d,o:o,compression:l})),o+=30+c+g+m,s+=76+2*(c+g)+(d||0)+m}for(var w=new n(s+22),x=o,z=s-o,k=0;k<i.length;++k){var M;hn(w,(M=i[k]).o,M,M.f,M.u,M.c.length);var S=30+M.f.length+un(M.extra);w.set(M.c,M.o+S),hn(w,o,M,M.f,M.u,M.c.length,M.o,M.m),o+=16+S+(M.m?M.m.length:0)}return fn(w,o,i.length,z,x),w}_e.Zip=vn,_e.zip=dn,_e.zipSync=gn;var yn=function(){function t(){}return t.prototype.push=function(t,n){this.ondata(null,t,n)},t.compression=0,t}();_e.UnzipPassThrough=yn;var mn=function(){function t(){var t=this;this.i=new Mt((function(n,r){t.ondata(null,n,r)}))}return t.prototype.push=function(t,n){try{this.i.push(t,n)}catch(t){this.ondata(t,null,n)}},t.compression=8,t}();_e.UnzipInflate=mn;var bn=function(){function t(t,n){var r=this;n<32e4?this.i=new Mt((function(t,n){r.ondata(null,t,n)})):(this.i=new St((function(t,n,e){r.ondata(t,n,e)})),this.terminate=this.i.terminate)}return t.prototype.push=function(t,n){this.i.terminate&&(t=D(t,0)),this.i.push(t,n)},t.compression=8,t}();_e.AsyncUnzipInflate=bn;var wn=function(){function t(t){this.onfile=t,this.k=[],this.o={0:yn},this.p=N}return t.prototype.push=function(t,r){var e=this;if(this.onfile||I(5),this.p||I(4),this.c>0){var i=Math.min(this.c,t.length),o=t.subarray(0,i);if(this.c-=i,this.d?this.d.push(o,!this.c):this.k[0].push(o),(t=t.subarray(i)).length)return this.push(t,r)}else{var s=0,a=0,u=void 0,h=void 0;this.p.length?t.length?((h=new n(this.p.length+t.length)).set(this.p),h.set(t,this.p.length)):h=this.p:h=t;for(var f=h.length,l=this.c,c=l&&this.d,p=function(){var t,n=ft(h,a);if(67324752==n){s=1,u=a,v.d=null,v.c=0;var r=ht(h,a+6),i=ht(h,a+8),o=2048&r,c=8&r,p=ht(h,a+26),d=ht(h,a+28);if(f>a+30+p+d){var g=[];v.k.unshift(g),s=2;var y,m=ft(h,a+18),b=ft(h,a+22),w=rn(h.subarray(a+30,a+=30+p),!o);4294967295==m?(t=c?[-2]:an(h,a),m=t[0],b=t[1]):c&&(m=-1),a+=d,v.c=m;var x={name:w,compression:i,start:function(){if(x.ondata||I(5),m){var t=e.o[i];t||x.ondata(I(14,"unknown compression type "+i,1),null,!1),(y=m<0?new t(w):new t(w,m,b)).ondata=function(t,n,r){x.ondata(t,n,r)};for(var n=0,r=g;n<r.length;n++)y.push(r[n],!1);e.k[0]==g&&e.c?e.d=y:y.push(N,!0)}else x.ondata(null,N,!0)},terminate:function(){y&&y.terminate&&y.terminate()}};m>=0&&(x.size=m,x.originalSize=b),v.onfile(x)}return"break"}if(l){if(134695760==n)return u=a+=12+(-2==l&&8),s=3,v.c=0,"break";if(33639248==n)return u=a-=4,s=3,v.c=0,"break"}},v=this;a<f-4&&"break"!==p();++a);if(this.p=N,l<0){var d=h.subarray(0,s?u-12-(-2==l&&8)-(134695760==ft(h,u-16)&&4):a);c?c.push(d,!!s):this.k[+(2==s)].push(d)}if(2&s)return this.push(h.subarray(a),r);this.p=h.subarray(a)}r&&(this.c&&I(13),this.p=null)},t.prototype.register=function(t){this.o[t.compression]=t},t}();_e.Unzip=wn;var xn="function"==typeof queueMicrotask?queueMicrotask:"function"==typeof setTimeout?setTimeout:function(t){t()};function zn(t,r,e){e||(e=r,r={}),"function"!=typeof e&&I(7);var i=[],o=function(){for(var t=0;t<i.length;++t)i[t]()},s={},a=function(t,n){xn((function(){e(t,n)}))};xn((function(){a=e}));for(var u=t.length-22;101010256!=ft(t,u);--u)if(!u||t.length-u>65558)return a(I(13,0,1),null),o;var h=ht(t,u+8);if(h){var f=h,l=ft(t,u+16),c=4294967295==l||65535==f;if(c){var p=ft(t,u-12);(c=101075792==ft(t,p))&&(f=h=ft(t,p+32),l=ft(t,p+48))}for(var v=r&&r.filter,d=function(r){var e=sn(t,l,c),u=e[0],f=e[1],p=e[2],d=e[3],g=e[4],y=on(t,e[5]);l=g;var m=function(t,n){t?(o(),a(t,null)):(n&&(s[d]=n),--h||a(null,s))};if(!v||v({name:d,size:f,originalSize:p,compression:u}))if(u)if(8==u){var b=t.subarray(y,y+f);if(p<524288||f>.8*p)try{m(null,Tt(b,{out:new n(p)}))}catch(t){m(t,null)}else i.push(At(b,{size:p},m))}else m(I(14,"unknown compression type "+u,1),null);else m(null,D(t,y,y+f));else m(null,null)},g=0;g<f;++g)d()}else a(null,{});return o}function kn(t,r){for(var e={},i=t.length-22;101010256!=ft(t,i);--i)(!i||t.length-i>65558)&&I(13);var o=ht(t,i+8);if(!o)return{};var s=ft(t,i+16),a=4294967295==s||65535==o;if(a){var u=ft(t,i-12);(a=101075792==ft(t,u))&&(o=ft(t,u+32),s=ft(t,u+48))}for(var h=r&&r.filter,f=0;f<o;++f){var l=sn(t,s,a),c=l[0],p=l[1],v=l[2],d=l[3],g=l[4],y=on(t,l[5]);s=g,h&&!h({name:d,size:p,originalSize:v,compression:c})||(c?8==c?e[d]=Tt(t.subarray(y,y+p),{out:new n(v)}):I(14,"unknown compression type "+c):e[d]=D(t,y,y+p))}return e}_e.unzip=zn,_e.unzipSync=kn;return _e});</script><script>// Official packs use file identities already verified against the live server.
+// Other packs use its live manifest. ZIP contents cannot add scripts or game data.
+(() => {
+  'use strict';
+  const CACHE = 'sp-resource-content-v1', META = 'sp-resource-preference-v1';
+  const LOCK = 'sp-resource-write-v1', MAX_FILE = 32 * 1048576;
+  const origin = location.origin;
+  const key = name => origin + '/__sp_resource_' + name;
+  const contentKey = hash => origin + '/__sp_resource_content/' + hash;
+  let statusText='',lastChange=Date.now(),phase='';
+  const say = text => { statusText=text;lastChange=Date.now();document.getElementById('pack-status').textContent=text; };
+  const tick = () => new Promise(resolve=>setTimeout(resolve,0));
+  async function reading(promise,label){
+    phase=label;let timer;
+    try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(label+'等待超过60秒。已导入的素材保留；请保持页面在前台，重新选择同一个ZIP继续。')),60000);})]);}
+    finally{clearTimeout(timer);check();}
+  }
+  const picker = document.getElementById('pack-file'), cancel = document.getElementById('pack-cancel');
+  let running = false, cancelled = false, activeFetch, wake, lockWait;
+  async function keepAwake(){try{if(running&&document.visibilityState==='visible'&&!wake){wake=await navigator.wakeLock?.request('screen');wake?.addEventListener('release',()=>{wake=undefined;});}}catch{}}
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void keepAwake();});
+  let rawDeflate=false;try{new DecompressionStream('deflate-raw');rawDeflate=true;}catch{}
+  // SHA-256 of JSON([URL, SHA-256, bytes] rows), sorted by URL; not a filename or CRC trust check.
+  const officialPacks = [
+    {"label":"0.2.5网页核心素材补全包","count":7686,"bytes":521418431,"digest":"5709902af4e9048a9d7cfcee85910a16122bec5748f22c0098a55b3e00b3bfb9"},
+    { label:'完整资源包v2', count:13254, bytes:716389352, digest:'62af8022b08b31c1d2678c65bdf2c82a443902818595e9e074935dd176b02c69' },
+    { label:'基础素材包', count:12968, bytes:712257779, digest:'4fc79600a8e4edb6bcb2b192afa2e7488a48b3eac932f42d7a10e7db44015619' },
+    { label:'补全素材包', count:286, bytes:4131573, digest:'390f4150b903c767f61dbfbd777712c17895c46f8303584156e9cc100ae943a4' },
+  ];
+  const digest = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),n=>n.toString(16).padStart(2,'0')).join('');
+  const types = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', gif:'image/gif', avif:'image/avif', svg:'image/svg+xml', mp3:'audio/mpeg', ogg:'audio/ogg', wav:'audio/wav', m4a:'audio/mp4', woff:'font/woff', woff2:'font/woff2', ttf:'font/ttf', otf:'font/otf', atlas:'text/plain; charset=utf-8', obj:'text/plain; charset=utf-8', css:'text/css; charset=utf-8', json:'application/json; charset=utf-8', bin:'application/octet-stream', skel:'application/octet-stream' };
+  const supported = () => isSecureContext && !!navigator.locks && !!globalThis.caches && !!crypto.subtle;
+  const check = () => { if (cancelled) throw Error('已停止；已校验的素材会保留，下次导入可继续。'); };
+  async function locked(action){
+    const controller=new AbortController();lockWait=controller;
+    const timer=setTimeout(()=>controller.abort(),60000);phase='等待其他页面完成素材读写';
+    try{return await navigator.locks.request(LOCK,{signal:controller.signal},async()=>{clearTimeout(timer);lockWait=undefined;check();return action();});}
+    catch(error){check();if(error.name==='AbortError')throw Error('其他页面长时间占用素材库。请关闭其他游戏页面，再选择同一个ZIP继续。');throw error;}
+    finally{clearTimeout(timer);if(lockWait===controller)lockWait=undefined;}
+  }
+  async function json(url,label) {
+    for(let attempt=1;attempt<=2;attempt++) {
+      check();const controller=new AbortController();activeFetch=controller;
+      const started=Date.now();let bytes=0,idle;
+      const reset=()=>{clearTimeout(idle);idle=setTimeout(()=>controller.abort(),30000);};
+      const report=()=>say(`${label} · 已收到 ${(bytes/1024).toFixed(0)} KB · ${Math.floor((Date.now()-started)/1000)} 秒${attempt>1?' · 正在重试':''}。本服发布的基础包和补全包可直接在本地校验。`);
+      const deadline=setTimeout(()=>controller.abort(),90000),heartbeat=setInterval(report,1000);reset();report();
+      try {
+        const response=await fetch(url,{cache:'no-cache',credentials:'omit',signal:controller.signal});reset();
+        if(!response.ok)throw Error('服务器清单暂不可用（HTTP '+response.status+'）。');
+        const reader=response.body.getReader(),chunks=[];
+        try{while(true){check();const {value,done}=await reader.read();if(done)break;reset();bytes+=value.length;if(bytes>8*1048576)throw Error('服务器清单过大，已停止读取。');chunks.push(value);}}
+        catch(e){await reader.cancel().catch(()=>{});throw e;}finally{reader.releaseLock();}
+        const body=new Uint8Array(bytes);let at=0;for(const chunk of chunks){body.set(chunk,at);at+=chunk.length;}
+        return JSON.parse(new TextDecoder().decode(body));
+      }catch(e){
+        check();if(attempt===2)throw Error('联网读取校验清单失败或超时。请使用本服发布的基础素材包／补全包，它们无需下载清单；其他 ZIP 可稍后重试。');
+      }finally{clearTimeout(idle);clearTimeout(deadline);clearInterval(heartbeat);if(activeFetch===controller)activeFetch=undefined;}
+    }
+  }
+  async function zipIndex(file) {
+    if (file.size > 0xffffffff || file.size < 22) throw Error('资源包大小不正确。');
+    const tailStart = Math.max(0,file.size - 65557), tail = new DataView(await file.slice(tailStart).arrayBuffer());
+    let eocd = -1;
+    for (let i = tail.byteLength - 22; i >= 0; i--) if (tail.getUint32(i,true) === 0x06054b50 && i + 22 + tail.getUint16(i+20,true) === tail.byteLength) { eocd=i; break; }
+    if (eocd < 0 || tail.getUint16(eocd+4,true) || tail.getUint16(eocd+6,true)) throw Error('请选择本服发布的完整 ZIP 素材包。');
+    const count = tail.getUint16(eocd+10,true), length = tail.getUint32(eocd+12,true), offset = tail.getUint32(eocd+16,true);
+    if (count > 50000 || count !== tail.getUint16(eocd+8,true) || length > 8*1048576 || offset+length !== tailStart+eocd) throw Error('资源包目录不正确。');
+    const central = new DataView(await file.slice(offset,offset+length).arrayBuffer()), decoder = new TextDecoder('utf-8',{fatal:true});
+    let p=0; const entries = new Map();
+    for (let n=0; n<count; n++) {
+      if (p+46>length || central.getUint32(p,true)!==0x02014b50) throw Error('资源包目录损坏。');
+      const flags=central.getUint16(p+8,true), method=central.getUint16(p+10,true), packed=central.getUint32(p+20,true), size=central.getUint32(p+24,true);
+      const nl=central.getUint16(p+28,true), extra=central.getUint16(p+30,true), comment=central.getUint16(p+32,true), local=central.getUint32(p+42,true);
+      if(p+46+nl+extra+comment>length || central.getUint16(p+34,true))throw Error('资源包目录损坏。');
+      const name=decoder.decode(new Uint8Array(central.buffer,p+46,nl));
+      const normalized=name.match(/^(?:[^/]+\/)?(?:public\/)?((?:assets|fonts)\/.+)$/)?.[1];
+      if (normalized && !name.endsWith('/')) {
+        if(flags&1 || ![0,8].includes(method) || method===0&&packed!==size || packed<=0 || packed>MAX_FILE+65536 || size<=0 || size>MAX_FILE || local+30+nl+packed>offset
+          || /[\\\x00-\x1f]/.test(name) || name.split('/').some(s=>!s || s==='.' || s==='..')) throw Error('素材条目格式不正确；只支持未加密的标准 ZIP。');
+        const url='/' + normalized.split('/').map(encodeURIComponent).join('/');
+        if(entries.has(url))throw Error('资源包有重复条目。');
+        entries.set(url,{size,packed,method,local,name,centralStart:offset});
+      }
+      p+=46+nl+extra+comment;
+    }
+    if(p!==length)throw Error('资源包目录长度不正确。');
+    return entries;
+  }
+  async function readEntry(file,item) {
+    const header=new DataView(await reading(file.slice(item.local,item.local+30).arrayBuffer(),'读取本地ZIP'));
+    if(header.getUint32(0,true)!==0x04034b50 || header.getUint16(8,true)!==item.method || header.getUint16(6,true)&1)throw Error('素材文件头损坏。');
+    const nl=header.getUint16(26,true), extra=header.getUint16(28,true), start=item.local+30+nl+extra;
+    if(start+item.packed>item.centralStart)throw Error('素材条目越界。');
+    // Combine filename and compressed body without over-reading adjacent files.
+    const buffer=await reading(file.slice(item.local+30,start+item.packed).arrayBuffer(),'读取本地ZIP');
+    const name=new TextDecoder('utf-8',{fatal:true}).decode(new Uint8Array(buffer,0,nl));
+    if(name!==item.name)throw Error('素材文件名不一致。');
+    const compressed=new Uint8Array(buffer,nl+extra,item.packed);
+    if(item.method===0)return compressed.slice().buffer;
+    if(!rawDeflate){
+      if(!window.fflate?.Inflate)throw Error('当前浏览器无法解压ZIP，请更新 Safari 或浏览器后重试。');
+      const output=new Uint8Array(item.size);let written=0;
+      const inflate=new window.fflate.Inflate(chunk=>{check();if(written+chunk.length>item.size)throw Error('素材解压长度超过清单限制。');output.set(chunk,written);written+=chunk.length;});
+      // Each file is already capped at 32MB. Read it once; bound inflater input to avoid large transient output.
+      let yielded=performance.now();
+      for(let at=0;at<compressed.length;at+=4096){check();inflate.push(compressed.subarray(at,at+4096),at+4096>=compressed.length);if(performance.now()-yielded>24){await tick();yielded=performance.now();}}
+      if(written!==item.size)throw Error('素材解压长度不正确。');return output.buffer;
+    }
+    const reader=new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+    const chunks=[];let length=0;
+    try{while(true){check();const {value,done}=await reader.read();if(done)break;length+=value.length;if(length>item.size)throw Error('素材解压长度超过清单限制。');chunks.push(value);}}catch(e){await reader.cancel().catch(()=>{});throw e;}finally{reader.releaseLock();}
+    if(length!==item.size)throw Error('素材解压长度不正确。');
+    const bytes=new Uint8Array(length);let at=0;for(const chunk of chunks){bytes.set(chunk,at);at+=chunk.length;}return bytes.buffer;
+  }
+  async function officialManifest(file,entries) {
+    const total=[...entries.values()].reduce((n,item)=>n+item.size,0);
+    const proof=officialPacks.find(p=>p.count===entries.size && p.bytes===total);
+    if(!proof)return null;
+    const meta=await window.SPResourceCacheOpen(META),proofKey=key('pack-proof/'+proof.digest);
+    const saved=await reading(meta.match(proofKey),'读取已校验清单');
+    if(saved){try{const rows=await saved.json();if(rows.length===proof.count&&await digest(new TextEncoder().encode(JSON.stringify(rows)))===proof.digest){say('已读取官方清单，直接校验待补齐素材…');return {version:1,official:proof.label,totalBytes:1500000000,entries:Object.fromEntries(rows.map(([url,hash,bytes])=>[url,{hash,bytes}]))};}}catch{}}
+    const rows=[];
+    for(const [url,item] of [...entries].sort(([a],[b])=>a<b?-1:a>b?1:0)) {
+      check();const bytes=await readEntry(file,item);
+      if(bytes.byteLength!==item.size)throw Error('素材文件长度不正确。');
+      rows.push([url,await digest(bytes),item.size]);
+      document.getElementById('pack-progress').value=.25*rows.length/entries.size;
+      if(rows.length%20===0 || rows.length===entries.size){say(`正在本地校验${proof.label} ${rows.length}/${entries.size}，无需下载服务器清单…`);await new Promise(r=>setTimeout(r,0));}
+    }
+    if(await digest(new TextEncoder().encode(JSON.stringify(rows)))!==proof.digest)throw Error('素材包校验失败，文件内容与本服发布的包不符。请重新获取完整 ZIP；已导入的缓存保留。');
+    phase='保存已校验清单';try{await meta.put(proofKey,new Response(JSON.stringify(rows)));}catch{/* Proof persistence is optional; content writes still report quota errors. */}
+    return {version:1,official:proof.label,totalBytes:1500000000,entries:Object.fromEntries(rows.map(([url,hash,bytes])=>[url,{hash,bytes}]))};
+  }
+  async function cacheSummary(cache,meta,keys,sizes) {
+    const stored=await reading(meta.match(key('size')),'读取素材统计');if(stored){const value=await stored.json();if(Number.isSafeInteger(value.files)&&value.files>=0&&Number.isSafeInteger(value.bytes)&&value.bytes>=0&&(!keys||value.files===keys.length))return value;}
+    keys??=await reading(cache.keys(),'修复素材统计');
+    let bytes=0;
+    for(const request of keys){const hash=request.url.split('/').pop();bytes+=sizes.get(hash)??(Number((await reading(cache.match(request),'修复素材统计'))?.headers.get('x-sp-resource-bytes'))||0);}
+    return {files:keys.length,bytes};
+  }
+  async function importPack(file) {
+    if(!supported())throw Error('请在8443服HTTPS大厅中使用新版Safari、Edge或Chrome正常模式导入。');
+    if(!['weishuxieyiwangye.cn','localhost','127.0.0.1'].includes(location.hostname))throw Error('请在 8443服大厅导入，本页面预览不能写入其他站点的缓存。');
+    say('正在读取本地 ZIP 目录…');
+    const entries=await zipIndex(file);
+    let manifest=await officialManifest(file,entries);
+    if(!manifest){
+      const state=await json('/__hot/status','正在读取服务器版本');
+      if(!/^[A-Za-z0-9_-]{1,80}$/.test(state.build))throw Error('服务器版本不可用。');
+      manifest=await json('/_build/'+state.build+'/data/resource-cache.json','正在下载校验清单');
+    }
+    if(manifest.version!==1 || !manifest.entries || typeof manifest.entries!=='object')throw Error('服务器素材清单不正确。');
+    const plan=[], seen=new Set();
+    for(const [url,item] of Object.entries(manifest.entries)) {
+      if(!/^\/(assets|fonts)\//.test(url) || !/^[a-f0-9]{64}$/.test(item?.hash) || !Number.isSafeInteger(item.bytes) || item.bytes<=0 || item.bytes>MAX_FILE || seen.has(item.hash))continue;
+      seen.add(item.hash); const packed=entries.get(url);
+      if(packed && packed.size===item.bytes)plan.push({url,...item,packed});
+    }
+    if(!plan.length)throw Error('包内没有与当前版本匹配的素材。');
+    const cache=await window.SPResourceCacheOpen(CACHE),meta=await window.SPResourceCacheOpen(META);
+    const sizes=new Map(Object.values(manifest.entries).map(item=>[item.hash,item.bytes]));
+    let inventory;
+    const epoch=await locked(async()=>{
+      check();phase='初始化素材库';await meta.put(key('preference'),new Response('on'));
+      const keys=await reading(cache.keys(),'读取已导入素材目录');inventory=new Set(keys.map(request=>request.url));
+      const value=await cacheSummary(cache,meta,keys,sizes);await meta.put(key('size'),new Response(JSON.stringify(value)));
+      return (await reading(meta.match(key('epoch')),'读取素材库状态'))?.text() ?? '0';
+    });
+    // This request is optional; browsers may refuse persistence. Import still works.
+    try{await navigator.storage?.persist?.();}catch{}
+    let done=0, imported=0, reused=0, failed=0, importedBytes=0;
+    const budget=Math.max(MAX_FILE,Math.ceil(Number(manifest.totalBytes||1073741824)/1048576)*1048576);
+    let batch=[],batchBytes=0;
+    const report=()=>{
+      document.getElementById('pack-progress').value=manifest.official ? .25+.75*done/plan.length : done/plan.length;
+      say(`正在导入 ${done}/${plan.length} · 新增 ${imported} · 已有 ${reused} · 校验不符 ${failed}。请保持页面在前台。`);
+    };
+    async function flush(){
+      if(!batch.length)return;
+      const work=batch;batch=[];batchBytes=0;
+      await locked(async()=>{
+        const epochResponse=await reading(meta.match(key('epoch')),'读取素材库状态');
+        if((epochResponse?await epochResponse.text():'0')!==epoch)throw Error('素材缓存已被清空，导入已停止。');
+        const pref=await reading(meta.match(key('preference')),'读取素材库状态');if(pref&&await pref.text()==='off')throw Error('素材缓存已关闭，导入已停止。');
+        const value=await cacheSummary(cache,meta,null,sizes);
+        const pending=[];let inspectCursor=0;
+        await Promise.all(Array.from({length:Math.min(4,work.length)},async()=>{while(inspectCursor<work.length){const item=work[inspectCursor++];if(!await reading(cache.match(contentKey(item.hash)),'核对本批素材'))pending.push(item);}}));
+        if(value.bytes+pending.reduce((sum,item)=>sum+item.bytes,0)>budget)throw Error('素材缓存容量已满，请在游戏设置中清空素材缓存后重试。');
+        // Keep the write lock until every write settles, including a failed batch.
+        // Never race uncancellable Cache.put against a timeout and release early.
+        let cursor=0,error;
+        phase='正在写入浏览器素材库';
+        await Promise.all(Array.from({length:Math.min(4,pending.length)},async()=>{
+          while(cursor<pending.length&&!error&&!cancelled){const item=pending[cursor++],ck=contentKey(item.hash),ext=item.url.split('.').pop().toLowerCase();
+            try{await cache.put(ck,new Response(item.body,{headers:{'Content-Type':types[ext]||'application/octet-stream','Content-Length':String(item.bytes),'x-sp-resource-bytes':String(item.bytes),'x-sp-resource-source':'import'}}));value.files++;value.bytes+=item.bytes;imported++;importedBytes+=item.bytes;done++;inventory.add(ck);report();}
+            catch(e){error=e;}
+          }
+        }));
+        try{await meta.put(key('size'),new Response(JSON.stringify(value)));}catch(e){await meta.delete(key('size'));error??=e;}
+        if(error)throw error;
+        const duplicated=work.length-pending.length;reused+=duplicated;done+=duplicated;check();
+      });report();await tick();
+    }
+    for(const item of plan) {
+      check();const ck=contentKey(item.hash);
+      if(inventory.has(ck)){reused++;done++;}
+      else {
+        const bytes=await readEntry(file,item.packed);check();
+        const hash=await digest(bytes);
+        if(hash!==item.hash){failed++;done++;}
+        else {
+          if(batch.length&&batchBytes+item.bytes>8*1048576)await flush();
+          batch.push({...item,body:bytes});batchBytes+=item.bytes;
+          if(batch.length>=64||batchBytes>=8*1048576)await flush();
+        }
+      }
+      if(done%20===0 || done===plan.length){report();await tick();}
+    }
+    await flush();
+    const missing=seen.size-plan.length;
+    say(`导入完成：新增 ${imported} 个素材（${(importedBytes/1048576).toFixed(1)} MB），复用 ${reused} 个。${failed ? ` ${failed} 个文件校验不符，未导入。` : ''}${missing ? ` 包内未覆盖当前清单的 ${missing} 个素材，请补齐后再检查进入。` : ''}${manifest.official==='基础素材包'?' 如尚未导入补全包，请再选择 3.6 MB 补全 ZIP。':''}请从大厅进入 8443服；已打开的游戏可在本局结束后重新进入。`);
+    return {imported,reused,failed,missing};
+  }
+  cancel.addEventListener('click',()=>{cancelled=true;activeFetch?.abort();lockWait?.abort();cancel.disabled=true;say('正在停止，等待当前素材写入完成；已导入的素材会保留。');});
+  picker.addEventListener('change',async()=>{
+    const file=picker.files[0];if(!file||running)return;
+    running=true;cancelled=false;picker.disabled=true;cancel.disabled=false;
+    const progress=document.getElementById('pack-progress');progress.hidden=false;progress.value=0;
+    const heartbeat=setInterval(()=>{if(Date.now()-lastChange>5000)document.getElementById('pack-status').textContent=statusText+` · ${phase||'处理中'}（等待${Math.floor((Date.now()-lastChange)/1000)}秒）。请保持页面在前台；如需中断可点停止，随后重新选择同一个ZIP。`;},1000);
+    try{await keepAwake();if(!supported())throw Error('请在8443服HTTPS大厅中使用新版Safari、Edge或Chrome正常模式导入。');await navigator.locks.request('sp-resource-import-v1',{ifAvailable:true},async lock=>{if(!lock)throw Error('另一个页面正在导入素材，请等它完成。');await importPack(file);});}
+    catch(e){say(e.name==='QuotaExceededError'?'浏览器可用空间不足。已导入的素材保留，可释放磁盘空间后重新导入。':e.message||'导入失败，请重试。');}
+    finally{clearInterval(heartbeat);running=false;await wake?.release().catch(()=>{});wake=undefined;picker.disabled=false;cancel.disabled=true;picker.value='';}
+  });
+  if(!supported()){picker.disabled=true;say('请在8443服HTTPS大厅中使用新版Safari、Edge或Chrome正常模式导入。');}
+})();
+</script>
+<script>(() => {
+  'use strict';
+  if (window.SPResourcePolicy) return;
+  const CACHE = 'sp-resource-content-v1';
+  const manifests = new Map();
+  let lastDiagnostic=null;
+  const supported = () => isSecureContext && !!navigator.serviceWorker && !!navigator.locks && !!globalThis.caches && !!crypto.subtle;
+  const mb = n => (n / 1048576).toFixed(1) + ' MB';
+  const failure = message => Object.assign(new Error(message), { code:'LOCAL_RESOURCES_REQUIRED' });
+  async function localRead(promise){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(failure('浏览器读取素材库等待过久。请保持页面在前台，关闭其他导入页面后重新检查。')),30000);})]);}finally{clearTimeout(timer);}}
+  async function json(url, cache='no-store') {
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+    let response;try{response=await fetch(url,{cache,signal:controller.signal});return await read(response);}finally{clearTimeout(timer);}
+    async function read(response){
+    if (!response.ok) throw failure('资源检查暂不可用，请稍后点击重新检查。');
+    return response.json();
+    }
+  }
+  function create({ build, prepare = async () => {} } = {}) {
+    let dialog, text, progress, retry, close, pending, resolve, reject, running = false;
+    function ui() {
+      if (dialog) return;
+      dialog = document.createElement('dialog'); dialog.className = 'sp-local-dialog';
+      dialog.innerHTML = '<form method="dialog"><button class="sp-local-close" aria-label="关闭资源检查">×</button></form><p class="sp-local-eyebrow">8443服 · 本地资源库</p><h2>检查本地素材后进入游戏</h2><p>安卓完整版内置全部素材，无需导入ZIP。iOS／电脑网页需先导入旧完整包v2，再导入0.2.5核心素材补全包。账号、联机和模拟数据仍需联网。</p><progress max="1" value="0" aria-label="本地资源检查进度"></progress><p class="sp-local-status" role="status" aria-live="polite"></p><div class="sp-local-actions"><a class="sp-local-primary" href="/#resource-pack">去导入 ZIP 资源包</a><button type="button" class="sp-local-retry">重新检查</button></div><p>优先从 QQ 群 <strong>455814975 / 1127927007</strong> 下载旧完整包v2及0.2.5核心素材补全包。服务器备用下载共享限速，人数多时会较慢。下载 ZIP 后还需在本站导入。</p><a class="sp-local-resume" href="/game.html">恢复已有对局（新开局仍需检查）</a>';
+      const download = document.createElement('p'); download.className = 'sp-local-downloads';
+      download.innerHTML = '<strong>资源包下载：</strong><a href="https://pan.quark.cn/s/c078652ad1fd" target="_blank" rel="noopener noreferrer">夸克网盘</a> ／ QQ 群 <strong>455814975 / 1127927007</strong> 群文件。安卓完整版 APK 请到该群群文件下载。';
+      const extra = document.createElement('a'); extra.href = '/resource-policy/download/8443-core-025.zip'; extra.textContent = '0.2.5核心素材补全包（备用限速下载）'; download.append(' ',extra);
+      dialog.querySelector('.sp-local-actions').after(download);
+      document.body.append(dialog); text = dialog.querySelector('.sp-local-status'); progress = dialog.querySelector('progress');
+      retry = dialog.querySelector('.sp-local-retry'); close = dialog.querySelector('.sp-local-close');
+      retry.addEventListener('click', () => { void inspect(); });
+      dialog.addEventListener('close', () => { if (pending) reject?.(failure('请先导入本地资源包，再创建或加入新对局。')); });
+    }
+    async function check(onProgress = () => {}, onStage=()=>{}) {
+      const started=performance.now(),timings={};
+      if (!supported()) throw failure('当前浏览器无法使用本地资源库。请使用正常模式的新版 Edge、Chrome 或支持站点存储的浏览器。');
+      onStage('正在读取版本清单…');
+      const selected = build || (await json('/resource-policy/status.json')).build;
+      if (!/^[A-Za-z0-9_-]{1,80}$/.test(selected || '')) throw failure('服务器版本暂不可用，请稍后重试。');
+      if(!manifests.has(selected))manifests.set(selected,json('/resource-policy/manifest.json?build='+encodeURIComponent(selected),'force-cache').catch(error=>{manifests.delete(selected);throw error;}));
+      const manifest = await manifests.get(selected);
+      if (manifest.version !== 1 || manifest.build !== selected || !Array.isArray(manifest.entries) || !manifest.entries.length || manifest.entries.length > 50000) throw failure('资源清单无效，请联系服主。');
+      const seen = new Set();
+      for (const item of manifest.entries) {
+        if (!/^[a-f0-9]{64}$/.test(item?.hash) || !Number.isSafeInteger(item.bytes) || item.bytes <= 0 || item.bytes > 33554432 || seen.has(item.hash)) throw failure('资源清单无效，请联系服主。');
+        seen.add(item.hash);
+      }
+      timings.manifestMs=Math.round(performance.now()-started);
+      async function finish(result){
+        result.digest=manifest.digest;
+        const before=performance.now();if(result.ready)onStage('素材已齐全，正在准备读取组件…');
+        if(result.ready)await prepare(selected,result);
+        timings.prepareMs=Math.round(performance.now()-before);timings.totalMs=Math.round(performance.now()-started);
+        result.timings=timings;lastDiagnostic={revision:'resource-fast-r04',...result};
+        window.dispatchEvent(new CustomEvent('sp:local-resource-check',{detail:result}));return result;
+      }
+      const native=new Map();
+      try{
+        const bundled=JSON.parse(window.SPAndroidResources?.getManifest?.()||'null');
+        if(bundled?.version===1&&bundled.source==='android-bundled'&&Array.isArray(bundled.entries)&&bundled.entries.length<=50000)
+          for(const item of bundled.entries)if(/^[a-f0-9]{64}$/.test(item?.hash)&&Number.isSafeInteger(item.bytes)&&item.bytes>0&&item.bytes<=33554432)native.set(item.hash,item.bytes);
+      }catch{}
+      const nativeOnly=manifest.entries.every(item=>native.get(item.hash)===item.bytes);
+      if(nativeOnly){
+        const result={ready:true,build:selected,count:manifest.entries.length,missing:0,missingBytes:0,nativeOnly:true,source:'android-bundled'};
+        timings.inventoryMs=0;onProgress(result.count,result.count);return finish(result);
+      }
+      const inventoryStarted=performance.now();onStage('正在读取本机素材目录…');
+      let missing = 0, missingBytes = 0;
+      const controller=new AbortController(),lockTimer=setTimeout(()=>controller.abort(),30000);
+      let result;
+      try{result = await navigator.locks.request('sp-resource-write-v1', {mode:'shared',signal:controller.signal}, async () => {
+        clearTimeout(lockTimer);
+        // Every writer verifies SHA-256 before cache.put. Enumerate actual content-addressed
+        // keys once for completeness; do not open 6,759 responses again on every room action.
+        // Keep the inventory inside the shared lock so a concurrent clear cannot race it.
+        const cache=await localRead(window.SPResourceCacheOpen(CACHE)),keys=new Set((await localRead(cache.keys())).map(request=>request.url));
+        for(const item of manifest.entries){
+          if(native.get(item.hash)!==item.bytes&&!keys.has(location.origin+'/__sp_resource_content/'+item.hash)){missing++;missingBytes+=item.bytes;}
+        }
+        onProgress(manifest.entries.length,manifest.entries.length);
+        return {ready:missing === 0, build:selected, count:manifest.entries.length, missing, missingBytes};
+      });}catch(error){if(error.name==='AbortError'&&controller.signal.aborted)throw failure('另一个页面正在写入素材，请等导入完成后重新检查。');throw error;}finally{clearTimeout(lockTimer);}
+      timings.inventoryMs=Math.round(performance.now()-inventoryStarted);return finish(result);
+    }
+    async function inspect() {
+      if (running) return; running = true; retry.disabled = true; progress.value = 0;
+      text.textContent = '正在核对当前版本的本地资源，请稍候…';
+      let stage='正在核对当前版本的本地资源',since=Date.now();
+      const heartbeat=setInterval(()=>{if(Date.now()-since>3000)text.textContent=stage+'（等待'+Math.floor((Date.now()-since)/1000)+'秒，请保持页面在前台）';},1000);
+      try {
+        const result = await check((done,total) => { progress.value = done/total; text.textContent = '正在检查本地资源 ' + done + '/' + total + '…'; },value=>{stage=value;since=Date.now();text.textContent=value;});
+        if (result.ready) { text.textContent = '核心资源检查通过，可以进入游戏。'; resolve?.(result); }
+        else text.textContent = '缺少 ' + result.missing + ' 个核心素材（约 ' + mb(result.missingBytes) + '）。请导入旧完整包v2及0.2.5核心补全包，再点击重新检查。';
+      } catch (error) { text.textContent = error.message || '检查失败，请稍后重试。'; }
+      finally { clearInterval(heartbeat);running = false; retry.disabled = false; }
+    }
+    function ensure() {
+      if (pending) return pending;
+      ui(); if (!dialog.open) dialog.showModal();
+      pending = new Promise((yes,no) => { resolve = yes; reject = no; }).finally(() => {
+        pending = null; resolve = reject = null; if (dialog.open) dialog.close();
+      });
+      void inspect(); return pending;
+    }
+    return {check,ensure};
+  }
+  window.SPResourcePolicy = {create,supported,diagnostics:()=>lastDiagnostic};
+})();
+</script><script>(() => {
+  const button=document.getElementById('pack-check'),status=document.getElementById('pack-status'),progress=document.getElementById('pack-progress');
+  let busy=false;
+  const gate=window.SPResourcePolicy.create();
+  async function enter(target='/game.html'){
+    if(busy)return;busy=true;button.disabled=true;
+    try{
+      document.getElementById('random-dialog')?.close();
+      status.textContent='正在检查本机已导入的资源…';if(progress)progress.hidden=false;
+      const result=await gate.check((done,total)=>{if(progress){progress.max=total;progress.value=done;}status.textContent='正在检查本地资源 '+done+'/'+total;},text=>{status.textContent=text;});
+      if(!result.ready){status.textContent='缺少 '+result.missing+' 个核心素材（约 '+(result.missingBytes/1048576).toFixed(1)+' MB）。请先导入完整资源包，再点击检查并进入。旧资源包仍然有效，可重复导入补齐。';document.getElementById('resource-pack').scrollIntoView({behavior:'smooth',block:'start'});return;}
+      await navigator.locks.request('sp-resource-write-v1',async()=>{const meta=await window.SPResourceCacheOpen('sp-resource-preference-v1');await meta.put(location.origin+'/__sp_resource_preference',new Response('on'));});
+      status.textContent='本地资源检查通过，正在进入8443服…';
+      const response=await fetch('/resource-policy/admission',{method:'POST',headers:{'Content-Type':'application/json','X-SP-Resource-Entry':'1'},body:JSON.stringify({build:result.build,digest:result.digest,source:result.nativeOnly?'native':'web-cache'}),signal:AbortSignal.timeout(20000)});
+      if(!response.ok)throw Error('入口确认失败，服务器可能刚更新，请重新检查。');
+      const granted=await response.json();if(!granted.allowed)throw Error('请重新检查本地资源。');
+      const destination=new URL(target,location.origin);
+      const room=sessionStorage.getItem('sp.entryRoom');if(room){destination.searchParams.set('room',room);sessionStorage.removeItem('sp.entryRoom');}
+      location.assign(destination.pathname+destination.search);
+    }catch(error){status.textContent=error.message||'检查失败，请稍后重试。';document.getElementById('resource-pack').scrollIntoView({behavior:'smooth',block:'start'});}
+    finally{busy=false;button.disabled=false;}
+  }
+  button.onclick=()=>void enter();
+  document.addEventListener('click',event=>{
+    const link=event.target.closest('a[href]');if(!link||event.button!==0)return;
+    const url=new URL(link.href,location.href);
+    if(url.origin!==location.origin||url.pathname!=='/game.html')return;
+    event.preventDefault();event.stopImmediatePropagation();void enter(url.pathname+url.search);
+  },true);
+})();
+</script></body>
+</html>

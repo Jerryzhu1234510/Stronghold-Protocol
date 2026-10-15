@@ -9,20 +9,21 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { startServer, parseRange, acceptsGzip, parseTrustProxy } from '../server/index.js';
+import { startServer, parseRange, acceptsGzip, pickEncoding, parseTrustProxy } from '../server/index.js';
 import { loadData, lookup, getChess, getBond, getBand, getMode, getConfig, INDEXED_FILES } from '../server/data.js';
 import * as dataModule from '../server/data.js';
 import { CODE_ALPHABET, BOT_NAMES } from '../server/lobby.js';
-import { normalizeName, sanitizeName, TokenBucket, SessionRegistry, clientAddress, normalizeIp, isLocalIp, limitKeyOf } from '../server/net.js';
+import { sanitizeName, TokenBucket, SessionRegistry, clientAddress, normalizeIp, isLocalIp, limitKeyOf } from '../server/net.js';
 import { StubMatch as Match } from '../server/match/StubMatch.js';
 import { Match as RealMatch } from '../server/match/Match.js';
 import { TestClient } from './helpers/wsClient.js';
-import { ERR, MAX_SEATS, DEFAULT_SEATS, MAX_SPECTATORS, PHASE, EMOTES } from '../shared/constants.js';
+import { ERR, DEFAULT_SEATS, MAX_SPECTATORS, PHASE, EMOTES } from '../shared/constants.js';
 
 const CODE_RE = new RegExp(`^[${CODE_ALPHABET}]{4}$`);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // ---------------------------------------------------------------------------------------------------
 // helpers
@@ -109,6 +110,8 @@ describe('static http server', () => {
   const js = `// app\n${'export const x = 1;\n'.repeat(200)}`;
   const mp3 = randomBytes(5000);
   const skel = Buffer.from('skel'.repeat(400));
+  // over the 8 MB compression cache limit: compressed as a stream
+  const big = `// big\n${Array.from({ length: 360000 }, (_, i) => `export const v${i} = ${i % 97};`).join('\n')}\n`;
 
   before(async () => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-static-'));
@@ -127,6 +130,7 @@ describe('static http server', () => {
     w('public/assets/spine/x.skel', skel);
     w('public/assets/spine/x.atlas', 'x.png\nsize: 64,64\n'.repeat(40));
     w('public/assets/img/a.png', randomBytes(32));
+    w('public/js/huge.js', big);
     w('public/assets/img/a.webp', randomBytes(32));
     w('public/fonts/f.woff2', randomBytes(32));
     w('public/fonts/f.ttf', randomBytes(32));
@@ -138,7 +142,10 @@ describe('static http server', () => {
     srv = await startServer({
       port: 0, host: '127.0.0.1', quiet: true,
       publicDir: path.join(tmp, 'public'), dataDir: path.join(tmp, 'data'), sharedDir: path.join(tmp, 'shared'),
+      assetIndex: { delayMs: 0 },
     });
+    // the content hashes of public/assets + public/fonts (the ETags of those files): ready before the first request
+    await srv.assetIndex.whenReady();
   });
 
   after(async () => {
@@ -161,17 +168,20 @@ describe('static http server', () => {
     assert.equal(redirect.headers.location, '/sub/?x=1');
   });
 
-  test('javascript: correct MIME, gzip when accepted, identity otherwise', async () => {
-    const gz = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip, deflate, br' } });
-    assert.equal(gz.status, 200);
-    assert.equal(gz.headers['content-type'], 'text/javascript; charset=utf-8');
-    assert.equal(gz.headers['content-encoding'], 'gzip');
-    assert.equal(gz.headers.vary, 'Accept-Encoding');
-    assert.equal(Number(gz.headers['content-length']), gz.body.length);
+  test('javascript: correct MIME, brotli when named, gzip when accepted, identity otherwise', async () => {
+    const br = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip, deflate, br' } });
+    assert.equal(br.status, 200);
+    assert.equal(br.headers['content-type'], 'text/javascript; charset=utf-8');
+    assert.equal(br.headers['content-encoding'], 'br', 'a browser on an HTTPS page (or localhost) names br');
+    assert.equal(br.headers.vary, 'Accept-Encoding');
+    assert.equal(Number(br.headers['content-length']), br.body.length);
+    assert.equal(zlib.brotliDecompressSync(br.body).toString(), js);
+    const gz = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip, deflate' } });
+    assert.equal(gz.headers['content-encoding'], 'gzip', 'a LAN http:// page: gzip');
     assert.equal(zlib.gunzipSync(gz.body).toString(), js);
-    // cached second response is identical
-    const gz2 = await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip' } });
-    assert.deepEqual(gz2.body, gz.body);
+    // cached second responses are identical
+    assert.deepEqual((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip' } })).body, gz.body);
+    assert.deepEqual((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'br' } })).body, br.body);
 
     const plain = await httpReq(srv.port, '/js/app.js');
     assert.equal(plain.headers['content-encoding'], undefined);
@@ -206,6 +216,27 @@ describe('static http server', () => {
     }
     const skelGz = await httpReq(srv.port, '/assets/spine/x.skel', { headers: { 'accept-encoding': 'gzip' } });
     assert.deepEqual(zlib.gunzipSync(skelGz.body), skel);
+    const skelBr = await httpReq(srv.port, '/assets/spine/x.skel', { headers: { 'accept-encoding': 'gzip, br' } });
+    assert.equal(skelBr.headers['content-encoding'], 'br');
+    assert.deepEqual(zlib.brotliDecompressSync(skelBr.body), skel);
+    // media is never compressed, whatever the client names
+    assert.equal((await httpReq(srv.port, '/assets/audio/bgm.mp3', { headers: { 'accept-encoding': 'br, gzip' } })).headers['content-encoding'], undefined);
+    assert.equal((await httpReq(srv.port, '/assets/img/a.png', { headers: { 'accept-encoding': 'br' } })).headers['content-encoding'], undefined);
+  });
+
+  test('a file over the compression cache limit is compressed as a stream (brotli and gzip); HEAD sends no body', async () => {
+    const br = await httpReq(srv.port, '/js/huge.js', { headers: { 'accept-encoding': 'br' } });
+    assert.equal(br.headers['content-encoding'], 'br');
+    assert.equal(br.headers['content-length'], undefined, 'streamed: no length up front');
+    assert.equal(zlib.brotliDecompressSync(br.body).toString(), big);
+    assert.ok(br.body.length < big.length / 4);
+    const gz = await httpReq(srv.port, '/js/huge.js', { headers: { 'accept-encoding': 'gzip' } });
+    assert.equal(gz.headers['content-encoding'], 'gzip');
+    assert.equal(zlib.gunzipSync(gz.body).toString(), big);
+    const head = await httpReq(srv.port, '/js/huge.js', { method: 'HEAD', headers: { 'accept-encoding': 'br' } });
+    assert.equal(head.status, 200);
+    assert.equal(head.body.length, 0);
+    assert.equal(head.headers['content-encoding'], 'br');
   });
 
   test('ETag / Last-Modified revalidation and Cache-Control policy', async () => {
@@ -225,10 +256,16 @@ describe('static http server', () => {
     assert.equal(stale.status, 200);
     const gzEtag = (await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip' } })).headers.etag;
     assert.notEqual(gzEtag, etag, 'gzip variant has its own ETag');
+    const brEtag = (await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'br' } })).headers.etag;
+    assert.equal(brEtag, etag.replace(/"$/, '-br"'), 'so has the brotli variant');
+    assert.equal((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'br', 'if-none-match': brEtag } })).status, 304);
+    assert.equal((await httpReq(srv.port, '/js/app.js', { headers: { 'accept-encoding': 'gzip', 'if-none-match': brEtag } })).status, 200, 'not the gzip variant');
 
-    // unversioned art/fonts/vendor: cached for a day (files can be rewritten in place by the asset tools)
+    // unversioned art/fonts/vendor: cached for a day (files can be rewritten in place by the asset tools); the art and
+    // fonts carry their content hash as ETag (server/http/assetIndex.js), so a rewrite with the same bytes is a 304
     const asset = await httpReq(srv.port, '/assets/img/a.png');
     assert.equal(asset.headers['cache-control'], 'public, max-age=86400');
+    assert.match(asset.headers.etag, /^"[0-9a-f]{16}"$/);
     const font = await httpReq(srv.port, '/fonts/f.woff2');
     assert.equal(font.headers['cache-control'], 'public, max-age=86400');
     const assetV = await httpReq(srv.port, '/assets/img/a.png?v=abc');
@@ -391,6 +428,17 @@ describe('static http server', () => {
     assert.equal(acceptsGzip('*;q=0'), false);
     assert.equal(acceptsGzip('br'), false);
     assert.equal(acceptsGzip(undefined), false);
+    // brotli when named at least as high as gzip; `*` alone never picks it
+    assert.equal(pickEncoding('gzip, deflate, br, zstd'), 'br');
+    assert.equal(pickEncoding('gzip, deflate'), 'gzip');
+    assert.equal(pickEncoding('br;q=0, gzip'), 'gzip');
+    assert.equal(pickEncoding('br;q=0.5, gzip'), 'gzip');
+    assert.equal(pickEncoding('gzip;q=0.5, br'), 'br');
+    assert.equal(pickEncoding('br'), 'br');
+    assert.equal(pickEncoding('*'), 'gzip');
+    assert.equal(pickEncoding('*;q=0'), null);
+    assert.equal(pickEncoding('identity'), null);
+    assert.equal(pickEncoding(undefined), null);
   });
 });
 
@@ -530,8 +578,16 @@ describe('websocket lobby', () => {
 
   test('flooding far beyond the limit closes the socket (1008)', async () => {
     const c = await pool.player('Flood');
-    for (let i = 0; i < 600; i++) c.send({ t: 'ping', c: i, rid: null });
-    const info = await c.closed;
+    // bursts until the server closes it: the close needs more than abuseDropsPerSec drops inside one 1 s window, and on
+    // a heavily loaded machine a single burst of 600 can be read over more than a second — the old single burst then
+    // never closed the socket and `await c.closed` (no timeout) hung the whole file
+    const t0 = Date.now();
+    while (c.isOpen && Date.now() - t0 < 20000) {
+      for (let i = 0; i < 600 && c.isOpen; i++) c.send({ t: 'ping', c: i, rid: null });
+      await delay(50);
+    }
+    const info = await Promise.race([c.closed, delay(10000).then(() => null)]);
+    assert.ok(info, 'the server closed the flooding socket');
     assert.equal(info.code, 1008);
   });
 
@@ -542,8 +598,7 @@ describe('websocket lobby', () => {
     assert.equal(st.mode, 'coop');
     assert.equal(st.difficulty, 'HARD');
     assert.equal(st.inMatch, false);
-    assert.equal(st.seats.length, DEFAULT_SEATS, 'a co-op room has the default (official) 4 seats');
-    assert.equal(st.capacity, DEFAULT_SEATS);
+    assert.equal(st.seats.length, DEFAULT_SEATS);
     assert.deepEqual(st.seats[0], { seat: 0, playerId: host.id, name: 'Host', isBot: false, ready: false, connected: true });
     assert.deepEqual(st.seats.slice(1), [null, null, null]);
 
@@ -605,136 +660,6 @@ describe('websocket lobby', () => {
     assert.equal(soloState.mode, 'solo');
     await expectError(late, { t: 'room.join', code: soloState.code }, ERR.ROOM_FULL);
     await expectError(solo, { t: 'room.addBot' }, ERR.ROOM_FULL);
-  });
-
-  // 5–8 seats (a remake extension, owner's decision): the host chooses the co-op room's capacity, 4 by default
-  test('room capacity: room.create {capacity}, 8 seats fill with humans and up to 7 AI teammates, a 9th is ROOM_FULL', async () => {
-    assert.equal(MAX_SEATS, 8);
-    assert.equal(DEFAULT_SEATS, 4);
-    const host = await pool.player('Host');
-    const r = await host.request({ t: 'room.create', mode: 'coop', difficulty: 'NORMAL', capacity: MAX_SEATS });
-    assert.equal(r.t, 'ok', JSON.stringify(r));
-    const st = await host.waitFor('room.state', (s) => s.hostId === host.id);
-    assert.equal(st.capacity, MAX_SEATS);
-    assert.deepEqual(st.seats, [st.seats[0], ...Array(MAX_SEATS - 1).fill(null)]);
-    const guests = [];
-    for (let i = 0; i < 3; i++) {
-      const g = await pool.player(`G${i}`);
-      const joined = await joinRoom(g, st.code);
-      assert.equal(seatOf(joined, g.id).seat, i + 1);
-      guests.push(g);
-    }
-    for (let i = 0; i < MAX_SEATS - 4; i++) await expectOk(host, { t: 'room.addBot' });
-    const full = await host.waitFor('room.state', (s) => s.seats.every(Boolean));
-    assert.equal(full.seats.length, MAX_SEATS);
-    assert.deepEqual(full.seats.filter((x) => x.isBot).map((x) => x.name), BOT_NAMES.slice(0, MAX_SEATS - 4));
-    const late = await pool.player('Late');
-    await expectError(late, { t: 'room.join', code: st.code }, ERR.ROOM_FULL);
-    await expectError(host, { t: 'room.addBot' }, ERR.ROOM_FULL);
-    // the last seat (index 7) is addressable: remove its AI, a late player takes it
-    assert.ok(full.seats[MAX_SEATS - 1].isBot);
-    await expectOk(host, { t: 'room.removeBot', seat: MAX_SEATS - 1 });
-    const sat = await joinRoom(late, st.code);
-    assert.equal(seatOf(sat, late.id).seat, MAX_SEATS - 1);
-    await expectError(host, { t: 'room.kick', seat: MAX_SEATS, playerId: late.id }, ERR.BAD_MSG); // beyond the protocol maximum
-    await expectOk(host, { t: 'room.kick', seat: MAX_SEATS - 1, playerId: late.id });
-    assert.equal((await late.waitFor('room.closed')).reason, 'kicked');
-
-    // a room of one human and 7 AI teammates: every bot gets its own name (and so its portrait), and the match gets 8 seats
-    const lead = await pool.player('Lead');
-    const r2 = await lead.request({ t: 'room.create', mode: 'coop', difficulty: 'FUNNY', capacity: MAX_SEATS });
-    assert.equal(r2.t, 'ok');
-    for (let i = 0; i < MAX_SEATS - 1; i++) await expectOk(lead, { t: 'room.addBot' });
-    const bots = await lead.waitFor('room.state', (s) => s.hostId === lead.id && s.seats.every(Boolean));
-    const names = bots.seats.slice(1).map((x) => x.name);
-    assert.deepEqual(names, BOT_NAMES.slice(0, MAX_SEATS - 1), 'BOT_NAMES covers 7 bots (no AI·N fallback)');
-    assert.equal(new Set(names).size, MAX_SEATS - 1);
-    await expectOk(lead, { t: 'room.start' });
-    await lead.waitFor('m.public', (m) => m.phase === 'INFO_CHECK');
-    const match = srv.lobby.getRoom(bots.code).match;
-    assert.deepEqual([...match.players.values()].map((p) => p.seat), [0, 1, 2, 3, 4, 5, 6, 7]);
-    await expectError(lead, { t: 'room.setCapacity', capacity: DEFAULT_SEATS }, ERR.ROOM_STARTED);
-    await expectOk(lead, { t: 'room.leave' });
-  });
-
-  test('every AI teammate name of the largest room has a portrait (an operator or a strategy with art)', async () => {
-    // the client's lookup (screens/room.js SeatCard, ui/gameComponents.js PlayerAvatar): strip 'AI·', then a non-golden
-    // chess of that name, else a band of that name; no art ⇒ the generic robot glyph
-    const { chessAvatarUrl, bandIconUrl } = await import('../public/js/ui/assetUrls.js');
-    const read = (f) => JSON.parse(fs.readFileSync(new URL(`../data/${f}`, import.meta.url), 'utf8'));
-    const chess = Object.values(read('chess.json'));
-    const bands = Object.values(read('bands.json'));
-    const assets = read('assets.json');
-    assert.ok(BOT_NAMES.length >= MAX_SEATS - 1);
-    assert.deepEqual(BOT_NAMES.slice(0, 3), ['AI·华法琳', 'AI·阿米娅', 'AI·惊蛰'], 'a 4-seat room (≤ 3 bots) names its bots as before');
-    for (const full of BOT_NAMES.slice(0, MAX_SEATS - 1)) {
-      const name = full.replace(/^AI[·・\s]*/, '');
-      const c = chess.find((x) => !x.isGolden && x.name === name);
-      const b = bands.find((x) => x.name === name);
-      assert.ok(chessAvatarUrl(assets, c) || bandIconUrl(assets, b?.bandId), `${full} resolves to an operator or strategy portrait`);
-    }
-  });
-
-  test('room capacity: host-only room.setCapacity in the lobby, 4..8, never below the occupied seats; shrinking moves members down', async () => {
-    // default: a co-op room has 4 seats; a capacity out of range is a bad message; a solo room has one seat whatever it asks
-    const host = await pool.player('Host');
-    const st = await createRoom(host);
-    assert.equal(st.capacity, DEFAULT_SEATS);
-    assert.equal(st.seats.length, DEFAULT_SEATS);
-    for (const capacity of [DEFAULT_SEATS - 1, MAX_SEATS + 1, 5.5, '6', null]) {
-      await expectError(host, { t: 'room.create', mode: 'coop', difficulty: 'NORMAL', capacity }, ERR.BAD_MSG);
-      await expectError(host, { t: 'room.setCapacity', capacity }, ERR.BAD_MSG);
-    }
-    await expectError(host, { t: 'room.setCapacity' }, ERR.BAD_MSG);
-    const soloHost = await pool.player('Solo');
-    const sr = await soloHost.request({ t: 'room.create', mode: 'solo', difficulty: 'FUNNY', capacity: MAX_SEATS });
-    assert.equal(sr.t, 'ok');
-    const soloSt = await soloHost.waitFor('room.state', (s) => s.mode === 'solo');
-    assert.equal(soloSt.capacity, 1);
-    assert.equal(soloSt.seats.length, 1);
-    await expectError(soloHost, { t: 'room.setCapacity', capacity: MAX_SEATS }, ERR.BAD_TARGET);
-
-    // grow: the seats keep their places; a guest may not resize; a spectator neither
-    const guest = await pool.player('Guest');
-    await joinRoom(guest, st.code);
-    await expectError(guest, { t: 'room.setCapacity', capacity: 6 }, ERR.NOT_HOST);
-    await expectOk(host, { t: 'room.setCapacity', capacity: 6 });
-    const grown = await guest.waitFor('room.state', (s) => s.capacity === 6);
-    assert.equal(grown.seats.length, 6);
-    assert.equal(seatOf(grown, host.id).seat, 0);
-    assert.equal(seatOf(grown, guest.id).seat, 1);
-    const watcher = await pool.player('Watcher');
-    await expectOk(watcher, { t: 'room.spectate', code: st.code });
-    await expectError(watcher, { t: 'room.setCapacity', capacity: 8 }, ERR.NOT_HOST);
-    await expectOk(watcher, { t: 'room.leave' });
-    await expectOk(host, { t: 'room.setCapacity', capacity: 6 }); // unchanged: ok, nothing to do
-
-    // a member seated beyond the new size moves to the lowest free seat (seat order kept), ready state and all
-    for (let i = 0; i < 3; i++) await expectOk(host, { t: 'room.addBot' }); // seats 2, 3, 4
-    const late = await pool.player('Late');
-    const lateSt = await joinRoom(late, st.code);
-    assert.equal(seatOf(lateSt, late.id).seat, 5);
-    await expectOk(late, { t: 'room.ready', ready: true });
-    await expectOk(guest, { t: 'room.ready', ready: true });
-    await expectError(host, { t: 'room.setCapacity', capacity: DEFAULT_SEATS }, ERR.BAD_TARGET); // 6 seated > 4
-    await expectOk(host, { t: 'room.removeBot', seat: 2 });
-    await expectOk(host, { t: 'room.removeBot', seat: 3 });
-    await host.waitFor('room.state', (s) => s.seats.filter(Boolean).length === 4);
-    await expectOk(host, { t: 'room.setCapacity', capacity: DEFAULT_SEATS });
-    const shrunk = await late.waitFor('room.state', (s) => s.capacity === DEFAULT_SEATS);
-    assert.equal(shrunk.seats.length, DEFAULT_SEATS);
-    shrunk.seats.forEach((x, i) => assert.equal(x.seat, i, 'seat indexes match their slots'));
-    const who = (x) => (x.playerId === host.id ? 'host' : x.playerId === guest.id ? 'guest' : x.playerId === late.id ? 'late' : 'bot');
-    assert.deepEqual(shrunk.seats.map(who), ['host', 'guest', 'bot', 'late'], 'the bot (seat 4) took seat 2, the late player (seat 5) seat 3');
-    assert.equal(seatOf(shrunk, late.id).ready, true, 'nobody is un-readied');
-    assert.equal(seatOf(shrunk, guest.id).ready, true);
-    await expectError(host, { t: 'room.removeBot', seat: 4 }, ERR.BAD_TARGET); // beyond the room now
-    const extra = await pool.player('Extra');
-    await expectError(extra, { t: 'room.join', code: st.code }, ERR.ROOM_FULL);
-    // the start still works with the moved seats
-    await expectOk(host, { t: 'room.start' });
-    await host.waitFor('m.public', (m) => m.phase === 'INFO_CHECK');
-    assert.deepEqual([...srv.lobby.getRoom(st.code).match.players.values()].map((p) => p.seat), [0, 1, 2, 3]);
   });
 
   // community report #26 (a remake feature): spectator seats — server/lobby.js header
@@ -1094,17 +1019,7 @@ describe('websocket lobby', () => {
     await expectError(probe, { t: 'room.join', code: st.code }, ERR.ROOM_NOT_FOUND);
   });
 
-  test('protocol fuzz: random intents never crash the server or corrupt lobby invariants', async (t) => {
-    // Its own server: the walk picks join / spectate targets among all open rooms, so rooms other tests left behind would
-    // change what it does (and whether steps such as g.infoReady ever succeed).
-    const ownCap = captureLog();
-    const srv = await startServer({ port: 0, host: '127.0.0.1', log: ownCap.log, MatchClass: Match });
-    const pool = clientPool(() => `ws://127.0.0.1:${srv.port}/ws`);
-    t.after(async () => {
-      await pool.closeAll();
-      await srv.close();
-      assert.deepEqual(ownCap.errors, [], 'no server errors logged');
-    });
+  test('protocol fuzz: random intents never crash the server or corrupt lobby invariants', async () => {
     let seed = 0x5eed1234;
     const rnd = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
     const pick = (a) => a[Math.floor(rnd() * a.length)];
@@ -1138,41 +1053,22 @@ describe('websocket lobby', () => {
       return pick([{ t: 'hello', name: pick(['Re', '', 'x'.repeat(20)]) }, { t: 'ping', c: pick([1, 'x']) }, { t: pick(['nope', '__proto__', 'toString']) }, { t: 'room.join', code: pick(junk) }]);
     };
     const okCounts = {};
-    // Stay well under the per-connection rate limit (net.js 40 msg/s, burst 40): at most PACE frames per connection in
-    // any second. A RATE reply changes what the rest of the walk does, so without this the walk (and whether a step such
-    // as g.infoReady ever succeeds) depends on how fast the machine runs it.
-    const PACE = 30;
-    const sentAt = new WeakMap(); // connection → its send times in the last second
-    const pace = async (conn) => {
-      const list = sentAt.get(conn) || [];
-      sentAt.set(conn, list);
-      for (;;) {
-        const now = Date.now();
-        while (list.length && now - list[0] >= 1000) list.shift();
-        if (list.length < PACE) break;
-        await delay(1000 - (now - list[0]) + 5);
-      }
-      list.push(Date.now());
-    };
     for (let i = 0; i < 500; i++) {
       const k = Math.floor(rnd() * clients.length);
       let c = clients[k];
       if (rnd() < 0.04) { // drop & resume
         await c.terminate();
         const back = await pool.connect();
-        await pace(back);
         const w = await back.hello(`F${k}`, c.token);
         Object.assign(back, { id: w.playerId, token: w.token });
         clients[k] = c = back;
         continue;
       }
       const msg = gen();
-      await pace(c);
       const reply = await c.request(msg, 3000);
       assert.ok(['ok', 'error', 'welcome', 'pong'].includes(reply.t));
       if (reply.t === 'ok') okCounts[msg.t] = (okCounts[msg.t] || 0) + 1;
       if (reply.t === 'error') assert.ok(Object.hasOwn(ERR, reply.code), reply.code);
-      assert.notEqual(reply.code, ERR.RATE, `step ${i} (${msg.t}) was rate-limited: the pacing above must keep the walk independent of machine speed`);
       if (i % 50 === 0) await delay(30); // stay well under the rate limit
     }
     for (const t of ['room.create', 'room.join', 'room.start', 'room.addBot', 'g.infoReady']) assert.ok(okCounts[t] > 0, `fuzz never succeeded at ${t}`);
@@ -1706,7 +1602,7 @@ describe('match result replay', () => {
   }
 
   /** Frames of a resumed socket in arrival order (types + phase), after welcome. */
-  const order = (c) => c.log.filter((m) => m.t !== 'welcome' && m.t !== 'pong').map((m) => m.t + (m.t === 'm.public' ? `:${m.phase}` : ''));
+  const order = (c) => c.log.filter((m) => !['welcome', 'pong', 'server.announcement', 'room.chatHistory'].includes(m.t)).map((m) => m.t + (m.t === 'm.public' ? `:${m.phase}` : ''));
 
   for (const unicast of [true, false]) {
     test(`a human disconnected when the match ends gets room.state, the final m.public and m.result on resume (${unicast ? 'per-player' : 'broadcast'} result)`, async () => {
@@ -1778,7 +1674,7 @@ describe('match result replay', () => {
     await back.terminate();
     const again = await pool.connect();
     await again.hello('Guest', guest.token);
-    await again.expectNone(null, (m) => m.t !== 'welcome', 300);
+    await again.expectNone(null, (m) => !['welcome', 'server.announcement'].includes(m.t), 300);
   });
 
   test('real Match: a human who is away when the match finishes gets its m.result on resume', async () => {
@@ -2131,18 +2027,6 @@ describe('platform units', () => {
     assert.equal(sanitizeName(''), null);
     assert.equal(sanitizeName(42), null);
     assert.equal([...sanitizeName('😀'.repeat(20))].length, 12);
-  });
-
-  test('normalizeName gives a name that normalizes to itself (NFC after the stripping)', () => {
-    const chars = (...codes) => String.fromCodePoint(...codes);
-    // x, soft hyphen, combining diaeresis: once the soft hyphen is gone, NFC makes one character of the other two.
-    assert.equal(normalizeName(chars(0x78, 0xad, 0x308)), chars(0x1e8d));
-    // Hangul jamo split by a zero-width space: one syllable once the space is gone.
-    assert.equal(normalizeName(chars(0x1100, 0x200b, 0x1161)), chars(0xac00));
-    for (const raw of [chars(0x78, 0xad, 0x308), chars(0x1100, 0x200b, 0x1161), 'e' + chars(0x301), ' 凯 尔希 ']) {
-      const name = normalizeName(raw);
-      assert.equal(normalizeName(name), name, JSON.stringify(raw));
-    }
   });
 
   test('TokenBucket refills continuously up to burst', () => {

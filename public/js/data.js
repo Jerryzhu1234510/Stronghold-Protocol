@@ -6,10 +6,9 @@
 // GAME_FILES) in the background once the player is in a room, and the match screen waits for them, so no text of the
 // match UI ever appears late. A transient failure (network error, HTTP 5xx) is retried twice (RETRY_DELAYS_MS); files
 // that stay unavailable (404, repeated failures, bad JSON) resolve to `null` and are reported once on the console — the
-// UI must degrade gracefully while data is being generated. The emote manifests (`local`, `assets`) are the exception:
-// one attempt is abandoned after ART_MANIFEST_TIMEOUT_MS (GitHub #99) and reported `missing` at once, so the 交流 button
-// draws its glyph instead of staying blank; a later retry that succeeds replaces the glyph. Other files stay `loading`
-// across their retries.
+// UI must handle unavailable data. Each complete transfer is bounded (core data: DATA_TIMEOUT_MS; optional art:
+// ART_MANIFEST_TIMEOUT_MS). Art is reported `missing` on the first failure so it can use a glyph; mandatory game data
+// stays `loading` across retries. The match waits for mandatory data and offers a manual retry if it remains missing.
 //
 // Each file is indexed tolerantly so the getters work whether a file is
 //   - an array of records carrying an id field (id / chessId / bondId / itemId / …),
@@ -17,9 +16,21 @@
 //   - or either of those wrapped as { <name>: … } / { list: … } / { data: … }.
 // Synchronous getters (getChess, getBond, …) return null until the file has loaded; use
 // `loadData(...)` to await, or the `useData(...)` hook to re-render when files arrive.
+//
+// Language (docs/I18N.md): the files hold the official Chinese texts. `setLocale(lang, chain)` downloads (once each) the
+// game-text overlays data/i18n/<code>.json of the chain — the language's own, its base's, a fallback's (ui/lang.js
+// passes the languages of the pack's chain that have one; default: the language alone) — built by tools/build-i18n.mjs
+// (the official texts by record id and field, shared/i18nData.js). From then on `get`, `lookup` and `list` — and every
+// getter built on them — return the records with their texts in that language (a copy per file, built on first use):
+// each text from the first overlay of the chain that has it, else the Chinese one. `setLocale('zh')` goes back. Each
+// switch notifies the subscribers of every loaded file, so `useData` components re-render. `localeName(zh)` maps a
+// Chinese game-data name to the current language (server messages name operators / items in Chinese).
 
 import { useEffect, useReducer } from '../vendor/hooks.module.js';
-import { waiguanRecords } from '../../shared/waiguan.js';
+import { applyFileOverlay } from '../../shared/i18nData.js';
+import { canonicalLang } from '../../shared/i18nPacks.js';
+import { requestJson } from './requestJson.js';
+import { manifestForNative } from './resources/manifest.js';
 
 /** Known data files (name → URL basename). Unknown names are allowed too (`/data/<name>.json`). */
 export const DATA_FILES = Object.freeze({
@@ -34,9 +45,8 @@ export const DATA_FILES = Object.freeze({
   choices: 'choices.json',
   config: 'config.json',
   assets: 'assets.json',
-  // 外援 / 甄选 (DIY) roster (DESIGN §27): the 6★ operators outside the shop pool, at both DIY tiers. Loaded on demand
-  // (the 甄选 picker and the 干员调配 screen), or with the rest of the match files once the player is in a room.
-  waiguan: 'waiguan.json',
+  // 补位 stand-ins (DATA.md §18): the bodies the 干员持有 screen, the cards and the detail card compose (shared/standIn.js)
+  backups: 'backups.json',
   // Optional art extracted from a local game client (DESIGN §13): { groups: { '<subdir>': { name: { path, w, h } } } }.
   // The emotes and the 玩法说明 pages are in data/assets.json too (downloaded from the mirror): artUrls().
   local: 'local-assets.json',
@@ -88,9 +98,10 @@ export const RETRY_DELAYS_MS = Object.freeze([600, 2000]);
 /**
  * How long one attempt at an emote manifest (`local`, `assets`) may hang before it counts as a failure.
  * [ASSUMED] 8 s: long enough for a slow link, short enough that the 交流 button does not stay blank for the session
- * (GitHub #99). Other files are not on this clock.
+ * (GitHub #99). Core data uses DATA_TIMEOUT_MS instead.
  */
 export const ART_MANIFEST_TIMEOUT_MS = 8000;
+export const DATA_TIMEOUT_MS = 30000;
 
 /** Manifests the emote button waits on. A hang here used to leave every cell blank (GitHub #99). */
 const ART_MANIFESTS = new Set(['local', 'assets']);
@@ -111,21 +122,37 @@ const transientFailure = (err) => {
  * user playtest #3 item 9); a transient failure is retried (RETRY_DELAYS_MS) while the file stays 'loading', so a
  * network hiccup does not leave the texts of a whole session missing. `local` and `assets` are reported `missing` on
  * the first failure or timeout (the emote glyph) and stay that way through a retry; a later success is `ready`.
- * @param {{ fetch?: typeof fetch, base?: string, retryDelays?: number[], wait?: (ms: number) => Promise<void>, timeoutMs?: number, setTimeout?: typeof setTimeout, clearTimeout?: typeof clearTimeout }} [opts]
- *   `timeoutMs` 0 turns the art-manifest clock off. `setTimeout` / `clearTimeout` let a test fire that clock.
+ * @param {{ fetch?: typeof fetch, base?: string, retryDelays?: number[], wait?: (ms: number) => Promise<void>, timeoutMs?: number, coreTimeoutMs?: number, setTimeout?: typeof setTimeout, clearTimeout?: typeof clearTimeout }} [opts]
+ *   `timeoutMs` / `coreTimeoutMs` 0 disable the respective clock. Timers can be injected by tests.
  */
 export function createDataStore(opts = {}) {
   const base = opts.base ?? '/data/';
   const doFetch = opts.fetch || ((...a) => globalThis.fetch(...a));
+  // The hot gateway pins every fetch to an immutable release. Reuse HTTP-cached
+  // names/skills/manifests on reconnect; unversioned development data still revalidates.
+  const cacheMode = globalThis.__SP_GENERATION ? 'default' : 'no-cache';
   const retryDelays = Array.isArray(opts.retryDelays) ? opts.retryDelays : RETRY_DELAYS_MS;
   const wait = opts.wait || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const timeoutMs = opts.timeoutMs === undefined ? ART_MANIFEST_TIMEOUT_MS : Number(opts.timeoutMs);
+  const coreTimeoutMs = opts.coreTimeoutMs === undefined ? DATA_TIMEOUT_MS : Number(opts.coreTimeoutMs);
   const armTimer = opts.setTimeout || ((fn, ms) => setTimeout(fn, ms));
   const disarmTimer = opts.clearTimeout || ((id) => clearTimeout(id));
-  /** @type {Map<string, { status: 'loading'|'ready'|'missing', promise: Promise<any>, value: any, index: Map<string, any>|null, diy: Map<string, any>|null }>} */
+  /** @type {Map<string, { status: 'loading'|'ready'|'missing', promise: Promise<any>, value: any, index: Map<string, any>|null }>} */
   const entries = new Map();
   const listeners = new Set();
   const warned = new Set();
+  /** Current locale ('zh' = the files as they are) and the downloaded overlays by language (shared/i18nData.js). */
+  let locale = 'zh';
+  /** The languages whose overlays apply, best first (a subset of the chain setLocale got: those that downloaded). */
+  let chain = [];
+  /** setLocale calls so far: a slower earlier call never overrides a later one. */
+  let switches = 0;
+  /** @type {Map<string, Promise<any>>} */
+  const overlayLoads = new Map();
+  /** @type {Map<string, any>} */
+  const overlays = new Map();
+  /** name → { lang, value, index } localized copy of a ready file (dropped on every switch / reload of the file) */
+  const localized = new Map();
 
   const notify = (name) => {
     for (const fn of [...listeners]) {
@@ -136,52 +163,29 @@ export function createDataStore(opts = {}) {
   const urlFor = (name) => base + (DATA_FILES[name] || `${name}.json`);
 
   /**
-   * One attempt at a file. Art manifests reject with a transient `{ timeout: true }` when the clock fires; a response
-   * that arrives after that is ignored (the retry is a new request). [ASSUMED]
+   * One bounded attempt, including the body; abort the transfer on timeout or manual retry.
    */
-  function readJson(name) {
-    const run = async () => {
-      const res = await doFetch(urlFor(name), { cache: 'no-cache' });
-      if (!res || !res.ok) throw Object.assign(new Error(`HTTP ${res ? res.status : '???'}`), { status: res ? res.status : null });
-      try {
-        return await res.json();
-      } catch (err) {
-        throw Object.assign(err instanceof Error ? err : new Error(String(err)), { badJson: true });
-      }
-    };
-    if (!ART_MANIFESTS.has(name) || !(timeoutMs > 0)) return run();
-    let timer = null;
-    let done = false;
-    const finish = () => {
-      if (done) return false;
-      done = true;
-      if (timer != null) disarmTimer(timer);
-      return true;
-    };
-    const timed = new Promise((_, reject) => {
-      timer = armTimer(() => {
-        if (!finish()) return;
-        reject(Object.assign(new Error('timeout'), { timeout: true }));
-      }, timeoutMs);
-    });
-    const req = run().then(
-      (json) => { finish(); return json; },
-      (err) => { finish(); throw err; },
-    );
-    return Promise.race([req, timed]);
+  function readJson(name, signal) {
+    return requestJson(urlFor(name), {
+      fetchFn: doFetch, cache: cacheMode, signal,
+      timeoutMs: ART_MANIFESTS.has(name) ? timeoutMs : coreTimeoutMs,
+      setTimer: armTimer, clearTimer: disarmTimer,
+    }).then(value => ART_MANIFESTS.has(name) ? manifestForNative(value) : value);
   }
 
-  function load(name) {
+  function load(name, retryMissing = false) {
     if (typeof name !== 'string' || !/^[A-Za-z0-9_-]+$/.test(name)) return Promise.resolve(null);
     const cur = entries.get(name);
-    if (cur) return cur.promise;
-    const entry = { status: 'loading', promise: null, value: null, index: null, diy: null };
+    if (cur && !(retryMissing && cur.status === 'missing' && cur.retryable && !cur.retrying)) return cur.promise;
+    if (cur) cur.retrying = true;
+    // A background recovery must keep the current UI visible until the replacement arrives.
+    const entry = { status: cur?.status === 'missing' ? 'missing' : 'loading', promise: null, value: null, index: null, retryable: false, retrying: !!cur, abort: new AbortController() };
     const art = ART_MANIFESTS.has(name);
     entry.promise = (async () => {
       let toldMissing = false;
       for (let attempt = 0; ; attempt++) {
         try {
-          entry.value = await readJson(name);
+          entry.value = await readJson(name, entry.abort.signal);
           entry.status = 'ready';
           break;
         } catch (err) {
@@ -193,7 +197,6 @@ export function createDataStore(opts = {}) {
           if (art && current && entry.status !== 'missing') {
             entry.value = null;
             entry.index = null;
-            entry.diy = null;
             entry.status = 'missing';
             toldMissing = true;
             notify(name);
@@ -210,8 +213,8 @@ export function createDataStore(opts = {}) {
             }
             entry.value = null;
             entry.index = null;
-            entry.diy = null;
             entry.status = 'missing';
+            entry.retryable = transientFailure(err);
           }
           break;
         }
@@ -219,64 +222,168 @@ export function createDataStore(opts = {}) {
       // A load superseded by invalidate() must not announce itself (its entry is no longer cached).
       // An art manifest already announced `missing` does not announce that same status again.
       if (entries.get(name) === entry && !(toldMissing && entry.status === 'missing')) notify(name);
+      entry.retrying = false;
       return entry.value;
     })();
     entries.set(name, entry);
     return entry.promise;
   }
 
+  /**
+   * The localized copy of a ready file (null in Chinese or without an overlay for the file): the overlays of the chain
+   * applied from the last to the first, each text checked against the Chinese file, so the best overlay wins per text.
+   */
+  function localizedEntry(name) {
+    if (locale === 'zh' || !chain.length) return null;
+    const e = entries.get(name);
+    if (!e || e.status !== 'ready') return null;
+    const fileOverlays = chain.map((c) => overlays.get(c)?.files?.[name]).filter(Boolean);
+    if (!fileOverlays.length) return null;
+    let l = localized.get(name);
+    if (!l || l.lang !== locale || l.base !== e.value) {
+      let value = e.value;
+      for (const fo of fileOverlays.reverse()) {
+        try { value = applyFileOverlay(e.value, fo, value).value; } catch (err) { console.warn(`[data] ${name}: overlay not applied`, err); }
+      }
+      l = { lang: locale, base: e.value, value, index: null };
+      localized.set(name, l);
+    }
+    return l;
+  }
+
   function index(name) {
     const e = entries.get(name);
     if (!e || e.status !== 'ready') return null;
+    const l = localizedEntry(name);
+    if (l) {
+      if (!l.index) l.index = buildIndex(name, l.value);
+      return l.index;
+    }
     if (!e.index) e.index = buildIndex(name, e.value);
     return e.index;
   }
 
-  /** chessId → 外援 / 甄选 record (data/waiguan.json), or null while that file is not loaded. */
-  function diyIndex() {
-    const e = entries.get('waiguan');
-    if (!e || e.status !== 'ready' || !e.value) return null;
-    if (!e.diy) e.diy = new Map(Object.entries(waiguanRecords(e.value)));
-    return e.diy;
+  /**
+   * Download (once per language) a game-text overlay — `url` (a pack folder's file, from the pack index) or the language
+   * folder's data/i18n/<lang>.json; resolves to it, or null when unavailable.
+   */
+  function loadOverlay(lang, url = `${base}i18n/${lang}.json`) {
+    if (overlayLoads.has(lang)) return overlayLoads.get(lang);
+    const p = (async () => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const res = await doFetch(url, { cache: 'no-cache' });
+          if (!res || !res.ok) throw Object.assign(new Error(`HTTP ${res ? res.status : '???'}`), { status: res ? res.status : null });
+          const json = await res.json();
+          if (!json || typeof json !== 'object' || !json.files) throw Object.assign(new Error('not an overlay'), { badJson: true });
+          overlays.set(lang, json);
+          return json;
+        } catch (err) {
+          if (transientFailure(err) && attempt < retryDelays.length) { await wait(retryDelays[attempt]); continue; }
+          console.warn(`[data] ${url} unavailable (${err?.message || err}); its game texts are not applied`);
+          overlayLoads.delete(lang); // a later switch may try again
+          return null;
+        }
+      }
+    })();
+    overlayLoads.set(lang, p);
+    return p;
   }
 
   return {
     /** Fetch (once) and return a file's JSON, or null when missing. */
     load,
     /** Load several files; resolves when all settled. */
-    loadAll: (...names) => Promise.all(names.flat().map(load)),
-    /** Raw JSON of a loaded file (null when missing / not loaded yet). */
-    get: (name) => entries.get(name)?.value ?? null,
+    loadAll: (...names) => Promise.all(names.flat().map((name) => load(name))),
+    /** JSON of a loaded file in the current locale (null when missing / not loaded yet). */
+    get: (name) => localizedEntry(name)?.value ?? entries.get(name)?.value ?? null,
+    /** The file exactly as downloaded (Chinese texts), whatever the locale. */
+    getRaw: (name) => entries.get(name)?.value ?? null,
     /** 'idle' | 'loading' | 'ready' | 'missing' */
     status: (name) => entries.get(name)?.status ?? 'idle',
-    /**
-     * Record by id from a loaded file (null when unknown / not loaded). `chess` also resolves the 外援 / 甄选 records
-     * (`chess_char_diy_*`, tier V and VI, normal and elite: shared/waiguan.js waiguanRecords) once data/waiguan.json is
-     * loaded — the match files include it (gameComponents GAME_FILES) — so a bought 外援 renders like any pool chess
-     * everywhere a chess is looked up: shop card, hand / board piece, unit detail, bonds, portraits, voice, replays,
-     * spectators. `list('chess')` stays data/chess.json alone (the roster screens add the player's own picks).
-     */
+    /** Record by id from a loaded file (null when unknown / not loaded). */
     lookup(name, id) {
       if (id == null) return null;
-      const hit = index(name)?.get(String(id)) ?? null;
-      if (hit || name !== 'chess') return hit;
-      return diyIndex()?.get(String(id)) ?? null;
+      return index(name)?.get(String(id)) ?? null;
+    },
+    /**
+     * Record by id from a loaded file exactly as downloaded (its Chinese texts), whatever the locale — what the server
+     * copied into a message, to compare with what it sent (ui/lang.js sentText).
+     */
+    lookupRaw(name, id) {
+      if (id == null) return null;
+      const e = entries.get(name);
+      if (!e || e.status !== 'ready') return null;
+      if (!e.index) e.index = buildIndex(name, e.value);
+      return e.index.get(String(id)) ?? null;
     },
     /** All records of a loaded file as an array (empty when not loaded). */
     list: (name) => [...(index(name)?.values() ?? [])],
     /** Drop a cached file and refetch it now (subscribers are notified when it settles). */
     invalidate(name) {
       if (!entries.has(name)) return Promise.resolve(null);
+      const previous = entries.get(name);
       entries.delete(name);
+      previous.abort.abort();
+      localized.delete(name);
       warned.delete(name);
       const p = load(name);
       notify(name); // status is 'loading' again, never a stuck 'idle'
       return p;
     },
-    /** Called with the file name whenever a file finishes loading (or is invalidated). */
+    /** Retry exhausted transient failures without a loading-screen flash or duplicate in-flight requests. */
+    retryMissing: (name) => load(name, true),
+    /** Called with the file name whenever a file finishes loading (or is invalidated, or the locale changes). */
     subscribe(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
+    },
+    /** Current game-text locale ('zh' or the language of the last switch). */
+    locale: () => locale,
+    /** The languages whose overlays apply now, best first (empty in Chinese). */
+    localeChain: () => [...chain],
+    /**
+     * Switch the game texts' language: 'zh' at once; another language once the overlays of `chain` (default: the
+     * language alone) have downloaded — those that fail are left out. When every overlay of a non-empty chain fails the
+     * locale does not change (the texts stay as they are); an empty chain (a pack without game texts) switches with
+     * the Chinese texts. Every loaded file's subscribers are notified. Resolves to the locale in effect.
+     * @param {string} lang
+     * @param {(string | { code: string, url?: string })[]} [chainIn] overlay languages, best first (with the URL of
+     *   each overlay when it is not the language folder's data/i18n/<code>.json)
+     * @returns {Promise<string>}
+     */
+    async setLocale(lang, chainIn) {
+      const code = canonicalLang(lang);
+      const want = code && code === lang ? code : 'zh';
+      const items = (Array.isArray(chainIn) ? chainIn : [want]).map((c) => (typeof c === 'string' ? { code: c, url: undefined } : c));
+      const seen = new Set();
+      const asked = want === 'zh' ? [] : items.filter((c) => c && canonicalLang(c.code) === c.code && c.code !== 'zh' && !seen.has(c.code) && seen.add(c.code));
+      const ask = asked.map((c) => c.code);
+      const seq = ++switches;
+      const got = await Promise.all(asked.map((c) => loadOverlay(c.code, typeof c.url === 'string' && c.url ? c.url : undefined)));
+      if (seq !== switches) return locale; // a later switch is under way
+      const next = ask.filter((_, i) => got[i]);
+      if (ask.length && !next.length) return locale;
+      if (want === locale && next.join('|') === chain.join('|')) return locale;
+      locale = want;
+      chain = next;
+      localized.clear();
+      for (const name of [...entries.keys()]) notify(name);
+      return locale;
+    },
+    /**
+     * A Chinese game-data name (operator, item, bond, token …) in the current locale: the first overlay of the chain
+     * that knows it, else the name itself (also in Chinese).
+     * @param {string} zh
+     * @returns {string}
+     */
+    localeName(zh) {
+      if (locale === 'zh' || typeof zh !== 'string') return zh;
+      for (const c of chain) {
+        const names = overlays.get(c)?.names;
+        if (names && Object.prototype.hasOwnProperty.call(names, zh) && names[zh]) return names[zh];
+      }
+      return zh;
     },
   };
 }
@@ -375,8 +482,11 @@ export function useData(...names) {
     let alive = true;
     const unsub = data.subscribe((n) => { if (alive && names.includes(n)) force(); });
     for (const n of names) data.load(n);
-    return () => { alive = false; unsub(); };
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+    const recovery = setInterval(() => {
+      for (const n of names) if (data.status(n) === 'missing') data.retryMissing(n);
+    }, 30000);
+    return () => { alive = false; clearInterval(recovery); unsub(); };
+  }, [key]);
   return names.every((n) => {
     const s = data.status(n);
     return s === 'ready' || s === 'missing';

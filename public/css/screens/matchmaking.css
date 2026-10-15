@@ -1,0 +1,53 @@
+/* Matchmaking uses the game's existing dark tactical palette and button components. */
+.quick-match-entry { display: grid; gap: .1rem; }
+.population-strip { display: grid; grid-template-columns: repeat(3, auto); gap: .15rem; flex: none; padding: .06rem .12rem; border-left: 1px solid var(--line); }
+.population-strip > span { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.population-strip small { font-size: max(11px, .12rem); color: var(--text-lo); white-space: nowrap; }
+.population-strip strong { font-size: max(15px, .2rem); color: var(--mint-400); font-variant-numeric: tabular-nums; }
+.lobby-screen .topbar { grid-template-columns: auto minmax(0, 1fr) auto; }
+.lobby-screen .topbar__right { flex-wrap: wrap; justify-content: flex-end; }
+.room-capacity-picker { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .1rem; margin-bottom: .1rem; color: var(--text-hi); font-size: max(12px, .15rem); }
+.room-capacity-picker select { min-height: 44px; padding: .04rem .12rem; border: 1px solid var(--mint-700); background: #111c16; color: var(--text-hi); font: inherit; }
+.room-capacity-picker small { color: var(--text-lo); font-size: max(11px, .12rem); }
+.room-screen .room-capacity-picker { margin: .05rem 0 0; }
+.room-screen .room-capacity-picker select { min-height: 44px; }
+@media (max-width: 700px) {
+  .lobby-screen .topbar { height: auto; min-height: 1.1rem; display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 16px; }
+  .lobby-screen .topbar__left { flex-wrap: wrap; }
+  .lobby-screen .topbar__center { display: none; }
+  .lobby-screen .topbar__right { flex-wrap: wrap; margin-left: auto; }
+  .population-strip { gap: 12px; }
+}
+.quick-match-entry__difficulty { display: flex; align-items: center; justify-content: space-between; gap: .15rem; color: var(--text-hi); font-size: .16rem; }
+.quick-match-entry__difficulty select { min-height: 44px; min-width: 1.5rem; padding: .05rem .14rem; border: 1px solid var(--text-lo); background: var(--bg-1, #151b18); color: var(--text-hi); font: inherit; }
+.quick-match-entry__hint { margin: 0; text-align: center; color: #aab5af; font-size: max(.14rem, 12px); }
+.quick-match-entry .btn, .matchmaking-screen .btn { min-height: 44px; }
+.title-login .quick-match-entry .btn { letter-spacing: .15em; padding-left: .24rem; }
+.title-screen { overflow-y: auto; overflow-x: hidden; }
+.title-main { max-width: 100%; flex-shrink: 0; }
+.title-login { width: min(4.9rem, 100%); }
+.title-tag { max-width: 100%; text-align: center; }
+.lobby-quick-match { display: grid; gap: .08rem; margin-bottom: .16rem; }
+.matchmaking-screen { overflow: auto; background: radial-gradient(ellipse at 50% 0, #173a2d 0, #101814 50%, #0c0f0e 90%); }
+.matchmaking-screen__body { width: min(100%, max(11rem, 680px)); min-height: 100%; margin: auto; padding: .55rem .4rem; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: .25rem; }
+.matchmaking-screen__heading { display: grid; justify-items: center; gap: .12rem; text-align: center; }
+.matchmaking-screen__eyebrow { margin: 0; color: var(--mint-500); font-size: max(.13rem, 12px); letter-spacing: .15em; }
+.matchmaking-screen h1 { margin: 0; font-size: max(.4rem, 22px); }
+.matchmaking-screen__status { min-height: 1.5em; margin: 0; text-align: center; color: var(--mint-400); font-size: max(.21rem, 14px); }
+.matchmaking-seats { list-style: none; width: 100%; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .16rem; }
+.matchmaking-seat { min-width: 0; display: grid; justify-items: center; gap: .13rem; padding: .3rem .14rem; border: 1px dashed #60736a; background: rgba(10, 18, 14, .6); }
+.matchmaking-seat.is-filled { border: 1px solid var(--mint-700); background: rgba(30, 67, 50, .4); }
+.matchmaking-seat strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-hi); font-size: max(.18rem, 13px); }
+.matchmaking-seat > span { color: #aab5af; font-size: max(.14rem, 12px); }
+.matchmaking-screen__hint { max-width: 42em; margin: 0; color: #aab5af; font-size: max(.16rem, 13px); line-height: 1.7; text-align: center; }
+.matchmaking-screen__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .16rem; }
+@media (max-width: 600px) { .matchmaking-seats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .matchmaking-screen__body { padding: 24px 16px; gap: 16px; } }
+@media (max-height: 500px) and (min-width: 601px) { .matchmaking-screen__body { padding: 20px; gap: 12px; } .matchmaking-seat { padding: 12px; } }
+@media (max-height: 600px) {
+  .title-screen { justify-content: flex-start; padding: 20px 16px; }
+  .title-main { margin-top: 0; }
+  .title-main .emblem { display: none; }
+  .title-login { margin-top: .2rem; }
+  .title-corner { display: none; }
+  .title-foot { position: relative; inset: auto; margin-top: 20px; gap: 16px; width: 100%; }
+}

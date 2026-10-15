@@ -1,0 +1,31 @@
+/* The two current release highlights; earlier announcements keep their ordinary styling. */
+.release-notes__content > .release-notes__lead:first-of-type {
+  color: #ff9292;
+  font-size: max(18px, .22rem);
+  font-weight: 800;
+}
+.release-notes__content > .release-notes__changes > li:nth-child(-n+2) {
+  list-style: none;
+  margin-left: -1.3em;
+  padding: 12px 14px;
+  border: 1px solid #8b4242;
+  border-left: 4px solid #ff6666;
+  background: #2a1a1b;
+  color: #ffaaaa;
+  font-weight: 600;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.release-notes__content > .release-notes__changes > li:first-child {
+  font-size: max(16px, .18rem);
+  font-weight: 700;
+}
+.release-notes__content > .release-notes__changes > li:nth-child(2) {
+  margin-top: 8px;
+  margin-bottom: 14px;
+}
+@media (forced-colors: active) {
+  .release-notes__content > .release-notes__changes > li:nth-child(-n+2) {
+    border-color: CanvasText;
+  }
+}

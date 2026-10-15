@@ -55,7 +55,7 @@ export function makeMatch(o = {}) {
     if (o.script) FakeBattle.script = o.script;
   }
   h.m = new Match({
-    roomCode: 'TEST', mode, difficulty, seats, spectators: o.spectators, seed: o.seed ?? 1, matchNo: o.matchNo, data: o.data ?? DATA, log,
+    roomCode: 'TEST', extensions: o.extensions, mode, gameMode: o.gameMode, capacity: o.capacity, difficulty, seats, spectators: o.spectators, seed: o.seed ?? 1, matchNo: o.matchNo, data: o.data ?? DATA, log,
     send: (id, msg) => {
       for (const fn of h.onSend) fn(id, msg);
       if (msg.t === 'b.snap' || msg.t === 'b.ev') { h.frames++; if (!captureFrames) return true; }
@@ -65,6 +65,9 @@ export function makeMatch(o = {}) {
     },
     broadcast: (msg) => { for (const fn of h.onBroadcast) fn(msg); checkFrame(msg); h.bc.push(msg); },
     onEnd: (s) => { h.ended = s; h.endedCount++; },
+    onAfk: o.onAfk,
+    // Many engine fixtures intentionally let all human decisions time out.
+    afkKickEnabled: o.afkKickEnabled ?? false,
     scheduler: sched,
     registry: o.registry,
     BattleClass: o.fake ? FakeBattle : undefined,
@@ -170,6 +173,7 @@ function legacyInvariants(m) {
       assert.ok(ps.hand.every((x) => x == null) && ps.temp.every((x) => x == null), 'eliminated player keeps nothing');
     }
     const chessUids = new Set();
+    const diyHeld = new Map();
     const all = [...ps.board.values(), ...ps.hand.filter(Boolean), ...ps.temp.filter(Boolean)];
     for (const p of all) if (p.kind === 'chess') chessUids.add(p.uid);
     let deployed = 0;
@@ -177,7 +181,8 @@ function legacyInvariants(m) {
     for (const [k, p] of ps.board) {
       const [r, c] = k.split(',').map(Number);
       assert.ok(r >= FIELD.r0 && r <= FIELD.r1 && c >= FIELD.c0 && c <= FIELD.c1, `piece outside the board ${k}`);
-      const rec = p.kind === 'token' ? m.gd.token(p.id) : m.gd.chess(p.id);
+      const pgd = ps.gd || m.gd; // the player's data view (0.2.0 自选: its summons are data/backups.json tokens)
+      const rec = p.kind === 'token' ? pgd.token(p.id) : pgd.chess(p.id);
       assert.ok(rec, `unknown board piece ${p.id}`);
       const cls = p.kind === 'chess' ? placeClass(ps, rec) : positionClass(rec);
       assert.ok(canPlace(dmap, cls, r, c), `illegal tile ${p.id} @ ${k}`);
@@ -195,9 +200,9 @@ function legacyInvariants(m) {
         for (const it of p.items) { note(it); assert.equal(it.kind, 'item'); assert.ok(m.gd.item(it.id), `unknown item ${it.id}`); }
         assert.ok(Number.isInteger(p.poolCopies) && p.poolCopies >= 0);
         const base = m.gd.baseIdOf(p.id);
-        // a copy of a player's own 甄选 entry counts against that player's entry (pool.js owned)
-        const key = pool.ownedBy(ps.playerId).has(base) ? `${base}@${ps.playerId}` : base;
-        held.set(key, (held.get(key) || 0) + p.poolCopies);
+        // a 自选 piece's copies are its player's own stock (0.2.0, server/match/player/diy.js)
+        const tally = ps.diyStock && ps.diyStock.has(base) ? diyHeld : held;
+        tally.set(base, (tally.get(base) || 0) + p.poolCopies);
       } else if (p.kind === 'item') {
         assert.ok(m.gd.item(p.id), `unknown item ${p.id}`);
       } else if (p.kind === 'token') {
@@ -212,16 +217,15 @@ function legacyInvariants(m) {
       const need = m.gd.mergeCount(b);
       if (need > 1 && m.gd.goldenIdOf(b)) assert.ok(n < need, `${ps.playerId} owns ${n} copies of ${b} (merge ${need})`);
     }
+    for (const [base, e] of ps.diyStock ? ps.diyStock.entries : []) {
+      assert.equal(e.left + (diyHeld.get(base) || 0), e.cap, `${ps.playerId} 自选 stock ${base}: left ${e.left} + held ${diyHeld.get(base) || 0} != cap ${e.cap}`);
+    }
   }
-  const counted = new Set();
-  const account = (key, e) => {
-    counted.add(key);
-    assert.ok(e.left >= 0 && e.left <= e.cap, `pool ${key} left ${e.left} cap ${e.cap}`);
-    assert.equal(e.left + (held.get(key) || 0), e.cap, `pool accounting ${key}: left ${e.left} + held ${held.get(key) || 0} != cap ${e.cap}`);
-  };
-  for (const [base, e] of pool.entries) account(base, e);
-  for (const [owner, mine] of pool.owned) for (const [base, e] of mine) account(`${base}@${owner}`, e);
-  for (const [key, n] of held) if (!counted.has(key)) assert.equal(n, 0, `non-pool chess ${key} holds copies`);
+  for (const [base, e] of pool.entries) {
+    assert.ok(Number.isInteger(e.left) && e.left <= e.cap, `pool ${base} left ${e.left} cap ${e.cap}`);
+    assert.equal(e.left + (held.get(base) || 0), e.cap, `pool accounting ${base}: left ${e.left} + held ${held.get(base) || 0} != cap ${e.cap}`);
+  }
+  for (const [base, n] of held) if (!pool.has(base)) assert.equal(n, 0, `non-pool chess ${base} holds copies`);
   return true;
 }
 
@@ -230,8 +234,7 @@ export function give(m, ps, chessId, where = 'hand', at = null) {
   const rec = m.gd.chess(chessId);
   assert.ok(rec, `unknown chess ${chessId}`);
   const base = m.gd.baseIdOf(chessId);
-  // copies from this player's pool (its own 甄选 entry when the chess is one of its picks)
-  const taken = m.pool.take(base, rec.isGolden ? m.gd.goldenCopies : 1, ps.playerId);
+  const taken = m.pool.take(base, rec.isGolden ? m.gd.goldenCopies : 1);
   const piece = ps.newPiece('chess', chessId, { poolCopies: taken });
   if (where === 'board') {
     ps.board.set(tileKey(at[0], at[1]), piece);

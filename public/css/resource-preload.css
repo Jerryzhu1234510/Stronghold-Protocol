@@ -1,0 +1,15 @@
+.resource-preload{position:relative;flex:none;font:12px/1.5 var(--font-cjk)}
+.resource-preload__button{display:flex;align-items:center;gap:6px;min-height:32px;padding:4px 9px;border:1px solid var(--line-2);background:#101614;color:var(--text-hi);white-space:nowrap;cursor:pointer}
+.resource-preload .icon{width:15px;height:15px;color:var(--mint-400)}
+.resource-preload__panel{position:fixed;z-index:70;top:64px;left:16px;width:min(320px,calc(100vw - 32px));max-height:calc(100dvh - 80px);overflow:auto;padding:10px;border:1px solid var(--line-3);background:#101614;box-shadow:0 5px 18px #0008}
+.resource-preload__panel header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.resource-preload__panel header button{width:28px;height:28px;display:grid;place-items:center;padding:0;border:1px solid var(--line-2);background:transparent;cursor:pointer}
+.resource-preload__panel p{margin:6px 0;font-size:12px;color:var(--text-md);overflow-wrap:anywhere}
+.resource-preload__panel p:empty{display:none}
+.resource-preload__panel progress{width:100%;height:8px;accent-color:var(--mint-400)}
+.resource-preload__panel .resource-preload__error{color:#f6ba87}
+.resource-preload__start{display:flex;align-items:center;gap:6px;margin-top:10px;min-height:34px;padding:5px 12px;border:1px solid var(--mint-700);color:var(--text-hi);background:#18372c;cursor:pointer}
+.resource-preload :focus-visible{outline:2px solid var(--mint-400);outline-offset:2px}
+.resource-preload button:disabled{opacity:.5;cursor:default}
+@media(min-width:1025px) and (max-width:1600px){.lobby-screen .topbar{grid-template-columns:auto minmax(150px,1fr) minmax(0,1.6fr);gap:12px;height:auto;min-height:82px;padding-top:8px;padding-bottom:8px}.lobby-screen .topbar__left{gap:10px}.lobby-screen .topbar__right{flex-wrap:wrap;justify-content:flex-end;gap:6px 10px}.lobby-screen .topbar__title{font-size:20px;line-height:24px;letter-spacing:0;white-space:nowrap}}
+@media(max-width:1000px){.resource-preload__button{min-height:28px;padding:3px 6px;font-size:10px;gap:3px}.resource-preload .icon{width:12px;height:12px}.resource-preload__panel{top:48px;max-height:calc(100dvh - 64px)}}

@@ -1,0 +1,98 @@
+{
+  "version": "026-r05-hp1",
+  "sourceFront": "front-mobile-compat-20261015",
+  "targetFront": "front-026-r05-hp1-20261015",
+  "gameBuild": "fd4dbe120420-2",
+  "files": [
+    {
+      "file": "https-proxy-resource.mjs",
+      "bytes": 7775,
+      "sha256": "8ec96d9a8f9e4b5232cea98ada54215496f0725bba54e5942701a713dc7ebea8",
+      "previousSha256": "cbd50e4a9736a860fed8f70fe0a4173b6ca14edf6f68581c94a4af1ed3a9ce3e"
+    },
+    {
+      "file": "proxy-transfer-r01.mjs",
+      "bytes": 5271,
+      "sha256": "4616d29d9c7eb0bc63563140233a473026cb929b0d9e31747ab5af6a8052f89c",
+      "previousSha256": "4616d29d9c7eb0bc63563140233a473026cb929b0d9e31747ab5af6a8052f89c"
+    },
+    {
+      "file": "resource-desktop-r01/admission.mjs",
+      "bytes": 2228,
+      "sha256": "3743024cbff3c0681b5afc107cae620cbaa2411a4e1722f04c2a9424ecd5d01f",
+      "previousSha256": "3743024cbff3c0681b5afc107cae620cbaa2411a4e1722f04c2a9424ecd5d01f"
+    },
+    {
+      "file": "resource-desktop-r01/cache-store.mjs",
+      "bytes": 2145,
+      "sha256": "99e7b2c63bb142a1d936e6f60d21a009618eaf5f6c0a2feb8907f8925ff5c858",
+      "previousSha256": "99e7b2c63bb142a1d936e6f60d21a009618eaf5f6c0a2feb8907f8925ff5c858"
+    },
+    {
+      "file": "resource-desktop-r01/client.js",
+      "bytes": 9605,
+      "sha256": "07183de9cf19d98b91b93978578cea5d9a273a2743c1d340bbdeae1f8e832201",
+      "previousSha256": "01153e04d50acaa3505f611c5c9f63d6531d35c8e6e02542089a7650655fce0c"
+    },
+    {
+      "file": "resource-desktop-r01/download-budget.mjs",
+      "bytes": 4145,
+      "sha256": "953379150ac206455a807cdcd03f742d2517f12b30f03274570b7afdeecf23d4",
+      "previousSha256": "953379150ac206455a807cdcd03f742d2517f12b30f03274570b7afdeecf23d4"
+    },
+    {
+      "file": "resource-desktop-r01/entry.mjs",
+      "bytes": 6031,
+      "sha256": "0b84ec9b59004e501cc66a0cafe16d7af774ac97072994703099cdf73ba46038",
+      "previousSha256": "2729c9aeebce841b1f44e4eab1e9199dccd70804b10f31f6b0de512e352b80c9"
+    },
+    {
+      "file": "resource-desktop-r01/metrics.mjs",
+      "bytes": 1915,
+      "sha256": "7eb6368c92b4c832746e29acab328059145803142158af53fb75deb92df5b8b7",
+      "previousSha256": "7eb6368c92b4c832746e29acab328059145803142158af53fb75deb92df5b8b7"
+    },
+    {
+      "file": "resource-desktop-r01/policy-router.mjs",
+      "bytes": 10774,
+      "sha256": "371275149c8c4713d5453eaf3529a0b9f9b76dd7bead42583ff4a6dce590e015",
+      "previousSha256": "e1fd1bbfa649768c5bbc79e22d06d8221b1ac9bbff211c7d9f99d01a32482616"
+    },
+    {
+      "file": "resource-desktop-r01/proxy-transfer-r02.mjs",
+      "bytes": 8003,
+      "sha256": "ac7b097ed1975bba0574d678997753863128dbc97586e51e36ca6b12877b0551",
+      "previousSha256": "ac7b097ed1975bba0574d678997753863128dbc97586e51e36ca6b12877b0551"
+    },
+    {
+      "file": "resource-desktop-r01/session-cap.mjs",
+      "bytes": 8358,
+      "sha256": "2737c4142ee5aad2737b8db775212bbb00622ef54a63003d6a6f7f54649ac88d",
+      "previousSha256": "2737c4142ee5aad2737b8db775212bbb00622ef54a63003d6a6f7f54649ac88d"
+    },
+    {
+      "file": "resource-desktop-r01/style.css",
+      "bytes": 6446,
+      "sha256": "53ee05af7baf115017e0a3665ecea97b4b21320742c87dd53653b66ff5e5620c",
+      "previousSha256": "53ee05af7baf115017e0a3665ecea97b4b21320742c87dd53653b66ff5e5620c"
+    },
+    {
+      "file": "resource-desktop-r01/worker-patch.mjs",
+      "bytes": 7602,
+      "sha256": "e1665a4ab41cc0d98df7928b0999d1636182a88e87dfab645e3e9dd0ebdcf2be",
+      "previousSha256": "2be439b8efd99b29a0eb39f7dcdf87cedfdc5baeb633d391abc0c40c39c1365e"
+    },
+    {
+      "file": "resource-desktop-r01/compat.mjs",
+      "bytes": 5789,
+      "sha256": "8f46b66024a0887a6dcc793c9b812f6ee8439acced408f6214779e2d76ec5aeb",
+      "previousSha256": "8f46b66024a0887a6dcc793c9b812f6ee8439acced408f6214779e2d76ec5aeb"
+    }
+  ],
+  "portal": {
+    "previousVersion": "l17",
+    "previousSha256": "bb614448a6cca86f2a15da78f04fee55b41c8ac001bf9e72dfe42f6aeeed987e",
+    "version": "l18",
+    "sha256": "4a3b292438179e2ca1f3c70dac0bf19ee824d3447cac30a179327fc6659d89fe"
+  }
+}

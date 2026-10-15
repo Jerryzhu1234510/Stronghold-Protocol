@@ -1,0 +1,26 @@
+services:
+  game:
+    image: node:22-bookworm-slim
+    container_name: stronghold-hot
+    working_dir: /entry
+    command: ["node", "/entry/deploy/hot/serve.mjs"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "14517"
+      NODE_ENV: production
+      SP_HOT_CURRENT_FILE: /state/current
+    ports:
+      - "14517:14517"
+    volumes:
+      - ./entry:/entry:ro
+      - ./releases:/releases:ro
+      - ./state:/state
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:14517/healthz').then(r=>r.json()).then(j=>process.exit(j.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3

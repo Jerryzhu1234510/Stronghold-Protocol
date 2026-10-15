@@ -2,7 +2,7 @@
 // data/assets.json. The pure helpers (animation-role resolver, atlas
 // normalizer, PNG/WOFF2/audio helpers, plan id sets) are always tested; the
 // on-disk checks run only when public/assets exists (it is git-ignored and
-// produced by `npm run assets`); the optional local-client enemy models
+// produced by `npm run assets`); the optional local-client enemy and token models
 // (spineLocal, tools/local-extract) only when data/local-assets.json lists them.
 
 import { test, describe } from 'node:test';
@@ -17,9 +17,8 @@ import { normalizeAtlas, atlasInfo, parseAtlas } from '../tools/assets/atlas.mjs
 import { pngSize, isCompletePng, isMp3, validate } from '../tools/assets/formats.mjs';
 import { encodeWoff2, decodeWoff2Tables, readSfnt, uintBase128 } from '../tools/assets/woff2.mjs';
 import { assetToPath, pickUnitSfx, indexAudio } from '../tools/assets/audio.mjs';
-import { parseVoiceLangs, indexCharWords, voiceLines, VOICE_ROLES, POSITIONAL_ROLES } from '../tools/assets/voice.mjs';
-import { mirrorUrl, safeName, encodePath, downloadUrls } from '../tools/assets/sources.mjs';
-import { collectEnemyIds, skillIndicesByChar, buildPlan, entryUrls, GUIDE_PAGES, UI_EXTRAS } from '../tools/assets/plan.mjs';
+import { mirrorUrl, safeName, encodePath } from '../tools/assets/sources.mjs';
+import { collectEnemyIds, skillIndicesByChar, buildPlan, GUIDE_PAGES, UI_EXTRAS } from '../tools/assets/plan.mjs';
 import { resolveTemplate, collectLeaves } from '../tools/assets/manifest.mjs';
 import { spineEntry } from '../public/js/assets.js';
 import { EMOTE_CATALOG, emoteArtGroup } from '../shared/constants.js';
@@ -76,6 +75,92 @@ describe('animation-role resolver (research 07 §5.4)', () => {
   test('SkillN without underscore (char_2015_dusk)', () => {
     const r = resolveRoles(['Attack', 'Die', 'Idle', 'Skill2_Begin', 'Skill2_End', 'Skill2_Loop', 'Skill3_Attack', 'Start'], { skillIndices: [1] });
     assert.deepEqual(r.skill, { begin: 'Skill2_Begin', loop: 'Skill2_Loop', end: 'Skill2_End', index: 1, idle: null });
+  });
+
+  // PR #275 (@xcdoge): an enemy's manifest only ever had skill index 0 (plan.mjs passes [0]), so a multi-skill boss could
+  // show one cast clip — 盐风主教昆图斯 has Skill_01..04. With `numberedSkills` (spine.mjs: enemy models) every numbered
+  // skill clip is resolved after the caller's indices, whose first stays the primary.
+  test('numbered skill clips of an enemy are all resolved (a multi-skill boss), the primary stays the caller’s first', () => {
+    const names = ['Attack', 'Default', 'Die', 'Idle', 'Skill_01', 'Skill_02', 'Skill_03', 'Skill_04'];
+    assert.equal(resolveRoles(names, { skillIndices: [0] }).skills, undefined, 'without the option: index 0 only (operators)');
+    const r = resolveRoles(names, { skillIndices: [0], numberedSkills: true });
+    assert.deepEqual(Object.keys(r.skills).sort(), ['0', '1', '2', '3']);
+    assert.equal(r.skills['1'].loop, 'Skill_02');
+    assert.equal(r.skills['3'].loop, 'Skill_04');
+    assert.equal(r.skill.loop, 'Skill_01', 'the first index stays the primary clip');
+    const first = resolveRoles(names, { skillIndices: [2], numberedSkills: true });
+    assert.equal(first.skill.index, 2, 'a caller-declared primary still wins');
+    assert.equal(first.skill.loop, 'Skill_03');
+    // 自在: Skill_01 / Skill_01_02 are one slot, Skill_02_Begin / Loop / End the next
+    const xi = resolveRoles(['Attack_01', 'Die', 'Idle', 'Skill_01', 'Skill_01_02', 'Skill_02_Begin', 'Skill_02_End', 'Skill_02_Loop'], { numberedSkills: true });
+    assert.deepEqual(xi.skills['1'], { begin: 'Skill_02_Begin', loop: 'Skill_02_Loop', end: 'Skill_02_End', index: 1, idle: null });
+    // phase-style skill clips (no index in the name) stay a single primary skill
+    assert.equal(resolveRoles(['Attack', 'Die', 'Idle', 'Skill_Begin', 'Skill_Loop', 'Skill_End'], { numberedSkills: true }).skills, undefined);
+  });
+
+  // PR #275: the stun family is spelled Stun / Stun_End, Stun_1 / Stun_2 (巨大的丑东西: first form, second form) and
+  // Dizzy_Begin / Dizzy_Loop / Dizzy_End (斩胄之剑 / 破胄之锤); without a role a stunned enemy freezes its clip.
+  test('stun clips: numbered Stun_N and the Dizzy_* family are recognised', () => {
+    const mc = resolveRoles(['Attack_1', 'Die', 'Idle_1', 'Idle_2', 'Move_1', 'Move_2', 'Stun_1', 'Stun_2'], {});
+    assert.deepEqual(mc.stun, { begin: null, loop: 'Stun_1', end: null });
+    const dz = resolveRoles(['Attack', 'Die', 'Idle_B', 'Move', 'Dizzy_Begin', 'Dizzy_Loop', 'Dizzy_End', 'Dizzy_Die'], {});
+    assert.deepEqual(dz.stun, { begin: 'Dizzy_Begin', loop: 'Dizzy_Loop', end: 'Dizzy_End' });
+    assert.deepEqual(resolveRoles(['Attack', 'Die', 'Idle', 'Stun', 'Stun_End'], {}).stun, { begin: null, loop: 'Stun', end: 'Stun_End' });
+    assert.equal(resolveRoles(['Attack', 'Die', 'Idle', 'Move'], {}).stun, null);
+  });
+
+  // PR #275: a model's own Run cycle is a role of its own (猎狗pro: Move_Loop 0.80 s, Run_Loop 0.53 s); the move choice
+  // is unchanged, the renderer switches to it for a fast enemy.
+  test('the model’s own Run cycle becomes a separate run role', () => {
+    const names = ['Attack', 'Default', 'Die', 'Idle', 'Move_Begin', 'Move_End', 'Move_Loop', 'Run_Begin', 'Run_End', 'Run_Loop'];
+    const r = resolveRoles(names, {});
+    assert.deepEqual(r.move, { begin: 'Move_Begin', loop: 'Move_Loop', end: 'Move_End' }, 'the move role is unchanged');
+    assert.deepEqual(r.run, { begin: 'Run_Begin', loop: 'Run_Loop', end: 'Run_End' });
+    assert.ok(roleAnimationNames(r).includes('Run_Loop'), 'the manifest writer validates the Run clips');
+    assert.equal(resolveRoles(['Attack', 'Die', 'Idle', 'Move'], {}).run, undefined, 'no Run cycle, no role');
+  });
+
+  // The manifest (tools/fetch-assets.mjs --offline with this resolver): every model whose skeleton has a stun / Run clip
+  // has the role, and every enemy with numbered skill clips has one clip per slot.
+  describe('data/assets.json roles (PR #275)', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../data/assets.json', import.meta.url), 'utf8'));
+    const models = [];
+    for (const [id, e] of Object.entries(manifest.enemies || {})) if (e.spine) models.push([`enemies.${id}`, e.spine]);
+    for (const [id, e] of Object.entries(manifest.tokens || {})) if (e.spine) models.push([`tokens.${id}`, e.spine]);
+    for (const [id, e] of Object.entries(manifest.chars || {})) if (e.spine?.front) models.push([`chars.${id}`, e.spine.front]);
+    const walk = (re, ok) => {
+      const bad = [];
+      let seen = 0;
+      for (const [id, sp] of models) {
+        if (!sp.animations || !Object.keys(sp.animations).some((n) => re.test(n))) continue;
+        seen++;
+        if (!ok(sp.anims || {}, id)) bad.push(id);
+      }
+      return { bad, seen };
+    };
+    test('every model with a stun clip has a stun role', () => {
+      const { bad, seen } = walk(/^(stun|dizzy)/i, (a) => !!a.stun);
+      assert.ok(seen >= 6, `models with a stun clip (${seen})`);
+      assert.deepEqual(bad, []);
+    });
+    test('every model with a Run clip has a run role', () => {
+      const { bad, seen } = walk(/^run/i, (a) => !!a.run);
+      assert.ok(seen >= 3, `models with a Run clip (${seen})`);
+      assert.deepEqual(bad, []);
+    });
+    test('every enemy with numbered skill clips has a clip per slot (盐风主教昆图斯: Skill_01..04)', () => {
+      const { bad, seen } = walk(/^Skill_?0*[1-9](?:$|_)/i, (a, id) => !id.startsWith('enemies.') || !!a.skills);
+      assert.ok(seen >= 10, `models with numbered skill clips (${seen})`);
+      assert.deepEqual(bad, []);
+      const q = manifest.enemies.enemy_1521_dslily.spine.anims;
+      assert.deepEqual(Object.values(q.skills).map((c) => c.loop), ['Skill_01', 'Skill_02', 'Skill_03', 'Skill_04']);
+      assert.equal(q.skill.loop, 'Skill_01', 'the primary clip is unchanged');
+      // operators keep their pool's indices (宴's fix, PREFAB_SPINE_ROLES / DESIGN §25.22.9, stays as it was)
+      const utage = manifest.chars.char_337_utage.spine.front.anims;
+      assert.deepEqual(Object.keys(utage.skills).sort(), ['0', '1']);
+      assert.equal(utage.skills['0'].loop, 'Skill_Loop');
+      assert.equal(utage.skill.loop, 'Attack');
+    });
   });
 
   test('pure supporter without Attack (char_4134_cetsyr)', () => {
@@ -363,6 +448,21 @@ describe('audio banks and plan id sets', () => {
     assert.equal(ok.value.p, '/assets/package.json');
     assert.equal(ok.fallbacks.length, 1);
   });
+
+  test('an array whose lines are all missing is dropped, with the entry it empties (a voice slot never downloaded)', () => {
+    const line = (rel) => ({ alts: [{ rel, urls: ['u'] }] });
+    const tpl = {
+      voice: {
+        a: { select: [line('nope/1.mp3'), line('nope/2.mp3')], place: [line('nope/3.mp3')] },
+        b: { select: [line('nope/4.mp3'), line('package.json')] },
+      },
+      empty: [],
+    };
+    const r = resolveTemplate(tpl, { root: ROOT, spine: new Map() });
+    assert.deepEqual(r.value.voice, { b: { select: ['/assets/package.json'] } }, 'operator a has no line on disk: no entry at all');
+    assert.deepEqual(r.value.empty, [], 'an array that was empty in the template stays');
+    assert.deepEqual(r.misses.sort(), ['voice.a.place[0]', 'voice.a.select[0]', 'voice.a.select[1]', 'voice.b.select[0]']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -471,117 +571,6 @@ describe('downloader (fake network)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The 外援 / 甄选 roster (DESIGN §27) is planned from tools/assets/waiguan-operators.json, whose entries name jsDelivr as
-// `url` and the raw.githubusercontent.com copy as `mirror`. Every file of an entry — not only the avatar and portrait —
-// lists the raw copy first, so the downloads follow the same source order as a pool operator: the opt-in gh-proxy
-// (--asset-source=mirror, upstream #24), then raw, then jsDelivr (docs/DEPLOY.md 国内镜像下载).
-describe('外援 roster asset entries (tools/assets/waiguan-operators.json)', () => {
-  const plan = (extraOperators) => buildPlan({ assets07: {}, ops03: {}, enemies05: {}, maps05: {}, audio: indexAudio({}), modelsData: {}, extraOperators });
-  const RAWGH = 'https://raw.githubusercontent.com/';
-  const JSD = 'https://cdn.jsdelivr.net/gh/';
-
-  test('entryUrls: a research entry keeps its URL(s); a roster entry lists `mirror` (raw) before `url` (jsDelivr)', () => {
-    assert.deepEqual(entryUrls('u'), ['u']);
-    assert.deepEqual(entryUrls({ url: 'u', bytes: 3 }), ['u']);
-    assert.deepEqual(entryUrls(['a', 'b', 'a']), ['a', 'b'], 'candidate folders, in order');
-    assert.deepEqual(entryUrls({ url: 'j', mirror: 'r' }), ['r', 'j']);
-    assert.deepEqual(entryUrls({ url: 'j', mirror: ['r1', 'r2'] }), ['r1', 'r2', 'j']);
-    assert.deepEqual(entryUrls(null), []);
-    assert.deepEqual(entryUrls({ url: '', mirror: null }), []);
-  });
-
-  test('avatar, portrait, battle Spine (and its atlas pages) and skill icons: raw first, jsDelivr next, the gh-proxy in front when chosen', () => {
-    const f = (repo, path) => ({ url: `${JSD}${repo}@main/${path}`, mirror: `${RAWGH}${repo}/main/${path}` });
-    const sp = (side, ext) => f('fexli/ArknightsResource', `spine/char_9999_x/char_9999_x/${side}/char_9999_x.${ext}`);
-    const entry = {
-      avatar: { e0e1: { ...f('yuanyan3060/ArknightsGameResource', 'avatar/char_9999_x.png'), bytes: 10 } },
-      portrait: { e0e1: f('yuanyan3060/ArknightsGameResource', 'portrait/char_9999_x_1.png') },
-      battleSpine: { front: { skel: sp('Front', 'skel'), atlas: sp('Front', 'atlas'), png: sp('Front', 'png') } },
-      skills: [{ index: 0, skillId: 'skchr_x_1', iconId: 'skchr_x_1', icon: f('yuanyan3060/ArknightsGameResource', 'skill/skill_icon_skchr_x_1.png') }],
-    };
-    const p = plan({ char_9999_x: entry });
-    const both = (x) => [x.mirror, x.url];
-    const av = p.template.chars.char_9999_x.avatar.alts[0];
-    assert.deepEqual(av.urls, both(entry.avatar.e0e1));
-    assert.equal(av.bytes, 10);
-    assert.deepEqual(p.template.chars.char_9999_x.portrait.alts[0].urls, both(entry.portrait.e0e1));
-    assert.deepEqual(p.template.skills.skchr_x_1.alts[0].urls, both(entry.skills[0].icon));
-    const m = p.models.get('op:char_9999_x:front');
-    assert.deepEqual(m.skel.urls, both(sp('Front', 'skel')));
-    assert.deepEqual(m.atlas.urls, both(sp('Front', 'atlas')));
-    assert.deepEqual(m.pngs[0].urls, both(sp('Front', 'png')));
-    assert.equal(m.skel.rel, 'spine/op/char_9999_x/front/char_9999_x.skel', 'the same files as before: only the URL order changed');
-    assert.equal(m.baseUrl, `${RAWGH}fexli/ArknightsResource/main/spine/char_9999_x/char_9999_x/Front/`, 'atlas pages: the raw folder (spine.mjs adds the others)');
-    // what the Downloader makes of the first candidate (tools/assets/network.mjs → sources.mjs downloadUrls)
-    assert.deepEqual(downloadUrls(m.skel.urls[0], { source: 'mirror' }), [`https://gh-proxy.com/${m.skel.urls[0]}`, m.skel.urls[0], m.skel.urls[1]]);
-    assert.deepEqual(downloadUrls(m.skel.urls[0]), [m.skel.urls[0], m.skel.urls[1]]);
-  });
-
-  test('the committed roster file: every operator\'s files have a raw.githubusercontent.com first candidate and a jsDelivr one', () => {
-    const roster = readJson('tools/assets/waiguan-operators.json').operators;
-    const ids = Object.keys(roster);
-    assert.ok(ids.length > 0);
-    const p = plan(roster);
-    const check = (urls, what) => {
-      assert.ok(urls[0].startsWith(RAWGH), `${what}: ${urls[0]}`);
-      assert.ok(urls.some((u) => u.startsWith(JSD)), `${what}: a jsDelivr candidate`);
-    };
-    for (const id of ids) {
-      const c = p.template.chars[id];
-      check(c.avatar.alts[0].urls, `${id}.avatar`);
-      check(c.portrait.alts[0].urls, `${id}.portrait`);
-      for (const side of ['front', 'back']) {
-        const m = p.models.get(`op:${id}:${side}`);
-        if (!m) { assert.equal(side, 'back', `${id}: a Front model`); continue; }
-        for (const a of [m.skel, m.atlas, ...m.pngs]) check(a.urls, a.rel);
-        assert.ok(m.baseUrl.startsWith(RAWGH), m.baseUrl);
-      }
-      for (const s of roster[id].skills || []) if (s.icon?.url) check(p.template.skills[s.iconId || s.skillId].alts[0].urls, `${id} ${s.skillId}`);
-    }
-  });
-
-  test('a roster operator\'s battle voice is planned like a pool operator\'s: the same 14 lines in the 9 roles (voice.mjs)', () => {
-    const lines = [['行动出发', 'BATTLE_START', '019'], ['行动开始', 'BATTLE_FACE_ENEMY', '020'], ['选中干员1', 'BATTLE_SELECT', '021'],
-      ['选中干员2', 'BATTLE_SELECT', '022'], ['部署1', 'BATTLE_PLACE', '023'], ['部署2', 'BATTLE_PLACE', '024'], ['作战中1', 'BATTLE_SKILL_1', '025'],
-      ['作战中2', 'BATTLE_SKILL_2', '026'], ['作战中3', 'BATTLE_SKILL_3', '027'], ['作战中4', 'BATTLE_SKILL_4', '028'], ['完成高难行动', 'FOUR_STAR', '029'],
-      ['3星结束行动', 'THREE_STAR', '030'], ['非3星结束行动', 'TWO_STAR', '031'], ['行动失败', 'LOSE', '032'], ['编入队伍', 'SQUAD', '017']];
-    const words = (key) => Object.fromEntries(lines.map(([title, place, n]) => [`${key}_CN_${n}`,
-      { charId: key, wordKey: key, voiceId: `CN_${n}`, voiceTitle: title, placeType: place, voiceAsset: `${key}/CN_${n}` }]));
-    const dict = (key) => ({ charId: key, dict: { CN_MANDARIN: { wordkey: key, voicePath: null }, JP: { wordkey: key, voicePath: null } } });
-    const index = indexCharWords({ charWords: { ...words('char_9999_x'), ...words('char_002_amiya') },
-      voiceLangDict: { char_9999_x: dict('char_9999_x'), char_002_amiya: dict('char_002_amiya') } });
-    const p = buildPlan({ assets07: { operators: { char_002_amiya: {} } }, ops03: {}, enemies05: {}, maps05: {}, audio: indexAudio({}), modelsData: {},
-      voice: { index, langs: ['cn', 'jp'] }, extraOperators: { char_9999_x: { avatar: { e0e1: { url: 'u', mirror: 'r' } } } } }).template;
-    for (const lang of ['cn', 'jp']) {
-      const pool = p.audio.voice[lang].char_002_amiya;
-      const wg = p.audio.voice[lang].char_9999_x;
-      assert.ok(wg, `${lang}: the 外援 operator has voice`);
-      assert.deepEqual(Object.keys(wg).sort(), Object.keys(VOICE_ROLES).sort(), `${lang}: every role`);
-      assert.deepEqual(Object.keys(wg).sort(), Object.keys(pool).sort(), `${lang}: the pool operator's roles`);
-      assert.equal(Object.values(wg).flat().length, 14, `${lang}: 14 lines`);
-      assert.equal(wg.depart.alts[0].rel, `voice/${lang}/char_9999_x/cn_019.mp3`, '行动出发');
-      assert.equal(wg.win4.alts[0].rel, `voice/${lang}/char_9999_x/cn_029.mp3`, '完成高难行动');
-      assert.deepEqual(wg.combat.map((l) => l.alts[0].rel.slice(-7, -4)), ['025', '026', '027', '028'], '作战中1–4, positional');
-    }
-  });
-
-  test('a roster summon listed in `tokens` gets the skin-variant Spine it names (extraTokens); any other unknown token the default guess', () => {
-    const FX = 'https://raw.githubusercontent.com/fexli/ArknightsResource/main/spine/';
-    const p = buildPlan({ assets07: {}, ops03: {}, enemies05: {}, maps05: {}, audio: indexAudio({}), modelsData: {},
-      extraTokenIds: ['token_10002_kalts_mon3tr', 'token_19999_x_y'],
-      extraTokens: { token_10002_kalts_mon3tr: { battleSpineSkinVariantsOnly: ['token_10002_kalts_mon3tr_boc_6'] } } });
-    assert.equal(p.template.tokens.token_10002_kalts_mon3tr.spineVariant, 'token_10002_kalts_mon3tr_boc_6');
-    assert.deepEqual(p.models.get('token:token_10002_kalts_mon3tr').skel.urls,
-      ['Spine', 'Front'].map((f) => `${FX}token_10002_kalts_mon3tr/token_10002_kalts_mon3tr_boc_6/${f}/token_10002_kalts_mon3tr_boc_6.skel`));
-    assert.equal(p.template.tokens.token_19999_x_y.spineVariant, 'token_19999_x_y', 'not listed: its own id as the variant');
-    // the committed roster file: 25 summons with a variant, each a skin of the token itself
-    const tokens = readJson('tools/assets/waiguan-operators.json').tokens || {};
-    assert.equal(Object.keys(tokens).length, 25);
-    for (const [id, t] of Object.entries(tokens)) assert.ok(t.battleSpineSkinVariantsOnly?.[0]?.startsWith(`${id}_`), id);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // GitHub issue #42: a source deploy on a server without the Arknights client had no public/assets/local, so the battle
 // emotes showed default icons and 玩法说明 showed text tips. The public mirror has both (checked 2026-10-03: all 55
 // URLs answer 200 on raw.githubusercontent.com and on jsDelivr, same pictures and sizes as the local extraction), so the
@@ -653,7 +642,7 @@ describe('generated manifest data/assets.json', () => {
   function urls(node, out = []) {
     if (typeof node === 'string') { if (/^\/(assets|fonts)\//.test(node)) out.push(node); }
     else if (Array.isArray(node)) node.forEach((x) => urls(x, out));
-    else if (node && typeof node === 'object') Object.values(node).forEach((x) => urls(x, out));
+    else if (node && typeof node === 'object') Object.entries(node).forEach(([key, x]) => { if (key !== 'root') urls(x, out); });
     return out;
   }
 
@@ -758,10 +747,10 @@ describe('generated manifest data/assets.json', () => {
     for (const e of Object.values(manifest.enemies)) if (e.spine) models.set(e.spine.skel, e.spine);
     for (const t of Object.values(manifest.tokens)) if (t.spine) models.set(t.spine.skel, t.spine);
     assert.ok(models.size > 400);
-    // the official enemy models of the local client, as the client resolves them (DESIGN §13: only when listed)
+    // the official enemy and token models of the local client, as the client resolves them (DESIGN §13: only when listed)
     const localPath = join(ROOT, 'data', 'local-assets.json');
     const local = existsSync(localPath) ? JSON.parse(readFileSync(localPath, 'utf8')) : null;
-    for (const id of Object.keys(manifest.enemies)) {
+    for (const id of [...Object.keys(manifest.enemies), ...Object.keys(manifest.tokens)]) {
       const s = local ? spineEntry(manifest, id, { local }) : null;
       if (s?.local && [s.skel, s.atlas, ...s.textures].every((u) => existsSync(join(PUBLIC, u)))) models.set(s.skel, s);
     }
@@ -801,136 +790,5 @@ describe('generated manifest data/assets.json', () => {
     assert.ok(units.length > 300);
     for (const u of units) for (const v of Object.values(u)) assert.ok(typeof v === 'string' || (v && typeof v === 'object'));
     assert.ok(manifest.fonts.css && existsSync(join(PUBLIC, manifest.fonts.css)));
-  });
-});
-
-describe('operator voice lines (tools/assets/voice.mjs)', () => {
-  const words = (key, lines) => Object.fromEntries(lines.map(([title, place, n]) => [`${key}_CN_${n}`,
-    { charId: key, wordKey: key, voiceId: `CN_${n}`, voiceIndex: Number(n), voiceTitle: title, placeType: place, voiceAsset: `${key}/CN_${n}` }]));
-  const ALL = [['编入队伍', 'SQUAD', '017'], ['行动出发', 'BATTLE_START', '019'], ['行动开始', 'BATTLE_FACE_ENEMY', '020'],
-    ['选中干员2', 'BATTLE_SELECT', '022'], ['选中干员1', 'BATTLE_SELECT', '021'], ['部署1', 'BATTLE_PLACE', '023'], ['部署2', 'BATTLE_PLACE', '024'],
-    ['作战中1', 'BATTLE_SKILL_1', '025'], ['作战中2', 'BATTLE_SKILL_2', '026'], ['作战中3', 'BATTLE_SKILL_3', '027'], ['作战中4', 'BATTLE_SKILL_4', '028'],
-    ['完成高难行动', 'FOUR_STAR', '029'], ['3星结束行动', 'THREE_STAR', '030'], ['非3星结束行动', 'TWO_STAR', '031'], ['行动失败', 'LOSE', '032'],
-    ['精英化晋升1', 'EVOLVE_ONE', '013'], ['交谈1', 'HOME_PLACE', '002']];
-  const table = {
-    charWords: { ...words('char_002_amiya', ALL), ...words('char_459_tachak', [['选中干员1', 'BATTLE_SELECT', '021']]) },
-    voiceLangDict: {
-      char_002_amiya: { charId: 'char_002_amiya', dict: { CN_MANDARIN: { wordkey: 'char_002_amiya', voicePath: null }, JP: { wordkey: 'char_002_amiya', voicePath: null }, EN: { wordkey: 'char_002_amiya', voicePath: null } } },
-      char_459_tachak: { charId: 'char_459_tachak', dict: { LINKAGE: { wordkey: 'char_459_tachak', voicePath: 'Audio/Sound_Beta_2/Voice/' } } },
-    },
-  };
-  const idx = indexCharWords(table);
-
-  test('the battle lines, by their official placeType, from the language folder (upstream #73\'s moments, DESIGN §21.30)', () => {
-    const cn = voiceLines(idx, 'char_002_amiya', 'cn');
-    assert.deepEqual(Object.keys(cn).sort(), Object.keys(VOICE_ROLES).sort());
-    assert.deepEqual(Object.keys(cn).sort(), ['combat', 'depart', 'deploy', 'fail', 'select', 'start', 'win', 'win3', 'win4']);
-    assert.equal(cn.start, 'voice_cn/char_002_amiya/cn_020.mp3', '行动开始 (BATTLE_FACE_ENEMY), not 行动出发');
-    assert.equal(cn.depart, 'voice_cn/char_002_amiya/cn_019.mp3', '行动出发 (BATTLE_START), a role of its own');
-    assert.equal(cn.win4, 'voice_cn/char_002_amiya/cn_029.mp3', '完成高难行动 (FOUR_STAR)');
-    assert.deepEqual(cn.select, ['voice_cn/char_002_amiya/cn_021.mp3', 'voice_cn/char_002_amiya/cn_022.mp3']);
-    assert.deepEqual(cn.deploy, ['voice_cn/char_002_amiya/cn_023.mp3', 'voice_cn/char_002_amiya/cn_024.mp3']);
-    assert.deepEqual(cn.combat.map((p) => p.slice(-7, -4)), ['025', '026', '027', '028'], '作战中1–4 in order');
-    assert.equal(cn.win3, 'voice_cn/char_002_amiya/cn_030.mp3');
-    assert.equal(cn.win, 'voice_cn/char_002_amiya/cn_031.mp3');
-    assert.equal(cn.fail, 'voice_cn/char_002_amiya/cn_032.mp3');
-    const jp = voiceLines(idx, 'char_002_amiya', 'jp');
-    assert.equal(jp.start, 'voice/char_002_amiya/cn_020.mp3');
-    assert.equal(jp.depart, 'voice/char_002_amiya/cn_019.mp3');
-    assert.equal(jp.win4, 'voice/char_002_amiya/cn_029.mp3');
-    for (const t of ['编入队伍', '精英化晋升1', '交谈1']) {
-      const n = ALL.find((l) => l[0] === t)[2];
-      assert.ok(!Object.values(cn).flat().some((p) => p.endsWith(`cn_${n}.mp3`)), `${t} is not a battle line`);
-    }
-  });
-
-  test('combat is positional: combat[k-1] is the first line of BATTLE_SKILL_k, in place order (the client plays 作战中N for skill N)', () => {
-    assert.deepEqual([...POSITIONAL_ROLES], ['combat'], 'select / deploy stay random draws');
-    // a place with two lines still gives one entry per place, in place order
-    const extra = words('char_002_amiya', [['作战中2b', 'BATTLE_SKILL_2', '040'], ['选中干员3', 'BATTLE_SELECT', '041']]);
-    const two = indexCharWords({ ...table, charWords: { ...extra, ...table.charWords } });
-    const cn = voiceLines(two, 'char_002_amiya', 'cn');
-    assert.deepEqual(cn.combat.map((p) => p.slice(-7, -4)), ['025', '026', '027', '028'], '4 entries: the 2nd is 作战中2, not 作战中2b');
-    assert.deepEqual(cn.select.map((p) => p.slice(-7, -4)), ['021', '022', '041'], 'a random role keeps every line');
-    // a missing place shortens the array (the client then draws at random instead of by index)
-    const noS3 = indexCharWords({ ...table, charWords: Object.fromEntries(Object.entries(table.charWords).filter(([, w]) => w.placeType !== 'BATTLE_SKILL_3')) });
-    assert.deepEqual(voiceLines(noS3, 'char_002_amiya', 'cn').combat.map((p) => p.slice(-7, -4)), ['025', '026', '028']);
-  });
-
-  test('a linkage operator uses its own voice everywhere; no voice entry ⇒ null', () => {
-    assert.deepEqual(voiceLines(idx, 'char_459_tachak', 'cn'), { select: ['voice/char_459_tachak/cn_021.mp3'] });
-    assert.deepEqual(voiceLines(idx, 'char_459_tachak', 'jp'), { select: ['voice/char_459_tachak/cn_021.mp3'] });
-    // with 行动出发 / 完成高难行动 lines: from its own folder (voice/) in every dub
-    const linked = indexCharWords({ ...table, charWords: { ...table.charWords,
-      ...words('char_459_tachak', [['行动出发', 'BATTLE_START', '019'], ['完成高难行动', 'FOUR_STAR', '029']]) } });
-    for (const lang of ['cn', 'jp', 'en', 'kr']) {
-      const l = voiceLines(linked, 'char_459_tachak', lang);
-      assert.equal(l.depart, 'voice/char_459_tachak/cn_019.mp3', lang);
-      assert.equal(l.win4, 'voice/char_459_tachak/cn_029.mp3', lang);
-    }
-    assert.equal(voiceLines(idx, 'char_600_cpione', 'cn'), null, 'reserve operators have no voice');
-    assert.equal(voiceLines(idx, 'char_002_amiya', 'kr'), null, 'no KR dub listed for her');
-  });
-
-  test('the EN / KR dubs (upstream #73, DESIGN §21.30): the same lines from voice_en/ / voice_kr/; a linkage operator keeps its own', () => {
-    const en = voiceLines(idx, 'char_002_amiya', 'en');
-    assert.deepEqual(Object.keys(en).sort(), Object.keys(VOICE_ROLES).sort());
-    assert.equal(en.start, 'voice_en/char_002_amiya/cn_020.mp3');
-    assert.equal(en.depart, 'voice_en/char_002_amiya/cn_019.mp3');
-    assert.equal(en.win4, 'voice_en/char_002_amiya/cn_029.mp3');
-    assert.deepEqual(en.combat.map((p) => p.slice(-7, -4)), ['025', '026', '027', '028']);
-    const kr = indexCharWords({ ...table, voiceLangDict: { char_002_amiya: { charId: 'char_002_amiya', dict: { KR: { wordkey: 'char_002_amiya', voicePath: null } } } } });
-    assert.equal(voiceLines(kr, 'char_002_amiya', 'kr').win3, 'voice_kr/char_002_amiya/cn_030.mp3');
-    assert.equal(voiceLines(kr, 'char_002_amiya', 'cn'), null, 'a KR-only entry is no 中文 voice');
-    assert.deepEqual(voiceLines(idx, 'char_459_tachak', 'en'), { select: ['voice/char_459_tachak/cn_021.mp3'] });
-    assert.deepEqual(voiceLines(idx, 'char_459_tachak', 'kr'), { select: ['voice/char_459_tachak/cn_021.mp3'] });
-  });
-
-  test('--voice option: 中文 and 日文 by default', () => {
-    assert.deepEqual(parseVoiceLangs(undefined), ['cn', 'jp']);
-    assert.deepEqual(parseVoiceLangs('cn'), ['cn']);
-    assert.deepEqual(parseVoiceLangs('JP, jp'), ['jp']);
-    assert.deepEqual(parseVoiceLangs('none'), []);
-    assert.deepEqual(parseVoiceLangs('cn,jp,en,kr'), ['cn', 'jp', 'en', 'kr'], 'EN / KR on request');
-    assert.deepEqual(parseVoiceLangs('KR'), ['kr']);
-    assert.throws(() => parseVoiceLangs('fr'), /unknown voice language/);
-  });
-
-  test('data/assets.json: every operator of every language — the 外援 ones too — has the 9 roles (depart, win4, combat ×4 in order), files on disk', () => {
-    const v = readJson('data/assets.json').audio?.voice;
-    const onDisk = existsSync(join(ROOT, 'public', 'assets', 'voice'));
-    if (!v) return; // assets fetched with --voice=none
-    // the 外援 / 甄选 roster (data/waiguan.json, DESIGN §27): its 78 operators outside research 07
-    // (tools/assets/waiguan-operators.json) speak like a pool operator, with the same 9 roles; its other 9 are pool
-    // operators already, the reserve operators 预备干员 (char_6xx), which have no voice in the game
-    const waiguan = Object.keys(readJson('tools/assets/waiguan-operators.json').operators || {});
-    const roster = readJson('data/waiguan.json').candidates.map((c) => c.charId);
-    const reserve = roster.filter((id) => !waiguan.includes(id));
-    assert.equal(waiguan.length, 78);
-    assert.equal(reserve.length, 9);
-    for (const id of reserve) assert.match(id, /^char_6\d\d_/, `${id}: a roster operator outside the 78 is a 预备干员`);
-    for (const [lang, per] of Object.entries(v)) {
-      assert.ok(['cn', 'jp', 'en', 'kr'].includes(lang), lang);
-      // every 外援-only operator has a 中文 and a 日文 dub (charword_table voiceLangDict); en / kr may lack one
-      if (lang === 'cn' || lang === 'jp') for (const id of waiguan) assert.ok(per[id], `${lang}.${id}: a 外援 operator has voice`);
-      for (const id of reserve) assert.equal(per[id], undefined, `${lang}.${id}: a 预备干员 has no voice`);
-      for (const [charId, roles] of Object.entries(per)) {
-        assert.ok(/^char_/.test(charId), charId);
-        assert.deepEqual(Object.keys(roles).sort(), Object.keys(VOICE_ROLES).sort(), `${lang}.${charId} roles`);
-        assert.equal(typeof roles.depart, 'string', `${lang}.${charId}.depart`);
-        assert.match(roles.depart, /\/cn_019\.mp3$/, `${lang}.${charId}.depart is 行动出发`);
-        assert.equal(typeof roles.win4, 'string', `${lang}.${charId}.win4`);
-        assert.match(roles.win4, /\/cn_029\.mp3$/, `${lang}.${charId}.win4 is 完成高难行动`);
-        assert.ok(Array.isArray(roles.combat) && roles.combat.length === 4, `${lang}.${charId}.combat has 4 entries`);
-        roles.combat.forEach((u, k) => assert.ok(u.endsWith(`/cn_02${5 + k}.mp3`), `${lang}.${charId}.combat[${k}] is 作战中${k + 1}: ${u}`));
-        for (const [role, urls] of Object.entries(roles)) {
-          assert.ok(VOICE_ROLES[role], `${lang}.${charId}.${role}`);
-          for (const u of [].concat(urls)) {
-            assert.match(u, new RegExp(`^/assets/voice/${lang}/char_[a-z0-9_]+/cn_\\d{3}\\.mp3$`));
-            if (onDisk) assert.ok(existsSync(join(ROOT, 'public', u)), u);
-          }
-        }
-      }
-    }
   });
 });

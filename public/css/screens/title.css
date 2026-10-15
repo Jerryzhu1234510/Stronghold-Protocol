@@ -126,7 +126,6 @@
 .title-corner { position: absolute; z-index: 2; display: flex; align-items: flex-start; gap: .12rem; line-height: 1.7; }
 .title-corner--tl { left: .44rem; top: .38rem; }
 .title-corner--tr { right: .44rem; top: .38rem; text-align: right; }
-.title-corner--tr .title-install { margin-top: -.04rem; } /* 安装 (js/ui/install.js): only where the site can be installed */
 .title-corner__mark {
   width: .32rem;
   height: .32rem;
@@ -139,22 +138,14 @@
 }
 
 /* ---- centre column ------------------------------------------------------------------------------- */
-/* Raised .15rem above the centre, as before (its .3rem padding is below). A screen too short for it (a phone, the
-   account card with its mistakes) scrolls it like a page: the column spans the screen, so its scrollbar is the
-   window's edge, and it lies over the footer it scrolls past (whose text would take the taps meant for the card). */
 .title-main {
   position: relative;
-  z-index: 3;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  align-self: stretch;
-  max-height: 100%;
-  padding-bottom: .3rem;
-  overflow-y: auto;
+  margin-top: -.3rem;
 }
-/* Account mode, signed out: the account card's forms take the emblem's room. */
-.title-screen--sign-in .emblem { display: none; }
 
 .emblem { position: relative; display: flex; align-items: center; gap: .26rem; margin-bottom: .26rem; animation: rise-in 600ms var(--ease-out) backwards; }
 .emblem__svg { width: 1.3rem; height: 1.4rem; overflow: visible; filter: drop-shadow(0 0 .12rem rgba(210, 255, 240, .25)); }
@@ -201,6 +192,8 @@
   animation: rise-in 600ms 140ms var(--ease-out) backwards;
 }
 .title-cn__colon { color: #f4f6f5; }
+/* a title in an alphabetic script (English …; screens/title.js): the display face, smaller so "Stronghold Protocol: Alliance" fits one line */
+.title-cn--latin { font-family: var(--font-display); font-size: .6rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
 .title-cn em { font-style: normal; color: var(--mint-500); text-shadow: 0 0 .26rem rgba(23, 249, 183, .45); }
 .title-tag {
   margin-top: .12rem;
@@ -237,13 +230,6 @@
   background: linear-gradient(90deg, var(--mint-500), transparent 60%);
 }
 .title-login .btn--xl { letter-spacing: .6em; padding-left: calc(.48rem + .3em); }
-.title-login .title-login__github, .title-login .title-login__enter { letter-spacing: normal; padding-inline: .24rem; }
-/* The account card's form: its fields and button are rows of the card like the others. */
-.title-login__form { display: contents; }
-.title-login__account { display: flex; align-items: center; gap: .12rem; }
-.title-login__identity { flex: 1; min-width: 0; }
-.title-login__identity > span { display: block; font-size: .13rem; color: var(--text-lo); }
-.title-login__identity > strong { display: block; font-size: .23rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .title-invite {
   display: flex;
   align-items: center;
@@ -256,15 +242,14 @@
 }
 .title-invite .icon { width: .2rem; height: .2rem; }
 .title-invite b { font-size: .2rem; letter-spacing: .2em; color: #ffd08a; }
-/* The connection row: the state (● text · ping) and the tools (玩法说明 · 资源管理 · ⚙ · ⛶) share one line where they
-   fit (a Node server: 玩法说明 · ⚙ · ⛶). Where they do not — a Cloudflare site's 资源管理 next to ⚙ — the tools take
-   their own line under the state instead of squeezing the row (the state text broke over two lines, ⚙ / ⛶ stopped
-   being squares). */
-.title-conn { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .1rem; row-gap: .06rem; min-height: .32rem; overflow-x: clip; font-size: .14rem; color: var(--text-lo); }
-.title-conn__state, .title-conn__tools { display: flex; align-items: center; gap: .1rem; }
+.title-conn { display: flex; align-items: center; justify-content: center; gap: .1rem; min-height: .32rem; font-size: .14rem; color: var(--text-lo); }
+/* language menu (中文 | English | …, ui/lang.js) in the top-right corner; more than four languages make it a list */
+.title-lang { display: inline-flex; margin-bottom: .1rem; }
+.title-lang button { min-width: .74rem; height: .3rem; font-size: .14rem; cursor: pointer; }
+.lang-select select { height: .38rem; min-width: 1.6rem; padding: 0 .12rem; background: #0a0d0c; border: 0; color: var(--text-hi); font-size: .16rem; cursor: pointer; }
+.title-lang.lang-select select { height: .3rem; font-size: .14rem; }
+html[data-script="alphabetic"] .title-login .btn--xl { letter-spacing: .3em; }
 .title-conn .ping { height: .26rem; font-size: .15rem; }
-/* 安装 help (js/ui/install.js, shown in the shared alert dialog) */
-.install-steps { margin: 0 0 .1rem; padding-left: 1.4em; line-height: 1.75; color: var(--text-hi); }
 
 .title-foot {
   position: absolute;
@@ -275,6 +260,21 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+  flex-wrap: wrap;
+  gap: .12rem .2rem;
   font-size: .13rem;
   color: var(--text-dim);
+}
+.title-foot__meta { display: flex; align-items: flex-end; gap: .16rem; flex-wrap: wrap; justify-content: flex-end; }
+.title-repo { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+.title-repo:hover, .title-repo:focus-visible { color: var(--text-hi); border-bottom-color: currentColor; }
+/* a development build (shared/constants.js DEV_BUILD): an unmissable tag in the footer */
+.title-dev {
+  padding: .03rem .1rem;
+  border: 1px solid #ff9f43;
+  border-radius: .04rem;
+  color: #ffb066;
+  background: rgba(255, 159, 67, .14);
+  font-weight: 700;
+  letter-spacing: .02em;
 }
