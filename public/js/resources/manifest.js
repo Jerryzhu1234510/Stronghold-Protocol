@@ -1,7 +1,7 @@
 import { unhashedUrl } from '../../../shared/assetPaths.js';
 
 export function isBundledClient() {
-  return typeof globalThis.SPAndroidResources?.getManifest === 'function' || typeof globalThis.window?.SPAndroidResources?.getManifest === 'function' || /StrongholdAndroid\//.test(globalThis.navigator?.userAgent || '') || !!globalThis.window?.chrome?.webview;
+  return typeof globalThis.SPAndroidResources?.getManifest === 'function' || typeof globalThis.window?.SPAndroidResources?.getManifest === 'function' || /(?:SPDesktop|SPAndroid|StrongholdAndroid)\//.test(globalThis.navigator?.userAgent || '') || !!globalThis.window?.chrome?.webview;
 }
 
 // Shipped native shells index bundled files by plain path. Web hot updates must keep reusing those files.

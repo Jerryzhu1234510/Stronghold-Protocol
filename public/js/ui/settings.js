@@ -14,13 +14,13 @@ import { openGuide } from './guide.js';
 import { detectFeatures } from './device.js';
 import { LangToggle, machineTranslationNote } from './lang.js';
 import { t, tc, N_ } from '../../../shared/i18n.js';
-import { cacheSupported, resourceCacheAction } from '../resources/client.js';
+import { cacheSupported, resourceCacheAction, localResourcesRequired } from '../resources/client.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
 function ResourceCacheSetting({ open }) {
   const [status, setStatus] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  const supported = cacheSupported();
+  const supported = cacheSupported(), localOnly = localResourcesRequired();
   const action = async (name, extra) => {
     setBusy(true); setError('');
     try { setStatus(await resourceCacheAction(name, extra)); }
@@ -30,12 +30,18 @@ function ResourceCacheSetting({ open }) {
   useLayoutEffect(() => {
     if (!open || !supported) return;
     let alive = true;
-    const refresh = () => resourceCacheAction().then(value => { if (alive) { setStatus(value); setError(''); } })
+    const refresh = () => resourceCacheAction(localOnly ? 'local-ready' : 'status').then(value => { if (alive) { setStatus(value); setError(''); } })
       .catch(err => { if (alive) setError(err.message); });
     void refresh();
     const timer = setInterval(refresh, 5000);
     return () => { alive = false; clearInterval(timer); };
-  }, [open, supported]);
+  }, [open, supported, localOnly]);
+  if (localOnly) return html`<div class="set-resource-cache">
+    <div class="set-row"><span class="set-row__label">本地素材读取<${MicroLabel}>LOCAL RESOURCES<//></span><strong>已启用</strong></div>
+    <p class="set-hint" role="status">${error || `本页本地读取 ${status?.hits ?? 0} 次；缺失 ${status?.localMisses ?? 0} 次。`}</p>
+    <p class="set-hint">素材直接读取已导入的资源库，不会自动下载。缺音乐／语音时暂时静音；缺图片／模型时请补导两个资源包。已有素材继续有效，请不要清除站点数据。</p>
+    <a class="set-key" href="/#resource-pack">返回选服大厅补导资源</a>
+  </div>`;
   return html`<div class="set-resource-cache">
     <div class="set-row">
       <span class="set-row__label">素材本地缓存<${MicroLabel}>RESOURCE CACHE<//></span>

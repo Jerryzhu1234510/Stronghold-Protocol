@@ -95,9 +95,9 @@ test('a corrupt prebuilt manifest is not silently replaced with non-CDN identiti
 });
 
 test('CDN worker registration is independent of Web Locks and persistent cache support', async () => {
-  const source = (await readFile(new URL('../public/js/resources/client.js', import.meta.url), 'utf8')).replace(/^export /gm, '');
+  const source = (await readFile(new URL('../public/js/resources/client.js', import.meta.url), 'utf8')).replace(/^import[^\n]+\n/gm,'').replace(/^export /gm, '');
   let registered = 0;
-  const context = { isSecureContext: true, crypto: { subtle: {} }, URL,
+  const context = { isSecureContext: true, crypto: { subtle: {} }, URL, isBundledClient:()=>false,
     navigator: { serviceWorker: { register() { registered++; return Promise.resolve({ active: {} }); } } } };
   const runtime = vm.createContext(context);
   vm.runInContext(source.replace(/import\.meta\.url/g, JSON.stringify('https://game.test/_build/a/js/resources/client.js')), runtime);

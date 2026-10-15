@@ -49,6 +49,11 @@ export function ReleaseNotesHost() {
       onClick=${closeReleaseNotes}>我知道了<//></span>`}>
     <div class="release-notes__content" ref=${body} tabIndex=${0} role="region" aria-label="更新内容">
       <div class="release-notes__callout release-notes__launch">
+        <strong>网页本地素材读取修复</strong>
+        <p>8443网页进入前确认资源组件已接管，并实际读取本地素材；修复部分大小写与编码路径无法复用的问题。缺失素材不再自动从服务器重复下载，缺失音乐／语音暂时静音并提示补导。大厅“本地素材”可查看本页读取和缺失次数。</p>
+        <p>旧完整资源包v2和0.2.5核心素材补全包继续有效，网页首次使用须两个都导入；已导入的不用重下，不要清空缓存。现有对局保留，打完后从选服大厅重新进入以使用修复。PC与安卓继续优先使用内置资源，本次无需重装。</p>
+      </div>
+      <div class="release-notes__callout release-notes__launch">
         <strong>r05 · 大厅顶栏布局修正</strong>
         <p>修正旧版两列／三列样式冲突导致顶部按钮和账号挤在中间的问题。桌面顶栏铺满可用宽度、账号靠右；窄窗口下按钮自动换行。</p>
       </div>

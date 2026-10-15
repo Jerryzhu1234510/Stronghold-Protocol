@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { html, Icon } from './components.js';
-import { cacheSupported, resourceCacheAction } from '../resources/client.js';
+import { cacheSupported, resourceCacheAction, localResourcesRequired } from '../resources/client.js';
 import { startResourcePreload } from '../resources/preload.js';
 import { MANUAL_PRELOAD_CONCURRENCY } from '../resources/policy.js';
 
@@ -10,20 +10,20 @@ export function ResourcePreloadButton() {
   const [open, setOpen] = useState(false), [status, setStatus] = useState(null), [running, setRunning] = useState(false);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const stop = useRef(null), root = useRef(null), alive = useRef(true), starting = useRef(false);
-  const supported = cacheSupported(), plan = status?.preload;
+  const supported = cacheSupported(), localOnly = localResourcesRequired(), plan = status?.preload;
   const complete = plan?.state === 'complete';
   const percent = plan?.totalBytes ? Math.floor(plan.completedBytes / plan.totalBytes * 100) : 0;
   useEffect(() => {
     if (!supported) return undefined;
     let alive = true;
-    const refresh = () => resourceCacheAction().then(value => { if (alive) { setStatus(value); setError(''); } })
+    const refresh = () => resourceCacheAction(localOnly ? 'local-ready' : 'status').then(value => { if (alive) { setStatus(value); setError(''); } })
       .catch(err => { if (alive) setError(err.message); });
     void refresh();
     const timer = setInterval(() => { if (!stop.current) void refresh(); }, 5000);
     const outside = e => { if (!root.current?.contains(e.target)) setOpen(false); };
     addEventListener('pointerdown', outside);
     return () => { alive = false; stop.current?.(); clearInterval(timer); removeEventListener('pointerdown', outside); };
-  }, [supported]);
+  }, [supported, localOnly]);
   useEffect(() => () => { alive.current = false; }, []);
   const toggle = async () => {
     if (starting.current) return;
@@ -45,6 +45,19 @@ export function ResourcePreloadButton() {
     } catch (err) { setError(err.message); setRunning(false); }
     finally { starting.current = false; if (alive.current) setBusy(false); }
   };
+  if (localOnly) return html`<div ref=${root} class="resource-preload" onKeyDown=${e => { if (e.key === 'Escape') setOpen(false); }}>
+    <button type="button" class="resource-preload__button" aria-expanded=${open} aria-controls="resource-preload-panel" onClick=${() => setOpen(!open)}>
+      <${Icon} name="check"/><span>本地素材</span>
+    </button>
+    ${open && html`<section id="resource-preload-panel" class="resource-preload__panel" aria-label="本地素材状态">
+      <header><b>本地素材状态</b><button type="button" aria-label="关闭本地素材状态" onClick=${() => setOpen(false)}><${Icon} name="close"/></button></header>
+      <p>本页已从本地读取 ${status?.hits ?? 0} 次；缺失 ${status?.localMisses ?? 0} 次。</p>
+      <p>素材直接从已导入的资源库读取。缺失音乐暂时静音，游戏不自动下载素材。</p>
+      <p>旧完整资源包 v2 ＋ 0.2.5 核心素材补全包均需导入；已导入的文件继续有效，不要清空资源库。</p>
+      ${error && html`<p class="resource-preload__error" role="status">${error}</p>`}
+      <a class="resource-preload__start" href="/#resource-pack">返回选服大厅补导资源</a>
+    </section>`}
+  </div>`;
   return html`<div ref=${root} class="resource-preload" onKeyDown=${e => { if (e.key === 'Escape') setOpen(false); }}>
     <button type="button" class="resource-preload__button" aria-expanded=${open} aria-controls="resource-preload-panel" onClick=${() => setOpen(!open)}>
       <${Icon} name=${complete ? 'check' : running ? 'download' : 'chevronRight'}/>

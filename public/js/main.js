@@ -60,7 +60,7 @@ import { ReleaseNotesHost, installReleaseNotes } from './ui/releaseNotes.js';
 import { emptyChat, receiveChat } from './ui/chatState.js';
 import { installProfiles } from './ui/profileEntry.js';
 import { startBuildGuard } from './ui/buildGuard.js';
-import { startResourceCache, resourceDocumentUrl } from './resources/client.js';
+import { startResourceCache, resourceDocumentUrl, requireLocalResourceController } from './resources/client.js';
 import { startResourcePreload } from './resources/preload.js';
 import { initLang, useLang, tickerText } from './ui/lang.js';
 import { t, N_, translateWire } from '../../shared/i18n.js';
@@ -365,6 +365,17 @@ function installGlobalErrorHandlers() {
 async function boot() {
   const canonical = resourceDocumentUrl(location.href, performance.getEntriesByType('navigation')[0]?.name, globalThis.__SP_GENERATION);
   if (canonical) { location.reload(); return; }
+  await requireLocalResourceController();
+  // Font CSS can request files as soon as HTML is parsed, before a first worker controls the page.
+  for (const link of document.querySelectorAll('link[data-sp-resource-href]')) link.href = link.dataset.spResourceHref;
+  const resourceNotices = new Set();
+  navigator.serviceWorker?.addEventListener('message', event => {
+    if (event.data?.type !== 'sp-local-resource-missing' || resourceNotices.has(event.data.kind)) return;
+    resourceNotices.add(event.data.kind);
+    toast(event.data.kind === 'audio'
+      ? '部分本地音乐／语音缺失，暂时静音，不影响对局；可回选服大厅补导资源。'
+      : '部分本地图片／模型缺失，请在选服大厅补导完整资源包和核心补全包，当前对局仍保留。', 'info');
+  });
   await accountState.refreshMe().catch(() => {});
   void startResourceCache();
   installGlobalErrorHandlers();
@@ -457,5 +468,13 @@ async function boot() {
 if (!globalThis.__SP_HTTPS_REDIRECTING) boot().catch((err) => {
   console.error('[app] boot failed', err);
   const el = document.getElementById('boot-err');
-  if (el) el.textContent = t('启动失败，请刷新页面重试');
+  if (el) {
+    el.textContent = err.code === 'LOCAL_RESOURCES_REQUIRED' ? err.message : t('启动失败，请刷新页面重试');
+    if (err.code === 'LOCAL_RESOURCES_REQUIRED') {
+      const back = document.createElement('a');
+      back.href = '/#resource-pack'; back.textContent = '返回选服大厅补导资源';
+      Object.assign(back.style, { display: 'block', marginTop: '16px', color: '#a9efd2', textDecoration: 'underline' });
+      el.append(back);
+    }
+  }
 });

@@ -38,14 +38,44 @@ export function resourcePath(request, base) {
   if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return null;
   const pathname = '/' + url.pathname.slice(scope.pathname.length);
   // Only the art/audio/font allowlist. Never cache scripts, pages, data, APIs or sockets.
-  if (!/^\/(assets|fonts|media)\//.test(pathname)) return null;
-  return splitHashedPath(pathname).path;
+  if (!/^\/(assets|fonts|media)\//i.test(pathname)) return null;
+  return canonicalResourcePath(splitHashedPath(pathname).path);
+}
+
+// File manifests encode each segment, while image/atlas loaders may leave [] or
+// other URL-safe characters literal. Both spellings must address the same hash.
+function canonicalResourcePath(pathname) {
+  try { return pathname.split('/').map(part => encodeURIComponent(decodeURIComponent(part))).join('/'); }
+  catch { return null; }
+}
+
+const foldedManifests = new WeakMap();
+function foldedManifest(manifest) {
+  if (foldedManifests.has(manifest)) return foldedManifests.get(manifest);
+  const entries = new Map(), aliases = new Map();
+  for (const [path, item] of Object.entries(manifest.entries || {})) {
+    const key = canonicalResourcePath(path)?.toLowerCase();
+    if (!key) continue;
+    const old = entries.get(key);
+    // Windows serves unique case aliases; never guess between distinct files.
+    entries.set(key, !entries.has(key) ? item : old?.hash === item?.hash && old?.bytes === item?.bytes ? old : null);
+  }
+  for (const [path, target] of Object.entries(manifest.aliases || {})) {
+    const key = canonicalResourcePath(path)?.toLowerCase();
+    if (key) aliases.set(key, !aliases.has(key) || aliases.get(key) === target ? target : null);
+  }
+  const result = { entries, aliases }; foldedManifests.set(manifest, result); return result;
 }
 
 export function resourceEntry(request, base, manifest) {
   const pathname = resourcePath(request, base);
-  if (!pathname) return null;
-  const item = manifest?.entries?.[manifest?.aliases?.[pathname] ?? pathname];
+  if (!pathname || !manifest?.entries) return null;
+  let item = manifest.entries[manifest.aliases?.[pathname] ?? pathname];
+  if (!item) {
+    const folded = foldedManifest(manifest), key = pathname.toLowerCase();
+    const target = folded.aliases.get(key);
+    item = target ? manifest.entries[target] || folded.entries.get(canonicalResourcePath(target)?.toLowerCase()) : folded.entries.get(key);
+  }
   return item && /^[a-f0-9]{64}$/.test(item.hash) && item.bytes > 0 && item.bytes <= MAX_FILE_BYTES ? item : null;
 }
 

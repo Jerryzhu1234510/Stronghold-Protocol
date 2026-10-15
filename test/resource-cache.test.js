@@ -52,7 +52,7 @@ function locks() {
   } };
 }
 function runtime({ id = 'a', caches = storage(), sharedLocks = locks(), bodies = {}, manifest = null, maxBytes = null,
-  assetNetwork = async () => {}, manifestNetwork = async () => {}, routeNetwork = async () => {} } = {}) {
+  assetNetwork = async () => {}, manifestNetwork = async () => {}, routeNetwork = async () => {}, localOnly = false } = {}) {
   const handlers = {}, counts = new Map(), modes = new Map();
   manifest ??= { version: 1, entries: Object.fromEntries(Object.entries(bodies).map(([url, body]) => [url, { hash: hash(body), bytes: Buffer.byteLength(body) }])), aliases: {} };
   const catalog = resourceRoutingCatalog(manifest);
@@ -70,7 +70,7 @@ function runtime({ id = 'a', caches = storage(), sharedLocks = locks(), bodies =
     await assetNetwork(p);
     return new Response(bodies[p] ?? 'network', { headers: { 'content-type': p.endsWith('.mp3') ? 'audio/mpeg' : 'application/octet-stream' } });
   };
-  const self = { location: { href: `https://game.test/_build/${id}/js/resources/worker.js` }, skipWaiting() {}, clients: { async claim() {} }, addEventListener(name, fn) { handlers[name] = fn; } };
+  const self = { location: { href: `https://game.test/_build/${id}/js/resources/worker.js${localOnly ? '?localOnly=1' : ''}` }, skipWaiting() {}, clients: { async claim() {} }, addEventListener(name, fn) { handlers[name] = fn; } };
   vm.runInNewContext(code, { ...policy, MAX_BYTES: maxBytes ?? policy.MAX_BYTES, createResourceTransport, resourceCacheLimit: value => maxBytes ?? policy.resourceCacheLimit(value), self, navigator: { locks: sharedLocks }, caches, crypto: webcrypto, fetch: network, URL, Request, Response, Headers, AbortSignal, AbortController, TextEncoder, setTimeout, clearTimeout, Uint8Array, Date, Promise, Map, Error, Number, String });
   async function emit(name, extra = {}) {
     const waits = []; let response;
@@ -84,6 +84,49 @@ function runtime({ id = 'a', caches = storage(), sharedLocks = locks(), bodies =
     async message(action, extra = {}) { let reply; await emit('message', { data: { action, ...extra }, ports: [{ postMessage(v) { reply = v; } }] }); return reply; },
   };
 }
+
+test('local-only play reuses imported bytes with cache preference off and never redownloads missing media', async () => {
+  const bodies = { '/assets/art.png': 'imported art', '/assets/audio/bgm/music.mp3': 'imported music' };
+  const h = runtime({ bodies, localOnly: true });
+  const cache = await h.caches.open(policy.CACHE_NAME);
+  for (const [path, body] of Object.entries(bodies)) await cache.put('https://game.test/__sp_resource_content/'+hash(body), new Response(body));
+  await h.message('enable', { enabled: false });
+  for (const path of Object.keys(bodies)) {
+    const response = await h.get(path);
+    assert.equal(response.headers.get('x-sp-resource-cache'), 'HIT');
+    assert.equal(await response.text(), bodies[path]);
+    assert.equal(h.counts.get(path), undefined);
+  }
+  const invalidRange = await h.get('/assets/art.png', { range: 'bytes=0-1,3-4' });
+  assert.equal(invalidRange.status, 416);
+  assert.equal(h.counts.get('/assets/art.png'), undefined, 'invalid range never falls back to the server');
+  const missing = await h.get('/assets/audio/bgm/missing.mp3');
+  assert.equal(missing.headers.get('x-sp-resource-cache'), 'LOCAL-MISSING');
+  assert.equal(missing.headers.get('content-type'), 'audio/wav');
+  const wave = Buffer.from(await missing.arrayBuffer());
+  assert.equal(wave.subarray(0,4).toString(), 'RIFF');
+  assert.equal(wave.length, wave.readUInt32LE(4)+8);
+  assert.equal(wave.subarray(44).every(byte=>byte===128), true);
+  assert.equal(h.counts.get('/assets/audio/bgm/missing.mp3'), undefined);
+  const art = await h.get('/assets/missing.png');
+  assert.equal(art.status, 503);
+  assert.equal(h.counts.get('/assets/missing.png'), undefined);
+  await h.message('warm', {manual:true,concurrency:16});
+  assert.equal(h.counts.get('/assets/art.png'), undefined);
+  const ready = await h.message('local-ready');
+  assert.equal(ready.localOnly,true);
+  assert.equal(ready.localMisses,2);
+});
+
+test('local-only metadata/storage failure cannot silently turn into an asset download', async () => {
+  const broken = runtime({localOnly:true,routeNetwork:async()=>{throw Error('metadata offline')}});
+  assert.equal((await broken.get('/assets/a.png')).status,503);
+  assert.equal(broken.counts.get('/assets/a.png'),undefined);
+  const cacheDenied=storage();cacheDenied.open=async()=>{throw Error('storage unavailable')};
+  const h=runtime({localOnly:true,caches:cacheDenied,bodies:{'/assets/a.png':'not cached'}});
+  assert.equal((await h.get('/assets/a.png')).status,503);
+  assert.equal(h.counts.get('/assets/a.png'),undefined);
+});
 
 test('same art is downloaded once and reused after a hot generation change; changed art downloads again', async () => {
   const caches = storage(), sharedLocks = locks();

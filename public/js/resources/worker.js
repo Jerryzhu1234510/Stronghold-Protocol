@@ -3,6 +3,30 @@ import { CACHE_NAME, META_NAME, MAX_BYTES, MANUAL_PRELOAD_BATCH_FILES, MANUAL_PR
 import { createResourceTransport } from './transport.js';
 
 const base = new URL('../../', self.location.href);
+const localOnly = new URL(self.location.href).searchParams.get('localOnly') === '1';
+const missingNotices = new Set();
+let localMisses = 0;
+
+function localMissing(request) {
+  localMisses++;
+  const audio = /\.(?:mp3|ogg|oga|opus|wav|m4a|aac|flac)(?:\?|$)/i.test(request.url) || new URL(request.url).pathname.includes('/media/');
+  const kind = audio ? 'audio' : 'core';
+  if (!missingNotices.has(kind)) {
+    missingNotices.add(kind);
+    Promise.resolve(self.clients.matchAll?.({ type: 'window' })).then(clients => {
+      for (const client of clients || []) client.postMessage({ type: 'sp-local-resource-missing', kind });
+    }).catch(() => {});
+  }
+  const headers = { 'Cache-Control': 'no-store', 'X-SP-Resource-Cache': 'LOCAL-MISSING' };
+  if (!audio) return new Response('本地素材缺失，请在选服大厅补导资源包。', { status: 503, headers });
+  // One second of valid silent PCM: missing optional music does not break play or download another track.
+  const body = new Uint8Array(8044), view = new DataView(body.buffer);
+  const text = (at, value) => { for (let i = 0; i < value.length; i++) body[at+i] = value.charCodeAt(i); };
+  text(0,'RIFF');view.setUint32(4,8036,true);text(8,'WAVEfmt ');view.setUint32(16,16,true);
+  view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,8000,true);view.setUint32(28,8000,true);
+  view.setUint16(32,1,true);view.setUint16(34,8,true);text(36,'data');view.setUint32(40,8000,true);body.fill(128,44);
+  return new Response(body, { headers: { ...headers, 'Content-Type': 'audio/wav', 'Content-Length': String(body.length) } });
+}
 const prefKey = new URL('/__sp_resource_preference', base.origin).href;
 const sizeKey = new URL('/__sp_resource_size', base.origin).href;
 const epochKey = new URL('/__sp_resource_epoch', base.origin).href;
@@ -55,9 +79,17 @@ async function routingDocument(url) {
     return await response.json();
   } finally { clearTimeout(timer); }
 }
+function resourceScope(request) {
+  if (resourcePath(request, base)) return base;
+  // Older CSS/audio loaders can still use an unpinned absolute resource URL.
+  const root = new URL('/', base);
+  return localOnly && resourcePath(request, root) ? root : null;
+}
 async function routeFor(request) {
-  if (manifest) return resourceEntry(request, base, manifest);
-  const pathname = resourcePath(request, base);
+  const scope = resourceScope(request);
+  if (!scope) return null;
+  if (manifest) return resourceEntry(request, scope, manifest);
+  const pathname = resourcePath(request, scope);
   if (!pathname) return null;
   const directory = pathname.slice(0, pathname.lastIndexOf('/'));
   if (!routes.has(directory)) {
@@ -69,7 +101,7 @@ async function routeFor(request) {
     })().catch(() => { routes.delete(directory); return null; });
     routes.set(directory, pending);
   }
-  return resourceEntry(request, base, await routes.get(directory));
+  return resourceEntry(request, scope, await routes.get(directory));
 }
 async function enabled() {
   const pref = await (await caches.open(META_NAME)).match(prefKey);
@@ -126,7 +158,7 @@ async function save(key, response, bytes, generation) {
   });
 }
 async function fullResponse(request, item, useCache = true) {
-  useCache = useCache && storageAvailable();
+  useCache = (localOnly || useCache) && storageAvailable();
   const key = cacheKey(item);
   let cached = null;
   if (useCache) try { cached = await (await caches.open(CACHE_NAME)).match(key); } catch { useCache = false; }
@@ -134,6 +166,7 @@ async function fullResponse(request, item, useCache = true) {
     const headers = new Headers(cached.headers); headers.set('x-sp-resource-cache', 'HIT');
     return new Response(cached.body, { status: cached.status, headers });
   }
+  if (localOnly) return localMissing(request);
   if (!inflight.has(key)) {
     const promise = (async () => {
       let generation = null;
@@ -161,15 +194,19 @@ async function fullResponse(request, item, useCache = true) {
 async function serve(request, item) {
   try {
     const response = await fullResponse(request, item, storageAvailable() && await enabled().catch(() => false));
+    if (!response.ok) return response;
     const result = await rangeResponse(request, response);
-    if (!result) return fetch(request);
+    if (!result) return localOnly
+      ? new Response(null, { status: 416, headers: { 'Cache-Control': 'no-store', 'X-SP-Resource-Cache': 'LOCAL-RANGE-INVALID' } })
+      : fetch(request);
     if (result.headers.get('x-sp-resource-cache') === 'HIT') {
       hits++; savedBytes += Number(result.headers.get('content-length')) || 0;
     }
     return result;
-  } catch { return fetch(request); }
+  } catch { return localOnly ? localMissing(request) : fetch(request); }
 }
 async function warmOne(concurrency = 1, warmId = null) {
+  if (localOnly) { warmState = 'paused'; return; }
   if (!storageAvailable() || !await enabled()) { warmState = 'disabled'; return; }
   const value = await loadManifest();
   if (!value) { warmState = 'retry'; return; }
@@ -241,13 +278,18 @@ self.addEventListener('fetch', event => {
     event.respondWith(fetch(new Request(event.request, { cache: 'default' })));
     return;
   }
-  if (resourcePath(event.request, base)) event.respondWith((async () => {
+  if (resourceScope(event.request)) event.respondWith((async () => {
     const item = await routeFor(event.request);
-    return item ? serve(event.request, item) : fetch(event.request);
+    return item ? serve(event.request, item) : localOnly ? localMissing(event.request) : fetch(event.request);
   })());
 });
 self.addEventListener('message', event => {
   const port = event.ports?.[0];
+  // Startup readiness must not enumerate twenty thousand cache records or fetch the whole manifest.
+  if (port && event.data?.action === 'local-ready') {
+    port.postMessage({ ok: true, localOnly, hits, localMisses });
+    return;
+  }
   if (!port || !['status', 'enable', 'clear', 'warm', 'warm.stop'].includes(event.data?.action)) return;
   event.waitUntil((async () => {
     try {

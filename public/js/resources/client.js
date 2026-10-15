@@ -1,5 +1,25 @@
+import { isBundledClient } from './manifest.js';
 let starting;
-const workerUrl = new URL('./worker.js', import.meta.url).href;
+export const localResourcesRequired = () => globalThis.__SP_LOCAL_RESOURCES_REQUIRED === true && !isBundledClient();
+const worker = new URL('./worker.js', import.meta.url);
+// The policy is part of the worker identity, so suspension/restart cannot reset it.
+if (localResourcesRequired()) worker.searchParams.set('localOnly', '1');
+const workerUrl = worker.href;
+const startupError = message => Object.assign(new Error(message), { code: 'LOCAL_RESOURCES_REQUIRED' });
+
+export async function requireLocalResourceController() {
+  if (!localResourcesRequired()) return;
+  if (!cacheSupported() || !await waitForResourceController({ timeoutMs: 20000 })) {
+    throw startupError('本地素材读取组件尚未接管，请重新加载；若仍失败，请使用正常模式的新版浏览器或完整版客户端。');
+  }
+  const result = await resourceCacheAction('local-ready');
+  if (!result.localOnly) throw startupError('本地素材读取组件版本不符，请重新加载后再进入。');
+  // An inventory entry alone does not prove this document can read the imported bytes.
+  const probe = await fetch(new URL('../../assets/ui/settle/settlemen_personal_success.png', workerUrl), { cache: 'reload' });
+  const hit = probe.ok && probe.headers.get('x-sp-resource-cache') === 'HIT';
+  if (!hit) { await probe.body?.cancel(); throw startupError('未能实际读取已导入素材，请回到选服大厅重新检查并补导；无需清空原资源库。'); }
+  await probe.arrayBuffer();
+}
 
 // History-only URL pinning does not move a document into a service worker's scope.
 export function resourceDocumentUrl(href, navigationUrl, generation) {
