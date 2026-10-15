@@ -66,8 +66,8 @@
     },
     {
       "file": "resource-desktop-r01/session-cap.mjs",
-      "bytes": 8358,
-      "sha256": "2737c4142ee5aad2737b8db775212bbb00622ef54a63003d6a6f7f54649ac88d",
+      "bytes": 8851,
+      "sha256": "50ea42d9d941bb71996fb5cc2df356adcea01653020411e5809c8910cf92bac7",
       "previousSha256": "2737c4142ee5aad2737b8db775212bbb00622ef54a63003d6a6f7f54649ac88d"
     },
     {
@@ -94,5 +94,6 @@
     "previousSha256": "bb614448a6cca86f2a15da78f04fee55b41c8ac001bf9e72dfe42f6aeeed987e",
     "version": "l18",
     "sha256": "4a3b292438179e2ca1f3c70dac0bf19ee824d3447cac30a179327fc6659d89fe"
-  }
+  },
+  "relayLifecycleRevision": "r01-20261016"
 }

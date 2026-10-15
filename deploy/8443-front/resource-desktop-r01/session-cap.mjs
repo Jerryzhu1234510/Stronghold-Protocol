@@ -18,6 +18,7 @@ export class SessionCap {
     seat.holders.add(lease.id); this.seats.set(key, seat); return lease;
   }
   confirm(lease, token, route) {
+    if (!lease || lease.released) return;
     const key = this.key(token, route); if (!key) return;
     const old = this.seats.get(lease.key), target = this.seats.get(key);
     if (old) { old.holders.delete(lease.id); if (!old.holders.size) this.seats.delete(lease.key); }
@@ -26,6 +27,7 @@ export class SessionCap {
     lease.key = key; lease.confirmed = true;
   }
   release(lease) {
+    if (lease) lease.released = true;
     if (!lease) return; const seat = this.seats.get(lease.key); if (!seat) return;
     seat.holders.delete(lease.id);
     if (!seat.holders.size) { if (lease.confirmed) seat.until = this.now() + this.graceMs; else this.seats.delete(lease.key); }
@@ -50,6 +52,8 @@ export function createCappedUpgradeHandler({ host, port, wsModule, cap = new Ses
     }
     try { wss.handleUpgrade(req, socket, head, front => {
       let back, lease, queue = [], queueBytes = 0, timer, wireAt = socket.bytesWritten, preHelloAt = Date.now(), preHelloCount = 0;
+      let ended = false;
+      const active = () => !ended && front.readyState === WebSocket.OPEN;
       let alive = true;
       front.on('pong', () => { alive = true; });
       const heartbeat = setInterval(() => { if (!alive) { front.terminate(); return; } alive = false; if (front.readyState === WebSocket.OPEN) front.ping(); }, 15000); heartbeat.unref();
@@ -66,10 +70,12 @@ export function createCappedUpgradeHandler({ host, port, wsModule, cap = new Ses
       };
       timer = setTimeout(() => front.close(4002, 'hello timeout'), 30000); timer.unref();
       const receive = async (data, binary) => {
+        if (!active()) return;
         if (authorizeNewRoom && !binary) {
           let message;try{message=JSON.parse(data.toString());}catch{}
           if (['room.create','room.join','room.start','room.spectate','room.matchmake','room.matchmakeParty','room.ready'].includes(message?.t)) {
             let allowed=false;try{allowed=await authorizeNewRoom(req,route);}catch{}
+            if (!active()) return;
             if(!allowed){send(front,JSON.stringify({t:'error',code:'ENTRY_REQUIRED',rid:message.rid,msg:'本局结束后，请从网页选服大厅检查资源后重进，或到QQ群1095895855群文件下载电脑端。'}));return;}
           }
         }
@@ -91,8 +97,9 @@ export function createCappedUpgradeHandler({ host, port, wsModule, cap = new Ses
           if (req.headers.origin) headers.origin = req.headers.origin;
           // The internal hop needs no compression; the public hop retains bounded Deflate.
           back = new WebSocket(`ws://${host}:${port}${req.url}`, { headers, perMessageDeflate: false, maxPayload: 32 * 1024 * 1024, handshakeTimeout: 10000 });
-          back.on('open', () => { for (const [body, isBinary] of queue) send(back, body, isBinary); queue = []; queueBytes = 0; });
+          back.on('open', () => { if (!active()) { back.terminate(); queue = []; queueBytes = 0; return; } for (const [body, isBinary] of queue) send(back, body, isBinary); queue = []; queueBytes = 0; });
           back.on('message', (body, isBinary) => {
+            if (!active()) return;
             // Welcome and account-resume messages are small; battle payloads pass through untouched.
             if (body.length < 16384 && !isBinary) try {
               const m = JSON.parse(body.toString()); if (m.t === 'welcome') cap.confirm(lease, m.token, route);
@@ -110,7 +117,7 @@ export function createCappedUpgradeHandler({ host, port, wsModule, cap = new Ses
       // Serialize async admission checks with game commands; preserve wire order.
       let receiving=Promise.resolve(),queuedBytes=0;
       front.on('message',(data,binary)=>{queuedBytes+=data.length;if(queuedBytes>1048576){front.close(1013,'connection busy');return;}receiving=receiving.then(()=>receive(data,binary)).catch(()=>front.close(1011,'relay failure')).finally(()=>{queuedBytes-=data.length;});});
-      front.on('close', (code, reason) => { clearTimeout(timer); clearInterval(heartbeat); cap.release(lease); wire(); close(back, code, reason); queue = []; });
+      front.on('close', (code, reason) => { ended = true; clearTimeout(timer); clearInterval(heartbeat); cap.release(lease); wire(); close(back, code, reason); queue = []; });
       front.on('error', () => back?.terminate());
     }); } catch { socket.destroy(); }
   };
