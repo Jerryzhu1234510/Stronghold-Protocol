@@ -1,6 +1,7 @@
 import { PHASE, ERR } from '../../../shared/constants.js';
 import { OK, fail } from './common.js';
 import { HeadlessJob } from '../fields.js';
+import { t } from '../../../shared/i18n.js';
 
 // Owner feedback 2026-10-09: an optional majority ballot ends a stuck unite battle.
 export class MatchUniteVote {
@@ -18,7 +19,7 @@ export class MatchUniteVote {
   requestUniteSkip(ps) {
     if (!this.uniteCanSkip()) return fail(ERR.WRONG_PHASE);
     if (!this.prepVoter(ps)) return fail(ERR.NOT_IN_ROOM);
-    if (this.uniteSkip.used) return fail(ERR.BAD_TARGET, '本次联防已发起过跳过投票');
+    if (this.uniteSkip.used) return fail(ERR.BAD_TARGET, t('本次联防已发起过跳过投票'));
     const eligible = this.order.filter(p => this.prepVoter(p)).map(p => p.playerId);
     const vote = { id: `unite-${this.round}`, initiatorId: ps.playerId, eligible,
       required: Math.floor(eligible.length / 2) + 1, votes: { [ps.playerId]: true },
@@ -36,7 +37,7 @@ export class MatchUniteVote {
     if (this.sched.now() >= vote.deadline) { this.finishUniteVote('expired'); return fail(ERR.WRONG_PHASE); }
     if (!this.prepVoter(ps) || !vote.eligible.includes(ps.playerId)) return fail(ERR.NOT_IN_ROOM);
     if (typeof agree !== 'boolean') return fail(ERR.BAD_MSG);
-    if (Object.hasOwn(vote.votes, ps.playerId)) return fail(ERR.BAD_TARGET, '已经投票，不能重复投票');
+    if (Object.hasOwn(vote.votes, ps.playerId)) return fail(ERR.BAD_TARGET, t('已经投票，不能重复投票'));
     vote.votes[ps.playerId] = agree;
     this.evaluateUniteVote();
     this.markPublic();

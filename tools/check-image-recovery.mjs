@@ -30,29 +30,30 @@ try{
    globalThis.unmount=()=>render(null,document.querySelector('#test'));
  });
  for(const kind of ['Img','AvatarFrame','BondDisc']){
-   const src='/assets/retry-test-'+kind+'.png';await page.evaluate(({kind,src})=>show(kind,src),{kind,src});
+   const src='/assets/retry-test-'+kind+'.png';await page.evaluate(({kind,src})=>globalThis.show(kind,src),{kind,src});
    await page.waitForFunction(()=>document.querySelector('#test img')?.naturalWidth===1,{timeout:5000});
-   assert.equal(counts.get(src),2);await page.evaluate(()=>unmount());
+   assert.equal(counts.get(src),2);await page.evaluate(()=>globalThis.unmount());
  }
  report.shopAvatarBondRecovery=true;
- const permanent='/assets/retry-test-permanent.png';await page.evaluate(src=>show('Img',src),permanent);
+ const permanent='/assets/retry-test-permanent.png';await page.evaluate(src=>globalThis.show('Img',src),permanent);
  await page.waitForFunction(()=>document.querySelector('#fallback'));
  await new Promise(resolve=>setTimeout(resolve,14000));
  assert.equal(counts.get(permanent),4,'one initial request plus three retries');
  await page.evaluate(()=>dispatchEvent(new Event('online')));
  await page.waitForFunction(()=>document.querySelector('#test img')?.naturalWidth===1,{timeout:3000});
  assert.equal(counts.get(permanent),5);report.boundedAndOnlineRecovery=true;
- const old='/assets/retry-test-old.png';await page.evaluate(src=>show('Img',src),old);
+ const old='/assets/retry-test-old.png';await page.evaluate(src=>globalThis.show('Img',src),old);
  await page.waitForSelector('#fallback');
- await page.evaluate(()=>show('Img','/assets/retry-test-Img.png'));
+ await page.evaluate(()=>globalThis.show('Img','/assets/retry-test-Img.png'));
  await page.waitForFunction(()=>document.querySelector('#test img')?.naturalWidth===1);
  await new Promise(resolve=>setTimeout(resolve,1600));assert.equal(counts.get(old),1);
  report.sourceChangeCancelsRetry=true;
- await page.evaluate(()=>show('Img','/assets/retry-test-old-unmount.png'));
- await page.waitForSelector('#fallback');await page.evaluate(()=>unmount());
+ await page.evaluate(()=>globalThis.show('Img','/assets/retry-test-old-unmount.png'));
+ await page.waitForSelector('#fallback');await page.evaluate(()=>globalThis.unmount());
  await new Promise(resolve=>setTimeout(resolve,1600));assert.equal(counts.get('/assets/retry-test-old-unmount.png'),1);
  report.unmountCancelsRetry=true;
  assert.ok(report.requests.every(u=>!u.includes('?')));assert.deepEqual(report.errors,[]);report.pass=true;
 }finally{
  await browser.close();await server.close();await fs.writeFile('../../outputs/image-recovery-qa.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 }
+

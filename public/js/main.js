@@ -1,3 +1,8 @@
+import './ui/compat.js';
+import { RoomChatHost } from './ui/roomChat.js';
+import { ServerAnnouncementHost, installAnnouncements } from './ui/serverAnnouncement.js';
+import { ReleaseNotesHost, installReleaseNotes } from './ui/releaseNotes.js';
+import { emptyChat, receiveChat } from './ui/chatState.js';
 // Client entry: boot (fonts, identity, socket), net → store wiring, router, global overlays.
 //
 // Router (derived from the store, no URL routes):
@@ -28,9 +33,11 @@
 // Language (ui/lang.js, docs/I18N.md): chosen before the first render (initLang); App re-renders on a switch (useLang).
 // Server texts are translated on arrival: m.toast / m.ticker frames (msgid + params, or the text as a msgid; a
 // config.broadcasts line from its id + args), error codes (ui/toasts.js describeError) and room.closed reasons.
+// Cosmetic plugins (DESIGN §32 P1a): installContent (content.js) lays the room's visual set and the player's personal
+// plugins over the art manifest every screen reads. Gameplay plugins (§32.6): installContentSet (content.js) downloads and
+// checks a room's content set and makes it the data every screen and the battle runner read.
 
 // Polyfills first (older Safari / Firefox ESR): every module evaluated after this one sees them.
-import './ui/compat.js';
 import { render } from '../vendor/preact.module.js';
 import { useErrorBoundary } from '../vendor/hooks.module.js';
 import { html, UiHosts, Button, MicroLabel, closeAllDialogs } from './ui/components.js';
@@ -42,29 +49,29 @@ import { installPrefSync } from './prefsync.js';
 import { store, useStore, emptyMatch, selectRoute, sessionResetNotice, isSpectating } from './store.js';
 import { data } from './data.js';
 import { GAME_FILES } from './ui/gameComponents.js';
-import { warmFieldRenderer } from './ui/fieldHost.js';
 import { TitleScreen, sanitizeName } from './screens/title.js';
 import { LobbyScreen, rememberRoom, parseRoomParam } from './screens/lobby.js';
-import { RoomScreen } from './screens/room.js';
+import { RoomScreen, TrustedNotice } from './screens/room.js';
 import { GameScreen } from './screens/game.js';
 import { VersusScreen } from './screens/versus.js';
 import { audio, installAudio } from './audio.js';
 import { settingsStore } from './ui/settings.js';
 import { GuideHost } from './ui/guide.js';
 import { installDeviceSupport } from './ui/device.js';
+import { registerImportedAssetWorker } from './assetCache.js';
 import { LoadoutHost } from './screens/loadout.js';
-import { matchHistory } from './ui/matchHistory.js';
-import { RoomChatHost } from './ui/roomChat.js';
-import { ServerAnnouncementHost, installAnnouncements } from './ui/serverAnnouncement.js';
-import { ReleaseNotesHost, installReleaseNotes } from './ui/releaseNotes.js';
-import { emptyChat, receiveChat } from './ui/chatState.js';
-import { installProfiles } from './ui/profileEntry.js';
+import { StatsHost } from './screens/stats.js';
+import { installRehearsal } from './battle/rehearsal.js';
+import { recordResult, installStatsRecorder } from './ui/stats.js';
+import { installLoadoutSync, installOwnershipSync, installDiySync } from './ui/loadoutSync.js';
 import { startBuildGuard } from './ui/buildGuard.js';
 import { startResourceCache, resourceDocumentUrl, requireLocalResourceController } from './resources/client.js';
 import { startResourcePreload } from './resources/preload.js';
 import { initLang, useLang, tickerText } from './ui/lang.js';
 import { t, N_, translateWire } from '../../shared/i18n.js';
 import { recordError, installTrafficMeter } from './diag.js';
+import { installContent, installContentSet } from './content.js';
+import { cosmetics } from './cosmetics.js';
 
 const RESTORE_GRACE_MS = 1500;
 const JOIN_DELAY_MS = 350;
@@ -97,6 +104,8 @@ let matchAt = 0;
 let restoreTimer = null;
 let joinTimer = null;
 let joinInFlight = false;
+/** The rehearsal installer (battle/rehearsal.js): its tasks follow the match on screen (see wireNet's store hook). */
+let rehearsal = null;
 
 function clearPendingJoin() {
   store.patch('ui', { pendingJoin: null });
@@ -152,13 +161,23 @@ function backToLobby() {
   store.patch('ui', { restoring: false });
 }
 
+/** The unofficial plugins a server counts in welcome / /healthz `content.plugins` (absent: none — DESIGN §32 P1a). */
+const pluginCount = (content) => (content && Number.isInteger(content.plugins) && content.plugins > 0 ? content.plugins : 0);
+
 function onWelcome(msg) {
   if (msg.account && accountState.accountToken()) accountState.setAccount(accountState.accountToken(), msg.account);
   identity.saveToken(msg.token);
   const prev = store.get();
   const prevId = prev.me.playerId;
   const name = typeof msg.name === 'string' && msg.name ? msg.name : prev.me.name;
-  store.set({ me: { playerId: msg.playerId ?? null, name, token: typeof msg.token === 'string' ? msg.token : null } });
+  identity.saveName(name);
+  store.set({
+    me: { playerId: msg.playerId ?? null, name, token: typeof msg.token === 'string' ? msg.token : null },
+    // the server's content identity (DESIGN §32): the diagnostics name it (diag.js contentLine)
+    content: msg.content && typeof msg.content.vanilla === 'string' ? { vanilla: msg.content.vanilla } : null,
+    // how many unofficial plugins it has (P1a — absent: none; content.js fetches the catalogue only when there are some)
+    installedPlugins: pluginCount(msg.content),
+  });
   welcomeAt = Date.now();
 
   if (prevId != null && prevId !== msg.playerId) {
@@ -232,8 +251,8 @@ function wireNet() {
   net.on('room.closed', (msg) => {
     backToLobby();
     if (msg.reason === 'matchmaking_cancelled') return;
-    if (msg.reason === 'matchmaking_disconnected') { toast('连接中断，匹配已取消，请重新匹配', 'warn'); return; }
-    if (msg.reason === 'matchmaking_failed') { toast('本次匹配未能开局，请稍后重新匹配', 'warn'); return; }
+    if (msg.reason === 'matchmaking_disconnected') { toast(t('连接中断，匹配已取消，请重新匹配'), 'warn'); return; }
+    if (msg.reason === 'matchmaking_failed') { toast(t('本次匹配未能开局，请稍后重新匹配'), 'warn'); return; }
     const known = Object.hasOwn(CLOSE_REASON, String(msg.reason)) ? CLOSE_REASON[msg.reason] : null;
     toast(known ? t(known) : typeof msg.reason === 'string' && msg.reason.length < 60 ? t('同盟已关闭：{reason}', { reason: msg.reason }) : t('同盟已关闭'), 'warn');
   });
@@ -246,9 +265,13 @@ function wireNet() {
   });
   net.on('m.field', (msg) => store.patch('match', { field: payload(msg) }));
   net.on('m.result', (msg) => {
-    const result = payload(msg), state = store.get();
-    matchHistory.save(result, state.match.public || {}, state.me.playerId);
-    store.patch('match', { result });
+    const res = payload(msg);
+    store.patch('match', { result: res });
+    // 本机统计 (PR #323): every arrival, including the lobby's result replay after a reconnect / reload —
+    // replays dedupe by content id inside recordResult (spectator seats' copies build no record at all)
+    // (`vs`: the room's cosmetic plugins, recorded — such a match still counts as the original game: ui/stats.js)
+    // (`content`: the room's content set when it played gameplay plugins — such a match is unofficial: ui/stats.js)
+    recordResult(res, { myId: store.get().me.playerId, roomMode: store.get().room?.mode ?? null, vs: store.get().room?.content?.vs ?? null, content: store.get().room?.content ?? null, now: Date.now() });
   });
   net.on('m.toast', (msg) => {
     const kind = ['info', 'success', 'warn', 'error'].includes(msg.kind) ? msg.kind : 'info';
@@ -277,6 +300,9 @@ function wireNet() {
     if (s.session.entered && !prev.session.entered) schedulePendingJoin();
     // in a room (co-op or solo, also a resumed one) a match is near: its data starts downloading
     if (s.room && !prev.room) warmGameData();
+    // the match on screen is over (left, closed, kicked, a new session): a rehearsal task of it is dead, and the frame
+    // that cancels it may never arrive (a disposed match sends nothing) — the page stops what it is running itself
+    if (selectRoute(prev) === 'game' && selectRoute(s) !== 'game') rehearsal?.clear();
   });
 }
 
@@ -288,10 +314,8 @@ function wireNet() {
  * data store shares each file's promise).
  */
 function warmGameData() {
-  const go = () => {
-    data.loadAll(GAME_FILES).catch(() => {});
-    warmFieldRenderer().catch(() => {});
-  };
+  // a room with gameplay plugins: content.js downloads its content set's files instead (DESIGN §32.6)
+  const go = () => { if (store.get().room?.content?.vanilla === false) return; data.loadAll(GAME_FILES).catch(() => {}); };
   if (typeof globalThis.requestIdleCallback === 'function') globalThis.requestIdleCallback(go, { timeout: 2500 });
   else setTimeout(go, 600);
 }
@@ -318,7 +342,7 @@ function App() {
   return html`<div class=${`app-root${route === 'game' ? ' is-game' : ''}`}>
     <div class="app-bg" aria-hidden="true"></div>
     ${error ? html`<${ScreenCrashed} error=${error} reset=${resetError} />` : html`<${Screen} key=${route} />`}
-    ${window.__SP_GENERATION || route === 'game' && versus ? null : html`<aside class="integration-stage-label">v0.2.6 房间扩展 · 本地验收 · 尚未上传服务器</aside>`}
+    <${TrustedNotice} />
     <${ConnectionBanner} />
     <${ToastHost} />
     <${UiHosts} />
@@ -373,8 +397,8 @@ async function boot() {
     if (event.data?.type !== 'sp-local-resource-missing' || resourceNotices.has(event.data.kind)) return;
     resourceNotices.add(event.data.kind);
     toast(event.data.kind === 'audio'
-      ? '部分本地音乐／语音缺失，暂时静音，不影响对局；可回选服大厅补导资源。'
-      : '部分本地图片／模型缺失，请在选服大厅补导完整资源包和核心补全包，当前对局仍保留。', 'info');
+      ? t('部分本地音乐／语音缺失，暂时静音，不影响对局；可回选服大厅补导资源。')
+      : t('部分本地图片／模型缺失，请在选服大厅补导完整资源包和核心补全包，当前对局仍保留。'), 'info');
   });
   await accountState.refreshMe().catch(() => {});
   void startResourceCache();
@@ -385,6 +409,8 @@ async function boot() {
   installTrafficMeter();
   // touch / hover / fullscreen classes, zoom-gesture blocking, rotation re-layout (ui/device.js, css/devices.css)
   installDeviceSupport();
+  // Hashed art a player imported. HTTPS or localhost only; a failure here must not stop boot.
+  // The official import worker is registered by startResourceCache; one registration owns this scope.
   // A page restored from the back/forward cache has a dead socket and a stale token choice: start over.
   window.addEventListener('pageshow', (ev) => { if (ev.persisted) location.reload(); });
   // Pick this tab's reconnect token (asks other live tabs; ≤150 ms) while fonts load.
@@ -400,23 +426,26 @@ async function boot() {
   }));
 
   wireNet();
-  installProfiles(net);
-  const accountPrefs = installPrefSync();
-  await accountPrefs.pull();
-  let knownAccount = accountState.accountToken();
-  net.on('welcome', () => void accountPrefs.pull());
-  window.addEventListener('sp:account-change', () => {
-    const token = accountState.accountToken();
-    if (token === knownAccount) return;
-    knownAccount = token;
-    identity.saveToken(null);
-    net.setName(accountState.accountProfile()?.name || savedName || '博士');
-    net.reconnectNow();
-    void accountPrefs.pull();
-  });
+  installStatsRecorder(store); // follows the match on screen, so a 放弃模拟 can be recorded (ui/stats.js)
+  installLoadoutSync({ net });
+  installOwnershipSync({ net });
+  installDiySync({ net });
+  // the room's cosmetic plugins and the player's own over the art manifest (content.js; nothing is fetched without them)
+  installContent({ toast });
+  // a room with gameplay plugins: its content set downloaded, checked and shown (content.js — DESIGN §32.6)
+  installContentSet({ toast });
+  // A bot prep's layout rehearsal the server offers this host's browser (DESIGN §14, SP_BOT_REHEARSAL=host on the
+  // server): a same-origin module Worker simulates the candidates off the main thread and answers with its pick; a
+  // browser that cannot run one answers `error` and the server rehearses itself. Nothing happens while the server
+  // does not delegate. A gameplay-plugin room is never offered (the server keeps that rehearsal).
+  rehearsal = installRehearsal({ net });
   net.attachBrowserHooks();
   // Audio: unlock on first gesture, BGM follows the route / match phase (js/audio.js).
-  installAudio({ getManifest: () => data.get('assets'), getChess: () => data.get('chess'), subscribe: store.subscribe, getState: store.get, selectRoute, settings: settingsStore.get() });
+  // a cosmetic plugin's sound that will not load falls back like its art (content.js, DESIGN §32 P1a)
+  installAudio({ getManifest: () => data.get('assets'), subscribe: store.subscribe, getState: store.get, selectRoute, settings: settingsStore.get(),
+    onFailed: (url) => cosmetics.fail(url) });
+  // …and the music follows the art: the screen's track again when the cosmetic layers change its URLs
+  cosmetics.subscribe(() => audio.refreshBgm());
   data.load('assets').catch(() => {});
   // Warm the data cache in the background (missing files are tolerated).
   data.loadAll('config').catch(() => {});
@@ -459,6 +488,8 @@ async function boot() {
       } : {}),
       inMatch: () => selectRoute(store.get()) === 'game',
       onStale: ({ waiting }) => { if (waiting) store.patch('ui', { buildStale: true }); },
+      // the same /healthz names how many plugins the server has: the title screen shows it before any hello
+      onHealth: (h) => { const n = pluginCount(h.content); if (n !== store.get().installedPlugins) store.set({ installedPlugins: n }); },
     });
   } catch (err) {
     console.warn('[app] build guard failed to start', err);
@@ -472,7 +503,7 @@ if (!globalThis.__SP_HTTPS_REDIRECTING) boot().catch((err) => {
     el.textContent = err.code === 'LOCAL_RESOURCES_REQUIRED' ? err.message : t('启动失败，请刷新页面重试');
     if (err.code === 'LOCAL_RESOURCES_REQUIRED') {
       const back = document.createElement('a');
-      back.href = '/#resource-pack'; back.textContent = '返回选服大厅补导资源';
+      back.href = '/#resource-pack'; back.textContent = t('返回选服大厅补导资源');
       Object.assign(back.style, { display: 'block', marginTop: '16px', color: '#a9efd2', textDecoration: 'underline' });
       el.append(back);
     }

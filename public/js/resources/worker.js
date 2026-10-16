@@ -1,6 +1,7 @@
 import '../ui/compat.js';
 import { CACHE_NAME, META_NAME, MAX_BYTES, MANUAL_PRELOAD_BATCH_FILES, MANUAL_PRELOAD_WINDOW_MS, preloadConcurrency, resourceCacheLimit, resourcePath, resourceEntry, rangeResponse, warmResources } from './policy.js';
 import { createResourceTransport } from './transport.js';
+import { t } from '../../../shared/i18n.js';
 
 const base = new URL('../../', self.location.href);
 const localOnly = new URL(self.location.href).searchParams.get('localOnly') === '1';
@@ -20,7 +21,7 @@ function localMissing(request) {
     }).catch(() => {});
   }
   const headers = { 'Cache-Control': 'no-store', 'X-SP-Resource-Cache': 'LOCAL-MISSING' };
-  if (!audio) return new Response('本地素材缺失，请在选服大厅补导资源包。', { status: 503, headers });
+  if (!audio) return new Response(t('本地素材缺失，请在选服大厅补导资源包。'), { status: 503, headers });
   // One second of valid silent PCM: missing optional music does not break play or download another track.
   const body = new Uint8Array(8044), view = new DataView(body.buffer);
   const text = (at, value) => { for (let i = 0; i < value.length; i++) body[at+i] = value.charCodeAt(i); };

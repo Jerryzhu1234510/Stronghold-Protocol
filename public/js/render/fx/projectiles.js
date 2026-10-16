@@ -5,8 +5,6 @@ import { PROJ } from '../style.js';
 import { SHOT_HEIGHT, bodyZ, feetZ } from './camera.js';
 import { clamp } from './limits.js';
 import { projSpeed } from './speeds.js';
-import { healingPoint } from './healing.js';
-import { visibleEffectPoint } from './visibility.js';
 
 const MAX_PROJ = 260;
 
@@ -127,7 +125,6 @@ export class FxProjectiles {
     core.visible = true;
     shadow.visible = look === 'shell' || look === 'boomerang';
     trail.alpha = halo.alpha = core.alpha = shadow.alpha = 0;
-    trail.renderable = halo.renderable = core.renderable = shadow.renderable = true;
   }
 
   _releaseProj(pr) {
@@ -175,9 +172,6 @@ export class FxProjectiles {
     const p = this._shotPoint(pr, k, cam, this._p);
     const kb = Math.max(0, k - (pr.arc ? 0.12 : 0.25));
     const q = this._shotPoint(pr, kb, cam, this._q);
-    const visible = visibleEffectPoint(p, this.ctx.screenSize?.()) && visibleEffectPoint(q, this.ctx.screenSize?.());
-    pr.trail.renderable = pr.halo.renderable = pr.core.renderable = pr.shadow.renderable = visible;
-    if (!visible) return true;
     const s = p.s, px = p.x, py = p.y;
     const seg = Math.hypot(px - q.x, py - q.y);
     if (seg > 0.5) pr.ang = Math.atan2(py - q.y, px - q.x);
@@ -361,7 +355,6 @@ export class FxProjectiles {
     if (!spec.muzzle) return;
     const cam = this.ctx.cam();
     const p = cam.project(pr.x0, pr.y0, pr.z0, this._g);
-    if (!visibleEffectPoint(p, this.ctx.screenSize?.())) return;
     const px = p.x, py = p.y, s = p.s;
     if (look === 'tracer') {
       const q = cam.project(pr.tx, pr.ty, pr.tz, this._q);
@@ -376,10 +369,7 @@ export class FxProjectiles {
   /** Arrival burst of a shot (PROJ `hit`): at the target, or the ground under it for shells. */
   _impact(pr, cam) {
     const spec = pr.spec;
-    const projected = cam.project(pr.tx, pr.ty, pr.tz, this._g);
-    if (!visibleEffectPoint(projected, this.ctx.screenSize?.())) return;
-    const p = spec.hit === 'heal' ? healingPoint(projected, this.ctx.screenSize?.()) : projected;
-    if (!p) return;
+    const p = cam.project(pr.tx, pr.ty, pr.tz, this._g);
     const x = p.x, y = p.y, s = p.s;
     const rich = this.rich;
     switch (spec.hit) {

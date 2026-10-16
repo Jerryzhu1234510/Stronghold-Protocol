@@ -14,6 +14,11 @@ import { botPickBand } from '../bot.js';
 import { OK, fail, DELAYS, BAND_TURN_SECONDS } from './common.js';
 
 export class MatchPhases {
+  humansFirst(order) {
+    if (!this.aiPicksLast) return order;
+    const bot = (pid) => !!this.players.get(pid)?.isBot;
+    return [...order.filter((pid) => !bot(pid)), ...order.filter(bot)];
+  }
   enterInfoCheck() {
     this.phase = PHASE.INFO_CHECK;
     for (const ps of this.order) if (ps.botControlled) ps.infoReady = true;
@@ -26,10 +31,13 @@ export class MatchPhases {
   }
 
   maybeEndInfo() {
-    if (this.phase !== PHASE.INFO_CHECK) return;
+    if (this.phase !== PHASE.INFO_CHECK || this.setupVote || this._infoAdvanceTimer) return;
     if (this.order.every((p) => p.isBot || p.left || p.infoReady)) {
       this.setDeadline(0);
-      this.later(0, () => { if (this.phase === PHASE.INFO_CHECK) this.enterBandDraft(); });
+      this._infoAdvanceTimer = this.later(0, () => {
+        this._infoAdvanceTimer = null;
+        if (this.phase === PHASE.INFO_CHECK && !this.setupVote) this.enterBandDraft();
+      });
     }
   }
 
@@ -43,8 +51,9 @@ export class MatchPhases {
   enterBandDraft() {
     if (this.phase !== PHASE.INFO_CHECK) return;
     this.phase = PHASE.BAND_DRAFT;
-    const order = this.order.map((p) => p.playerId);
+    let order = this.order.map((p) => p.playerId);
     if (!this.isSolo) this.rngDraft.shuffle(order);
+    order = this.humansFirst(order);
     const skips = this.isSolo ? 0 : this.gd.bandDraft.skipsPerPlayer;
     const untimed = this.soloUntimed;
     this.draft = {
@@ -80,7 +89,7 @@ export class MatchPhases {
     const d = this.draft;
     this.cancel(this._turnTimer);
     this._turnTimer = null;
-    while (d.idx < d.order.length && d.picks[d.order[d.idx]]) d.idx++;
+    while (d.idx < d.order.length && d.picks[d.order[d.idx]]) d.idx++; // loop-cap: draft order
     if (d.idx >= d.order.length) {
       d.turnDeadline = 0;
       this.deadline = 0;
@@ -219,7 +228,16 @@ export class MatchPhases {
     if (d.order.length - d.idx <= 1) return fail(ERR.BAD_TARGET, 'nobody to pass to');
     d.skipsLeft[ps.playerId]--;
     d.order.splice(d.idx, 1);
-    d.order.push(ps.playerId);
+    // the skipper goes to the end; with 「AI 队友最后选择」 to the end of the humans still to pick — behind them, ahead of
+    // the AI seats — and to the very end only when no other human is left to pass to [ASSUMED: the option's intent,
+    // humans before AI, kept through a skip; no source, a remake option]
+    let at = d.order.length;
+    if (this.aiPicksLast) {
+      for (let j = d.order.length - 1; j >= d.idx; j--) {
+        if (!this.players.get(d.order[j])?.isBot) { at = j + 1; break; }
+      }
+    }
+    d.order.splice(at, 0, ps.playerId);
     this.startDraftTurn();
     return OK;
   }

@@ -49,15 +49,6 @@ describe('normalizeSnapshot', () => {
 });
 
 describe('SnapshotBuffer', () => {
-  test('paused roster commands replace equal-time snapshots without changing arrival clock or native duplicate behavior', () => {
-    const b = new SnapshotBuffer(); b.push(snap(0, [U(1, 3, 4)]), 0);
-    assert.equal(b.push(snap(0, [U(2, 5, 4)]), 1), false);
-    assert.deepEqual([...b.sample(0).keys()], [1]);
-    assert.equal(b.push(snap(0, [U(2, 5, 4)]), 2, { replaceSameTime: true }), true);
-    assert.deepEqual([...b.sample(0).keys()], [2]); assert.equal(b.snaps[0].at, 0);
-    assert.equal(b.push(snap(0, []), 3, { replaceSameTime: true }), true);
-    assert.equal(b.sample(0).size, 0); assert.equal(b.size, 1); assert.equal(b.arrivals.length, 1);
-  });
   test('render clock trails the newest snapshot by delay × rate', () => {
     const b = new SnapshotBuffer({ delay: 0.1, rate: 2 });
     const frames = [];

@@ -1,5 +1,6 @@
 import { useEffect, useState } from '../../vendor/hooks.module.js';
 import { html } from './components.js';
+import { t } from '../../../shared/i18n.js';
 
 export function populationCounts(reports) {
   const totals = { online: 0, inGame: 0, lobby: 0, waiting: 0, spectators: 0 };
@@ -52,15 +53,15 @@ export function PopulationStrip() {
     document.addEventListener('visibilitychange', refresh);
     return () => { active = false; request?.abort(); clearInterval(interval); document.removeEventListener('visibilitychange', refresh); };
   }, []);
-  return html`<div class="population-strip population-strip--detailed" aria-label="服务器当前人数"
-    title="每10秒更新。在线包括对局中、大厅、房间待开局和观战；仅统计已连接的真人，AI和离线玩家不计。">
+  return html`<div class="population-strip population-strip--detailed" aria-label=${t('服务器当前人数')}
+    title=${t('每10秒更新。在线包括对局中、大厅、房间待开局和观战；仅统计已连接的真人，AI和离线玩家不计。')}>
     <div class="population-strip__summary">
-      ${[['online', '在线'], ['inGame', '对局中']].map(([key, label]) => html`<span key=${key} data-population=${key}>
+      ${[['online', t('在线')], ['inGame', t('对局中')]].map(([key, label]) => html`<span key=${key} data-population=${key}>
         <small>${label}</small><strong class="num">${counts?.[key] ?? '—'}</strong>
       </span>`)}
     </div>
     <div class="population-strip__details">
-      ${[['lobby', '大厅'], ['waiting', '待开局'], ['spectators', '观战']].map(([key, label]) => html`<span key=${key} data-population=${key}>
+      ${[['lobby', t('大厅')], ['waiting', t('待开局')], ['spectators', t('观战')]].map(([key, label]) => html`<span key=${key} data-population=${key}>
         <small>${label}</small><strong class="num">${counts?.[key] ?? '—'}</strong>
       </span>`)}
     </div>

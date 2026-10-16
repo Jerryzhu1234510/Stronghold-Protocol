@@ -8,10 +8,12 @@ import { startGateway } from '../server/hot/gateway.mjs';
 
 test('cancelling a completed GET releases its unfinished rewritten upstream response', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'stronghold-cancel-'));
+  const accounts = await mkdtemp(path.join(os.tmpdir(), 'stronghold-cancel-account-'));
   let gateway, client;
   try {
     await mkdir(path.join(root, 'server')); await mkdir(path.join(root, 'public'));
     await writeFile(path.join(root, 'package.json'), '{"type":"module"}');
+    await writeFile(path.join(root, 'HOT-RELEASE.json'), '{"accountsProtocol":1}');
     await writeFile(path.join(root, 'public/index.html'), '<head></head>');
     await writeFile(path.join(root, 'server/index.js'), `
       import http from 'node:http';
@@ -30,7 +32,7 @@ test('cancelling a completed GET releases its unfinished rewritten upstream resp
         return {port:server.address().port, beginDrain(){}, async close(){ for(const t of timers) clearInterval(t); server.closeAllConnections(); await new Promise(r => server.close(r)); }};
       }
     `);
-    gateway = await startGateway({ releaseRoot: root, port: 0, log: { info() {} } });
+    gateway = await startGateway({ releaseRoot: root, port: 0, accountFile: path.join(accounts, 'accounts.json'), allowCreateAccounts: true, log: { info() {} } });
     const origin = `http://127.0.0.1:${gateway.port}/_build/${gateway.active.id}`;
     const health = () => fetch(origin + '/healthz').then(r => r.json());
     const waitFor = async predicate => {
@@ -44,6 +46,11 @@ test('cancelling a completed GET releases its unfinished rewritten upstream resp
     const state = await waitFor(s => s.active === 0 && s.cancelled === 1);
     assert.equal(state.cancelled, 1);
   } finally {
-    client?.destroy(); await gateway?.close(); await rm(root, { recursive: true, force: true });
+    client?.destroy(); await gateway?.close();
+    for (const directory of [root, accounts]) {
+      assert.equal(path.dirname(directory), os.tmpdir());
+      assert.ok(path.basename(directory).startsWith('stronghold-cancel-'));
+      await rm(directory, { recursive: true, force: true });
+    }
   }
 });

@@ -1,6 +1,7 @@
 import { getData } from '../data.js';
 import { enemyEnabled } from '../../shared/customEnemyPolicy.js';
 import { TIMES_KITS } from '../sim/content/enemies/times.js';
+import { N_ } from '../../shared/i18n.js';
 
 export const data = getData();
 const starters = [
@@ -60,9 +61,9 @@ export const ELITES = OPERATORS.map(o => data.chess[o.id]?.goldenId).filter(id =
 export const CATALOG = [...OPERATORS, ...ELITES, ...MONSTERS, ...EQUIPMENT];
 export const byId = new Map(CATALOG.map(c => [c.id, c]));
 export const STRATEGIES = [
-  { id: 'band_bldsk', name: '华法琳', desc: '每击杀一个投放敌人，一名在场干员的所属盟约各加 1 层。' },
-  { id: 'band_amiya', name: '阿米娅', desc: '激活 3 / 4 / 5 个盟约时，全体攻击和生命加 20% / 30% / 40%。' },
-  { id: 'band_dury', name: '杜遥夜', desc: '前两次刷新各提供一名炎干员，每轮淘汰赛重新计数。' },
+  { id: 'band_bldsk', name: N_('华法琳'), desc: N_('每击杀一个投放敌人，一名在场干员的所属盟约各加 1 层。') },
+  { id: 'band_amiya', name: N_('阿米娅'), desc: N_('激活 3 / 4 / 5 个盟约时，全体攻击和生命加 20% / 30% / 40%。') },
+  { id: 'band_dury', name: N_('杜遥夜'), desc: N_('前两次刷新各提供一名炎干员，每轮淘汰赛重新计数。') },
 ];
 export const RECT = { r0: 0, r1: 5, c0: 2, c1: 18 };
 // Reuse the real Boss field, including its terrain, mirrored crates and blue gates.

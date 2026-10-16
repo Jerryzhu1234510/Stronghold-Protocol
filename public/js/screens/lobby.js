@@ -353,7 +353,7 @@ export function LobbyScreen() {
 
     <div class="lobby-body screen__scroll">
       <section class="lobby-left">
-        <a class="local-training-entry" href="/training.html" target="_blank" rel="noopener">本地训练场 <span>自选阵容与敌人 · 独立窗口测试</span><b aria-hidden="true">↗</b></a>
+        <a class="local-training-entry" href="/training.html" target="_blank" rel="noopener">${t('本地训练场')} <span>${t('自选阵容与敌人 · 独立窗口测试')}</span><b aria-hidden="true">↗</b></a>
         <div class="section-label"><span class="section-label__idx num">01</span>${t('模拟方式')}<${MicroLabel}>MODE<//></div>
         <div class="mode-cards">
           ${MODE_CARDS.map((c) => html`<${ModeCard} key=${c.id} card=${c} selected=${roomMode === c.id} onSelect=${pickMode} />`)}
@@ -391,9 +391,9 @@ export function LobbyScreen() {
         <div class="create-box">
           ${roomMode === 'coop' ? html`<${RoomCapacityPicker} value=${capacity} onChange=${setCapacity} disabled=${!!busy} confirmOnChange=${false} />` : null}
           <div class=${`create-box__actions${roomMode === 'solo' ? ' create-box__actions--solo' : ''}`}>
-            <${Tooltip} block=${true} text=${online ? null : '正在连接服务器…'}>
+            <${Tooltip} block=${true} text=${online ? null : t('正在连接服务器…')}>
               <${Button} variant="primary" size="xl" block=${true} iconRight="chevrons" loading=${busy === 'create'} disabled=${!online || !!busy} onClick=${create}>
-                ${roomMode === 'solo' ? '开始独立模拟' : '创建同盟'}
+                ${roomMode === 'solo' ? t('开始独立模拟') : t('创建同盟')}
               <//>
             <//>
           </div>

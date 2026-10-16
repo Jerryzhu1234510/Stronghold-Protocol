@@ -7,6 +7,7 @@ import { loadPref, savePref, useStore } from '../store.js';
 import { releaseNotesStore } from './releaseNotes.js';
 import { CLEMENTIA_POLL, validPollChoice, previewPollResults } from '../../../shared/playerPoll.js';
 import { isLivePoll, requestPlayerPoll } from './playerPollClient.js';
+import { t } from '../../../shared/i18n.js';
 
 const storageKey = `pollPreview.${CLEMENTIA_POLL.id}`;
 export function readPreviewPollChoice() {
@@ -63,22 +64,22 @@ export function PlayerPollModal({ open, onClose }) {
     } catch (err) { setError(err.message); }
     finally { submitting.current = false; setBusy(false); }
   };
-  return html`<${Modal} open=${open} title=${CLEMENTIA_POLL.title} micro="玩家投票 · 单选"
+  return html`<${Modal} open=${open} title=${CLEMENTIA_POLL.title} micro=${t('玩家投票 · 单选')}
     class="player-poll" width="min(760px, calc(100vw - 24px))" onClose=${onClose} trapFocus=${true}
-    actions=${html`<span class=${`player-poll__status${error ? ' is-error' : ''}`} role="status" aria-live="polite">${error || (busy ? '正在连接…' : live ? (committed ? '已提交' : '尚未投票') : results && committed ? '已提交 · 本地预览' : '本地预览')}</span>
-      <${Button} variant="ghost" size="sm" onClick=${onClose}>暂不参与<//>
-      ${error && live ? html`<${Button} variant="secondary" size="sm" icon="refresh" onClick=${() => setRetry(value => value + 1)}>重试<//>` : !results ? html`<${Button} variant="secondary" size="sm" icon="eye" disabled=${busy || (live && !serverState)} onClick=${() => setResults(true)}>查看结果<//>` : null}
+    actions=${html`<span class=${`player-poll__status${error ? ' is-error' : ''}`} role="status" aria-live="polite">${error || (busy ? t('正在连接…') : live ? (committed ? t('已提交') : t('尚未投票')) : results && committed ? t('已提交 · 本地预览') : t('本地预览'))}</span>
+      <${Button} variant="ghost" size="sm" onClick=${onClose}>${t('暂不参与')}<//>
+      ${error && live ? html`<${Button} variant="secondary" size="sm" icon="refresh" onClick=${() => setRetry(value => value + 1)}>${t('重试')}<//>` : !results ? html`<${Button} variant="secondary" size="sm" icon="eye" disabled=${busy || (live && !serverState)} onClick=${() => setResults(true)}>${t('查看结果')}<//>` : null}
       <${Button} variant="primary" size="sm" icon=${results ? 'edit' : 'check'} loading=${busy} disabled=${(live && !serverState) || (!results && !validPollChoice(selected))}
-        class="player-poll__submit" onClick=${results ? () => setResults(false) : submit}>${results ? '修改投票' : '提交投票'}<//>`}>
-    <${Tooltip} text="关闭投票" class="player-poll__close-anchor"><${Button} variant="ghost" size="sm" square=${true} icon="close"
-      class="player-poll__close" onClick=${onClose} aria-label="关闭投票" /><//>
+        class="player-poll__submit" onClick=${results ? () => setResults(false) : submit}>${results ? t('修改投票') : t('提交投票')}<//>`}>
+    <${Tooltip} text=${t('关闭投票')} class="player-poll__close-anchor"><${Button} variant="ghost" size="sm" square=${true} icon="close"
+      class="player-poll__close" onClick=${onClose} aria-label=${t('关闭投票')} /><//>
     <div class="player-poll__intro">
-      <${Img} src=${portrait} alt="克莱门莎" class="player-poll__portrait" />
-      <div><p class="player-poll__question">你希望采用哪种调整方案？</p>
-        <p class="player-poll__meta">${results ? `${live ? '累计票数' : '预览票数'} ${tally.total}` : '克莱门莎 · 特质与所属盟约调整'}</p></div>
+      <${Img} src=${portrait} alt=${t('克莱门莎')} class="player-poll__portrait" />
+      <div><p class="player-poll__question">${t('你希望采用哪种调整方案？')}</p>
+        <p class="player-poll__meta">${results ? `${live ? t('累计票数') : t('预览票数')} ${tally.total}` : t('克莱门莎 · 特质与所属盟约调整')}</p></div>
     </div>
     <fieldset class="player-poll__options" disabled=${results || busy}>
-      <legend class="player-poll__legend">调整方案（单选）</legend>
+      <legend class="player-poll__legend">${t('调整方案（单选）')}</legend>
       ${CLEMENTIA_POLL.options.map((option, index) => {
         const count = tally.options[index];
         const chosen = (results ? committed : selected) === option.id;
@@ -88,7 +89,7 @@ export function PlayerPollModal({ open, onClose }) {
           <span class="player-poll__copy">
             <span class="player-poll__option-head"><strong>${option.title}</strong>
               <span class="player-poll__bonds">${option.bonds.join(' / ')}</span>
-              ${results ? html`<span class="player-poll__count num">${count.votes}票 · ${count.percent}%</span>` : null}</span>
+              ${results ? html`<span class="player-poll__count num">${t('{votes}票 · {percent}%', { votes: count.votes, percent: count.percent })}</span>` : null}</span>
             <span class="player-poll__description">${option.description}</span>
             ${results ? html`<span class="player-poll__bar" aria-hidden="true"><i style=${`width:${count.percent}%`}></i></span>` : null}
           </span>
@@ -100,7 +101,7 @@ export function PlayerPollModal({ open, onClose }) {
 
 export function PlayerPollEntry({ onClick }) {
   return html`<${Button} variant="danger" size="sm" icon="check" class="lobby-poll-entry"
-    data-testid="player-poll-open" onClick=${onClick}>投票<//>`;
+    data-testid="player-poll-open" onClick=${onClick}>${t('投票')}<//>`;
 }
 
 export function PlayerPollHost({ open, onOpen, onClose }) {

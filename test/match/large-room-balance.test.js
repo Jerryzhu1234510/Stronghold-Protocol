@@ -4,6 +4,7 @@ import { DATA, makeMatch, give, legalTileFor } from './harness.js';
 import { GameData } from '../../server/match/gamedata.js';
 import { roomStartLp, roomOperatorStats } from '../../shared/constants.js';
 import { createBattleFromSpec } from '../../server/sim/spec.js';
+import { unitStatsEntry } from '../../shared/protocol.js';
 import { makeBattle, chessRec } from '../helpers/battleHarness.js';
 
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
@@ -119,7 +120,7 @@ test('prep detail stats include the same boost as the actual battle, and repeate
   b.start();
   const unit = b.allyUnits.find(u => u.uid === piece.uid);
   assert.equal(first.maxHp, Math.round(unit.s.maxHp));
-  assert.equal(first.base.atk, Math.round(unit.def.stats.atk * 1.2));
+  assert.deepEqual(first, unitStatsEntry(unit, unit.s), 'preview includes the same potential and cultivation as combat');
   h.m.handle('p_0', { t: 'g.unitStats', seq: 2 });
   assert.deepEqual(h.lastTo('p_0', 'm.unitStats').units.find(u => u.uid === piece.uid), first);
   h.m.dispose();

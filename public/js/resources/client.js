@@ -1,15 +1,16 @@
 import { isBundledClient } from './manifest.js';
 let starting;
 // Bundled clients use native files, but must not expose the bulk network downloader.
-export const networkPreloadAllowed = () => !(globalThis.__SP_LOCAL_RESOURCES_REQUIRED === true
+export const networkPreloadAllowed = () => !isBundledClient() && !(globalThis.__SP_LOCAL_RESOURCES_REQUIRED === true
   || globalThis.location?.hostname?.toLowerCase() === 'weishuxieyiwangye.cn');
 // Every document on 8443, including child frames and auxiliary pages, must choose
 // the same worker policy. A missing HTML flag must never downgrade its scope.
 export const localResourcesRequired = () => !networkPreloadAllowed() && !isBundledClient();
 // Keep web-only worker identities stable so existing tabs do not compete over
 // the registration. Native legacy workers can be upgraded separately.
-const worker = new URL(!networkPreloadAllowed() && !localResourcesRequired()
-  ? './worker.js?noPreload=1' : './worker.js', import.meta.url);
+const worker = new URL('../../sw.js', import.meta.url);
+if (isBundledClient()) worker.searchParams.set('native', '1');
+if (!networkPreloadAllowed()) worker.searchParams.set('noPreload', '1');
 // The policy is part of the worker identity, so suspension/restart cannot reset it.
 if (localResourcesRequired()) worker.searchParams.set('localOnly', '1');
 const workerUrl = worker.href;
@@ -35,7 +36,7 @@ export async function requireLocalResourceController() {
   const result = await resourceCacheAction('local-ready');
   if (!result.localOnly) throw startupError('本地素材读取组件版本不符，请重新加载后再进入。');
   // An inventory entry alone does not prove this document can read the imported bytes.
-  const probe = await fetch(new URL('../../assets/ui/settle/settlemen_personal_success.png', workerUrl), { cache: 'reload' });
+  const probe = await fetch(new URL('./assets/ui/settle/settlemen_personal_success.png', workerUrl), { cache: 'reload' });
   const hit = probe.ok && probe.headers.get('x-sp-resource-cache') === 'HIT';
   if (!hit) { await probe.body?.cancel(); throw startupError('未能实际读取已导入素材，请回到选服大厅重新检查并补导；无需清空原资源库。'); }
   await probe.arrayBuffer();
@@ -83,7 +84,7 @@ export function startResourceCache() {
   // CDN transport does not require Web Locks or persistent cache storage.
   if (!(globalThis.isSecureContext && globalThis.navigator?.serviceWorker && globalThis.crypto?.subtle)) return Promise.resolve(null);
   return starting ??= navigator.serviceWorker.register(workerUrl, {
-    type: 'module', scope: new URL('../../', import.meta.url).pathname,
+    updateViaCache: 'none', scope: new URL('../../', import.meta.url).pathname,
   }).catch(() => { starting = undefined; return null; });
 }
 export async function resourceCacheAction(action = 'status', extra = {}) {

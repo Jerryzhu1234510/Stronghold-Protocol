@@ -43,8 +43,9 @@
 import { toLocal, frontOf } from './dir.js';
 import { isHpLoss } from './damage.js';
 import { absoluteRangeKeys } from './targeting.js';
-import { bodyInKeys, bodyKeys, bodyOnTile } from './body.js';
+import { bodyKeys, bodyInRange, bodyInRangeTile } from './body.js';
 import { COLS, CHAIN_RADIUS } from './constants.js';
+import { textCount, textFinite } from '../../shared/plugins/textNumber.js';
 
 const P = (o) => Object.freeze(o);
 const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
@@ -442,7 +443,8 @@ export function bardRegen(battle, bard, ally, value, duration = BARD_REGEN_DUR) 
 
 const installBard = (battle, unit) => {
   battle.every(BARD_REGEN_IV, () => {
-    if (!unit.canAct) return;
+    // Continuous regeneration is an aura, so stun does not stop it.
+    if (!unit.alive || !unit.deployed || unit.hidden) return;
     const v = unit.s.atk * (unit.profile.auraRatio ?? 0.1);
     for (const ally of battle.alliesInGrid(unit)) bardRegen(battle, unit, ally, v);
   }, { owner: unit });
@@ -454,7 +456,7 @@ const installSkywalker = (battle, unit) => {
 
 /** Target's tile offset from the unit in the unit's facing-RIGHT frame ([dRow, dCol], sim/dir.js toLocal). */
 /** The target (its body: a huge enemy's every tile — body.js) on a tile of `grid` around the unit (its facing frame). */
-const inTraitGrid = (unit, target, grid) => bodyInKeys(target, absoluteRangeKeys(grid, unit.tileR, unit.tileC, unit.dir, 0));
+const inTraitGrid = (unit, target, grid) => bodyInRange(target, absoluteRangeKeys(grid, unit.tileR, unit.tileC, unit.dir, 0));
 
 /**
  * 'reaperrange' default front test: the target stands on the unit's own line, at or ahead of it along its facing — a
@@ -481,8 +483,6 @@ export const SUB = Object.freeze({
   fastshot: P({ priority: 'fly', dmgMul: (b, u, t) => (t.isFlying ? (u.profile.flyScale ?? 1) : 1) }),
   closerange: P({}),
   longrange: P({ priority: 'lowDef' }),
-  // Siege-sniper weight priority is supplied by the operator kit (Typhon).
-  siegesniper: P({}),
   aoesniper: P({ splashRadius: 1.1, projectile: 'bomb' }),
   // PRTS 溅射半径一览 (特性): 投掷手 0.9, 扩散术师 1.1 (格雷伊 1.0, TUNE below), 链术师 1.7 jumps; 炮手 1.0 (none in the pool)
   bombarder: P({ splashRadius: 0.9, projectile: 'bomb', groundOnly: true, canHitFly: false,
@@ -541,8 +541,6 @@ export const SUB = Object.freeze({
   corecaster: P({}),
   // --- MEDIC
   physician: P({ heal: { mode: 'single' } }),
-  // Watchmen heal normally; their own kits control take-off and repair forms.
-  watchman: P({ heal: { mode: 'single' } }),
   ringhealer: P({ heal: { mode: 'multi', count: 3 } }),
   chainhealer: P({ heal: { mode: 'chain', count: 3, falloff: 0.25 } }),
   healer: P({ heal: { mode: 'single', farMul: 0.8, nearDist: 2 } }),
@@ -557,11 +555,10 @@ export const SUB = Object.freeze({
   summoner: P({}),
   // --- TANK
   protector: P({}),
-  // Arts-protector skills change damage type while active through their kit.
-  artsprotector: P({}),
   guardian: P({}),
   shotprotector: P({ attack: 'ranged', canHitFly: true, projectile: 'arrow' }),
   primprotector: P({}),
+  primguard: P({}), // retained shop Clementia; element damage is authored by her official operator kit
   unyield: P({ noHeal: true }),
   duelist: P({}),
   fortress: P({ fortress: true, splashRadius: 1.0, projectile: 'bomb', canHitFly: false, groundOnly: true }),
@@ -577,7 +574,7 @@ export const SUB = Object.freeze({
     dmgMul: (battle, unit, target) => {
       if (target.blockedBy === unit) return 1;
       const [fr, fc] = frontOf(unit.tileR, unit.tileC, unit.dir);
-      return bodyOnTile(target, unit.tileR, unit.tileC) || bodyOnTile(target, fr, fc) ? 1 : (unit.profile.rangedScale ?? 0.8);
+      return bodyInRangeTile(target, unit.tileR, unit.tileC) || bodyInRangeTile(target, fr, fc) ? 1 : (unit.profile.rangedScale ?? 0.8);
     } }),
   musha: P({ noHeal: true, install: installMushaHeal }),
   reaper: P({ noHeal: true, allInRange: true, install: installReaperHeal }),
@@ -624,10 +621,10 @@ const TUNE = {
   incantationmedic: (tb) => ({ healRatio: num(tb.scale, 0.5) }),
   chainhealer: (tb, def, p) => {
     const o = { ...p.heal };
-    const m = String(def.trait || '').match(/在(\d+)个友方单位间跳跃/);
-    if (m) o.count = +m[1];
-    const f = String(def.trait || '').match(/治疗量降低(\d+)%/);
-    if (f) o.falloff = +f[1] / 100;
+    const jumped = textCount(String(def.trait || ''), /在(\d+)个友方单位间跳跃/, NaN, 'jump-ally');
+    if (Number.isFinite(jumped) && jumped > 0) o.count = jumped; // loop-cap: textCount jump-ally
+    const pct = textFinite(String(def.trait || ''), /治疗量降低(\d+)%/, NaN);
+    if (Number.isFinite(pct)) o.falloff = pct / 100;
     if (tb['attack@chain.max_target'] != null) o.count = num(tb['attack@chain.max_target'], o.count);
     if (tb['attack@chain.atk_scale'] != null) o.falloff = 1 - num(tb['attack@chain.atk_scale'], 1 - o.falloff);
     return { heal: o };
@@ -635,10 +632,10 @@ const TUNE = {
   ringhealer: (tb, def, p) => ({ heal: { ...p.heal, count: /同时恢复三个|同时恢复3个/.test(String(def.trait || '')) ? 3 : (p.heal.count ?? 3) } }),
   chain: (tb, def, p) => {
     const o = { ...p.chain };
-    const m = String(def.trait || '').match(/在(\d+)个敌人间跳跃/);
-    if (m) o.count = +m[1];
-    const f = String(def.trait || '').match(/伤害降低(\d+)%/);
-    if (f) o.falloff = +f[1] / 100;
+    const jumped = textCount(String(def.trait || ''), /在(\d+)个敌人间跳跃/, NaN, 'jump-enemy');
+    if (Number.isFinite(jumped) && jumped > 0) o.count = jumped; // loop-cap: textCount jump-enemy
+    const pct = textFinite(String(def.trait || ''), /伤害降低(\d+)%/, NaN);
+    if (Number.isFinite(pct)) o.falloff = pct / 100;
     if (tb['attack@max_target'] != null) o.count = num(tb['attack@max_target'], o.count);
     if (tb['attack@sluggish'] != null) o.sluggish = num(tb['attack@sluggish'], o.sluggish);
     if (tb['attack@chain.atk_scale'] != null) o.falloff = 1 - num(tb['attack@chain.atk_scale'], 1 - o.falloff);

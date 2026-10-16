@@ -64,7 +64,10 @@ export async function act(t, fields = {}, opts = {}) {
 }
 
 export const actions = {
-  infoReady: () => act('g.infoReady'),
+  infoReady: (setupRevision = 0) => act('g.infoReady', { setupRevision }),
+  rerollSetup: (setupRevision) => act('room.rerollSetup', { setupRevision }, { sfx: 'confirm' }),
+  rerollVote: (voteId, agree) => act('g.rerollVote', { voteId, agree }, { sfx: agree ? 'confirm' : 'back' }),
+  cancelReroll: (voteId) => act('room.cancelReroll', { voteId }, { sfx: 'back' }),
   band: (bandId) => act('g.band', { bandId }),
   bandSkip: () => act('g.bandSkip'),
   buy: (slot) => act('g.buy', { slot }),
@@ -76,7 +79,7 @@ export const actions = {
     return act('g.refresh').finally(() => { refreshPending = false; emitRefreshBusy(); });
   },
   freeze: () => act('g.freeze'),
-  shopFocus: (bondId) => act('g.shopFocus', { bondId }, { sfx: 'click' }),
+  shopFocus: (bondId) => act('g.shopFocus', { bondId }),
   levelUp: () => act('g.levelUp'),
   sell: (uid) => act('g.sell', { uid }),
   // `dir` (UP|RIGHT|DOWN|LEFT): the direction chosen with the deploy wheel (research 09 §6.1 — g.move / g.art carry it;
@@ -87,17 +90,15 @@ export const actions = {
   art: (itemUid, row, col, dir) => act('g.art', dir ? { itemUid, row, col, dir } : { itemUid, row, col }),
   destroy: (uid) => act('g.destroy', { uid }),
   reward: (idx) => act('g.reward', { idx }),
-  choice: (idx) => act('g.choice', { idx }),
+  choice: (idx, choiceId) => act('g.choice', choiceId === undefined ? { idx } : { idx, choiceId }),
   ready: (ready) => act('g.ready', { ready }, { sfx: ready ? 'ready' : 'back' }),
-  prepExtend: (seconds) => act('g.prepExtend', { seconds }),
-  prepVote: (voteId, agree) => act('g.prepVote', { voteId, agree }),
-  uniteSkip: () => act('g.uniteSkip'),
-  uniteVote: (voteId, agree) => act('g.uniteVote', { voteId, agree }),
-  readyReminder: () => act('g.readyReminder'),
-  emote: (id) => act('g.emote', { id }),
+  emote: (id) => act('g.emote', { id }, { quiet: true }),
   // `playerId`: the player tapped in the team panel (a shared field shows two) — what an eliminated viewer follows
   watch: (fieldId, playerId = null) => act('g.watch', typeof playerId === 'string' && playerId ? { fieldId, playerId } : { fieldId }, { sfx: 'tab' }),
   autoplay: (on) => act('g.autoplay', { on }),
   // solo battles only (ui/matchStatus.js pauseAvailable): m.public.paused follows
   pause: (on) => act('g.pause', { on: !!on }, { sfx: on ? 'click' : 'confirm' }),
+  // room-level intent (NOT g.*): the host frees a spectator seat while the match runs — the server takes room.removeSpectator at
+  // any time (server/lobby.js removeSpectator), the game screen had no entry for it (ui/hud.js SpectatorPill; GitHub #120)
+  removeSpectator: (playerId) => act('room.removeSpectator', { playerId }, { sfx: 'back' }),
 };

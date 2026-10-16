@@ -36,7 +36,8 @@ for (const capacity of [4,5,6,7,8]) test(`${capacity} seats keep scaled DIY inve
   assert.equal(other.diyStock.entries.size,0);
   for (const tier of [5,6]) {
     const list=[...ps.diyStock.entries.values()].filter(e=>e.tier===tier);
-    assert.equal(list.reduce((n,e)=>n+e.cap,0),Math.round((tier===5?16:10)*capacity/4));
+    // Official 0.3.0 assigns 16/10 copies to each slot, rather than splitting that total across both slots.
+    assert.equal(list.reduce((n,e)=>n+e.cap,0),Math.round((tier===5?32:20)*capacity/4));
   }
   slots.forEach(id=>assert.equal(h.m.pool.has(id),false));
   ps.shop.level=6; other.shop.level=6;

@@ -34,9 +34,10 @@
 // keeps those tiles NONE (grid.js DEPLOY_REFUSED_TILES), so automatic placements never use them [ASSUMED].
 
 import { COLS, ROWS } from '../constants.js';
-import { performAttack } from '../ai.js';
+import { performAttack, attackCountdown } from '../ai.js';
 import { sortEnemyTargets } from '../targeting.js';
 import { DIR_VEC, normDir, oppositeDir } from '../dir.js';
+import { hypot } from '../detmath.js';
 
 const num = (v, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : (typeof v === 'string' && v.trim() !== '' && Number.isFinite(+v) ? +v : d));
 /** ASPD blackboard values: a fraction (|v| < 1, e.g. −0.6 / −0.05) is ×100 ASPD, otherwise flat (+20). */
@@ -125,7 +126,7 @@ export function startColdWind(battle, { playerId = null, interval, duration, fir
   if (!(iv > 0)) return null;
   const durOf = () => num(typeof duration === 'function' ? duration() : duration, 0);
   const handle = { cancelled: false, gusts: 0, timer: null, cancel() { this.cancelled = true; this.timer?.cancel(); } };
-  const gust = () => {
+  const gust = () => {;let __spWind;try{__spWind=globalThis.__SPDesktopMusicBridge?.enterWind?.(battle,playerId);}catch{}try{
     if (handle.cancelled || battle.finished) return;
     const dur = durOf();
     if (!(dur > 0)) return;
@@ -138,7 +139,7 @@ export function startColdWind(battle, { playerId = null, interval, duration, fir
     handle.gusts++;
     const R = battle.rect;
     battle.fx('coldWind', { x: (R.c0 + R.c1) / 2, y: (R.r0 + R.r1) / 2, playerId, n, duration: dur });
-  };
+  }finally{try{globalThis.__SPDesktopMusicBridge?.exitWind?.(__spWind);}catch{}}};
   const firstDelay = Math.max(0, num(first, iv));
   handle.timer = battle.after(firstDelay, () => {
     if (handle.cancelled) return;
@@ -192,7 +193,7 @@ function deviceTile(battle, r0, c0) {
       const exact = r === r0 && c === c0;
       if (!exact && battle.grid.tile(r, c).build !== 'NONE') continue;
       const walk = !exact && battle.grid.groundPassable(r, c, true) ? 1 : 0;
-      const s = [exact ? 0 : 1, walk, Math.hypot(r - r0, c - c0), r * COLS + c];
+      const s = [exact ? 0 : 1, walk, hypot(r - r0, c - c0), r * COLS + c];
       let less = !bs;
       if (!less) for (let i = 0; i < s.length; i++) { if (s[i] < bs[i] - 1e-9) { less = true; break; } if (s[i] > bs[i] + 1e-9) break; }
       if (less) { best = [r, c]; bs = s; }
@@ -240,7 +241,7 @@ const TURRET_PROFILE = Object.freeze({ attack: 'ranged', dmgType: 'arts', projec
 function tickTurret(battle, u, dt) {
   const T = u.mem.turret;
   if (!u.alive || !T) return;
-  T.cd -= dt;
+  T.cd = attackCountdown(T.cd, dt);   // (the engine's attack countdown: a whole number of ticks takes exactly that many)
   if (T.cd > 0 || u.s.flags.stun) return;
   const L = u.ownerId != null ? topLayers(battle, u.ownerId) : 0;
   const bonus = Math.min(L * T.aspdPer, T.aspdMax);
@@ -455,7 +456,7 @@ function tickAirflowEnemy(battle, st, e) {
     const r = Math.round(e.y), c = Math.round(e.x);
     const f = r >= 0 && r < ROWS && c >= 0 && c < COLS ? st.flow.get(r * COLS + c) : null;
     const vx = e.x - px, vy = e.y - py;
-    const v = Math.hypot(vx, vy);
+    const v = hypot(vx, vy);
     if (f && v > 1e-6) {
       const rel = airflowRelation((vx * f.fx + vy * f.fy) / v);
       if (rel !== 'vertical') mul = 1 + num(f.bb[`blower_s_enemy[${rel}].move_speed`], 0);

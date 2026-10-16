@@ -1,3 +1,4 @@
+import { pinIdentityHtml, generationBootstrap, htmlCsp } from './identityPin.mjs';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
@@ -8,6 +9,7 @@ import { gzipSync } from 'node:zlib';
 import { createInterface } from 'node:readline';
 import { createAccountAuthority } from '../accounts/authority.js';
 import { gatewayHeaders } from './proxy.js';
+import { t } from '../../shared/i18n.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const isId = id => /^[a-zA-Z0-9_-]{1,64}$/.test(id);
@@ -89,7 +91,7 @@ export async function startGateway({ releaseRoot, port = 3222, host = '127.0.0.1
           if (child.connected) child.send({ type: 'account.reply', id: message.id, value });
         } catch (error) {
           log.error('[accounts] worker request failed', error.message);
-          if (child.connected) child.send({ type: 'account.reply', id: message.id, error: '账号服务暂不可用' });
+          if (child.connected) child.send({ type: 'account.reply', id: message.id, error: t('账号服务暂不可用') });
         }
       });
       const workerPort = await new Promise((resolve, reject) => {
@@ -103,7 +105,7 @@ export async function startGateway({ releaseRoot, port = 3222, host = '127.0.0.1
       if (!health.ok) throw new Error('新版健康检查失败');
       const id = `${health.build || 'release'}-${++serial}`;
       if (!isId(id)) throw new Error('版本标识不正确');
-      const release = { id, root, port: workerPort, child, draining: false, connections: 0, healthy: true };
+      const release = { id, root, port: workerPort, child, draining: false, connections: 0, healthy: true, integrity: /^0\.[3-9]\./.test(health.app || '') };
       releaseId = id;
       // Mark old lobby as draining BEFORE advertising the new release. Existing game handlers remain active.
       if (active) {
@@ -130,7 +132,21 @@ export async function startGateway({ releaseRoot, port = 3222, host = '127.0.0.1
   const server = http.createServer(async (req, res) => {
     try {
       if (req.url?.startsWith('/__hot/status')) return json(res, 200, { stage: 'versioned-hot-update', build: active?.id, versions: [...releases.values()].map(r => ({ id: r.id, draining: r.draining, connections: r.connections, healthy: r.healthy })) });
-      const route = select(req.url);
+      let route = select(req.url);
+      // A raw ../../shared import from /_build/id/js reaches /_build/shared.
+      // Redirect it to the referring generation without changing the module bytes.
+      if (!route.release && /^\/_build\/(?:shared|sim|data|vendor|js|css)\//.test(req.url || '')) {
+        route = { release: active, pinned: false, path: req.url.slice('/_build'.length) };
+      }
+      if (!route.pinned && req.headers.referer) {
+        try {
+          const reference = new URL(req.headers.referer);
+          if (reference.host === req.headers.host) {
+            const ref = select(reference.pathname);
+            if (ref.pinned && ref.release?.integrity) route = { ...route, release: ref.release };
+          }
+        } catch { /* invalid Referer does not choose a release */ }
+      }
       if (route.path.split('?')[0].startsWith('/api/')) {
         req.headers = gatewayHeaders(req);
         const url = new URL(route.path, 'http://local');
@@ -141,7 +157,7 @@ export async function startGateway({ releaseRoot, port = 3222, host = '127.0.0.1
         return json(res, 200, await population());
       }
       const r = route.release;
-      if (!r || !r.healthy) return json(res, 503, { error: '该版本暂不可用，请返回首页', home: '/' });
+      if (!r || !r.healthy) return json(res, 503, { error: t('该版本暂不可用，请返回首页'), home: '/' });
       if (!route.pinned && (req.method === 'GET' || req.method === 'HEAD')) {
         const entry = new URL(req.url, 'http://local');
         if (entryPaths.has(entry.pathname)) {
@@ -149,10 +165,19 @@ export async function startGateway({ releaseRoot, port = 3222, host = '127.0.0.1
           return res.end();
         }
       }
+      if (r.integrity && route.path.split('?')[0] === '/__generation.js') {
+        const body = generationBootstrap(r.id);
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=31536000, immutable' });
+        return res.end(req.method === 'HEAD' ? undefined : body);
+      }
+      if (r.integrity && !route.pinned && /^(?:\/(?:js|css|shared|sim|data|vendor|assets|media|fonts|cs|vs|p)\/|\/sw\.js)/.test(route.path)) {
+        res.writeHead(302, { Location: uri(r.id, route.path), 'Cache-Control': 'no-store' }); return res.end();
+      }
       const headers = gatewayHeaders(req);
       const immutableTable = route.pinned && gameTablePath.test(route.path);
+      const immutableCode = r.integrity && route.pinned && /^\/(?:js|css|shared|sim|vendor)\//.test(route.path);
       // Rewritten bodies cannot use the worker's validators. Unchanged game tables can.
-      if (!immutableTable) { delete headers['if-none-match']; delete headers['if-modified-since']; }
+      if (!immutableTable && !immutableCode) { delete headers['if-none-match']; delete headers['if-modified-since']; }
       const key = r.id + route.path;
       const finishText = item => {
         const useGzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
@@ -164,10 +189,10 @@ export async function startGateway({ releaseRoot, port = 3222, host = '127.0.0.1
       const upstream = http.request({ host: '127.0.0.1', port: r.port, path: route.path, method: req.method, headers }, reply => {
         if (res.destroyed) { reply.destroy(); return; }
         const type = reply.headers['content-type'] || '';
-        const rewrite = req.method === 'GET' && reply.statusCode === 200 && /javascript|text\/css|text\/html/.test(type) || req.method === 'GET' && reply.statusCode === 200 && /^\/data\/(assets|local-assets)\.json(?:\?|$)/.test(route.path);
+        const rewrite = r.integrity ? req.method === 'GET' && reply.statusCode === 200 && /text\/html/.test(type) : req.method === 'GET' && reply.statusCode === 200 && /javascript|text\/css|text\/html/.test(type) || req.method === 'GET' && reply.statusCode === 200 && /^\/data\/(assets|local-assets)\.json(?:\?|$)/.test(route.path);
         if (!rewrite) {
           const h = { ...reply.headers };
-          if (immutableTable && (reply.statusCode === 200 || reply.statusCode === 304)) h['cache-control'] = 'public, max-age=31536000, immutable';
+          if ((immutableTable || immutableCode) && (reply.statusCode === 200 || reply.statusCode === 304)) h['cache-control'] = 'public, max-age=31536000, immutable';
           res.writeHead(reply.statusCode, h); reply.pipe(res); return;
         }
         const chunks = []; let bytes = 0;
@@ -175,10 +200,11 @@ export async function startGateway({ releaseRoot, port = 3222, host = '127.0.0.1
         reply.on('end', () => {
           if (res.destroyed) return;
           try {
-            const body = Buffer.from(pinText(Buffer.concat(chunks).toString(), type, route.path.split('?')[0], r.id));
+            const body = Buffer.from(r.integrity ? pinIdentityHtml(Buffer.concat(chunks).toString(), r.id) : pinText(Buffer.concat(chunks).toString(), type, route.path.split('?')[0], r.id));
             // Incoming Node headers are lowercase. Mixed casing emits two Cache-Control
             // lines, retaining the worker's no-cache and forcing every script to reload.
             const h = { ...reply.headers, 'cache-control': type.includes('html') ? 'no-store' : 'public, max-age=31536000, immutable' };
+            if (r.integrity && h['content-security-policy']) h['content-security-policy'] = htmlCsp(h['content-security-policy'], body.toString());
             delete h['content-length']; delete h['content-encoding']; delete h.etag; delete h['last-modified'];
             const item = { status: reply.statusCode, headers: h, body, gz: gzipSync(body) };
             if (!type.includes('html') && body.length < 4 * 1024 * 1024) {
@@ -193,13 +219,13 @@ export async function startGateway({ releaseRoot, port = 3222, host = '127.0.0.1
         });
         reply.on('error', () => res.destroy());
       });
-      upstream.on('error', () => { if (!res.headersSent) json(res, 502, { error: '版本服务暂不可用' }); else res.destroy(); });
+      upstream.on('error', () => { if (!res.headersSent) json(res, 502, { error: t('版本服务暂不可用') }); else res.destroy(); });
       req.on('aborted', () => upstream.destroy());
       // GET requests have already finished when their response is cancelled. Abort the upstream
       // on response close too, so abandoned downloads cannot retain sockets and rewrite buffers.
       res.once('close', () => { if (!res.writableFinished) upstream.destroy(); });
       req.pipe(upstream);
-    } catch { if (!res.headersSent) json(res, 400, { error: '请求无效' }); else res.destroy(); }
+    } catch { if (!res.headersSent) json(res, 400, { error: t('请求无效') }); else res.destroy(); }
   });
   server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
   server.on('upgrade', (req, socket, head) => {

@@ -48,7 +48,7 @@ test('机密商店 (4 official shops): six free items, two of them tier VI, a ti
   assert.deepEqual(rest, { 3: 1, 4: 2, 5: 3, coin: 2 });
   for (const s of SHOP.slots.slice(4)) assert.deepEqual(s, rest);
   assert.equal(SHOP.slots.length, 6);
-  assert.deepEqual(SHOP.rounds, [11], 'corrected R11 composition');
+  assert.deepEqual(SHOP.rounds, [11], 'the composition where the screenshots are: R11 (绝境 / 终极)');
   // an item's weight within its tier: 1 + the official cards it showed on
   const seen = {};
   for (const { cards } of SHOPS) for (const [n] of cards) if (n !== '盟约之币') seen[itemByName(n).id] = (seen[itemByName(n).id] || 0) + 1;

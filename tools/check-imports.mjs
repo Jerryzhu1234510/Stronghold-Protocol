@@ -201,8 +201,6 @@ function isHttp(spec, resolved) {
  * @returns {{ code: string, resolved: string } | { note: true, resolved: string } | null}
  */
 export function classify(spec, fromFile, area) {
-  // This explicit Node-only loader is dynamically imported under Node, never by a browser.
-  if (fromFile.replace(/\\/g, '/') === 'server/sim/nodeData.js' && isBuiltin(spec)) return { note: true, resolved: spec };
   const fromDir = path.posix.dirname(fromFile);
   let resolved = spec;
   if (spec.startsWith('.')) {

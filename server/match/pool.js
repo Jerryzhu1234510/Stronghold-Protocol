@@ -3,13 +3,16 @@
 //
 // Model:
 //   * Every visible (non-hidden, non-DIY) base chess that is not banned this match has `cap` copies
-//     (config.economy.poolCopies[tier], overrides e.g. 缪尔赛思 4). `left[baseId]` = copies not owned by anyone.
+//     (config.economy.poolCopies[tier], measured identity overrides; co-op shared stock doubled). `left` is the
+//     signed capacity minus occupation; the public left() and shop sampling clamp a deficit to zero.
 //   * Owning a piece takes copies: a normal piece holds 1, an elite holds 3 (merge of 3 normals). Shop displays
-//     do NOT reserve copies. An item buy fails (SOLD_OUT) when left = 0; an operator card already shown in the shop or a
-//     reward can still be taken and overdraws (a negative raw left, the debt — GitHub #498, the owner's decision).
+//     do NOT reserve copies. An operator or equipment card already shown in the shop, or a reward already shown, can
+//     still be taken and overdraws (chess: a negative raw left; equipment: SharedItemPool's debt — GitHub #498, and
+//     the maintainer's decision of 2026-10-14 for equipment, #624). A slot that is already sold still fails SOLD_OUT.
+//     Future rolls exclude empty stock. 整备 and grants that are not an already-shown card stay stock-limited.
 //   * Pieces remember how many copies they hold (`piece.poolCopies`), so selling / elimination / temp wipes return
 //     exactly what was taken — chess granted by effects while the pool is empty (or hidden/banned chess) hold 0.
-//   * Invariant (tests): 0 ≤ left ≤ cap and left + Σ held copies == cap for every base chess.
+//   * Invariant: raw left ≤ cap and raw left + Σ held copies == cap. Mimic can exceed stock, but its copies still occupy it.
 //
 // Rolls: each chess slot draws ONE copy uniformly from all remaining copies of eligible chess with tier ≤ shop level
 // ("copy-weighted"; duplicates within a roll allowed). The item slot picks a tier with the same tier shares, then a
@@ -19,28 +22,9 @@
 // copies like any chess, drawn by that player only.
 
 /**
- * Restore fixed bans independently for core and add-on bonds in larger rooms. Zero-weight special bonds stay off.
- * @param {import('./gamedata.js').GameData} gd
- * @param {Function} rng seeded rng (createRng)
- * @returns {Set<string>}
- */
-export function roomInactiveBonds(gd, rng) {
-  const off = new Set(gd.modeInactiveBonds);
-  const count = gd.largeRoomBonus;
-  if (!count) return off;
-  for (const core of [true, false]) {
-    const candidates = [...off].filter(id => {
-      const bond = gd.bond(id);
-      return bond && !!bond.isCore === core && Number(bond.weight) > 0;
-    });
-    if (!candidates.length) continue;
-    for (const id of sample(candidates, count, rng)) off.delete(id);
-  }
-  return off;
-}
-
-/**
- * Per-match random bans and chess bans, using the room-adjusted fixed inactive set.
+ * Per-match disabled bond set D and banned chess (research 01 A2): D = uniform sample of `core` core bonds and `addon`
+ * add-on bonds among weight > 0 bonds that are active in the mode. A visible chess is banned iff every one of its
+ * bonds is in D ∪ mode.inactiveBondIds.
  * @param {import('./gamedata.js').GameData} gd
  * @param {Function} rng seeded rng (createRng)
  * @returns {{ drawn: string[], staticOff: string[], banned: string[] }}
@@ -70,22 +54,6 @@ function sample(arr, n, rng) {
   rng.shuffle(a);
   return a.slice(0, Math.max(0, Math.min(n, a.length)));
 }
-
-export function scalePoolEntries(entries, copiesMultiplier) {
- // Apportion the rounded total of each tier, rather than rounding every card upwards.
-    if (copiesMultiplier > 1 && Number.isFinite(copiesMultiplier)) {
-      for (let tier = 1; tier <= 6; tier++) {
-        const group = [...entries].filter(([, entry]) => entry.tier === tier)
-          .map(([id, entry]) => ({ id, entry, scaled: entry.cap * copiesMultiplier }));
-        const target = Math.round(group.reduce((sum, row) => sum + row.scaled, 0));
-        let assigned = 0;
-        for (const row of group) { row.entry.cap = Math.floor(row.scaled); assigned += row.entry.cap; }
-        group.sort((a, b) => (b.scaled % 1) - (a.scaled % 1) || a.id.localeCompare(b.id));
-        for (let i = 0; i < target - assigned; i++) group[i].entry.cap++;
-        for (const row of group) row.entry.left = row.entry.cap;
-      }
-    }
- }
 
 export class SharedPool {
   /**
@@ -134,14 +102,14 @@ export class SharedPool {
    * Remaining copies of eligible chess (tier ≤ maxTier, or exactly `tier`): the pool's entries, then `extra` ([id, entry]
    * pairs of the same shape — a player's 自选 stock) under the same filters.
    */
-  _eligible({ maxTier = 6, tier = null, filter = null, extra = null } = {}) {
+  _eligible({ maxTier = 6, tier = null, filter = null, extra = null, ignoreCounts = false } = {}) {
     const out = [];
     const scan = (list) => {
       for (const [id, e] of list) {
-        if (e.left <= 0) continue;
+        if (!ignoreCounts && e.left <= 0) continue;
         if (tier != null ? e.tier !== tier : e.tier > maxTier) continue;
         if (filter && !filter(id, e)) continue;
-        out.push([id, e.left]);
+        out.push([id, ignoreCounts ? 1 : e.left]);
       }
     };
     scan(this.entries);
@@ -183,7 +151,7 @@ export class SharedPool {
    * Item roll for the shop's item slot: tier by the chess tier shares at this level, uniform item within the tier,
    * falling back to lower tiers when a tier has no item. Returns an item id or null.
    */
-  rollItem(rng, maxTier) {
+  rollItem(rng, maxTier, stock = null) {
     const shares = this.tierShares(maxTier);
     const tiers = Object.keys(shares).map(Number).sort((a, b) => a - b);
     let tier = null;
@@ -195,12 +163,12 @@ export class SharedPool {
       tier = 1 + Math.floor(rng() * Math.max(1, maxTier));
     }
     for (let t = tier; t >= 1; t--) {
-      const list = this.gd.shopItemsByTier[t];
-      if (list && list.length) return list[Math.floor(rng() * list.length)];
+      const list = (this.gd.shopItemsByTier[t] || []).filter(id => !stock || stock.canGain(id));
+      if (list.length) return stock ? stock.pick(rng, list) : list[Math.floor(rng() * list.length)];
     }
     for (let t = tier + 1; t <= 6; t++) {
-      const list = this.gd.shopItemsByTier[t];
-      if (list && list.length) return list[Math.floor(rng() * list.length)];
+      const list = (this.gd.shopItemsByTier[t] || []).filter(id => !stock || stock.canGain(id));
+      if (list.length) return stock ? stock.pick(rng, list) : list[Math.floor(rng() * list.length)];
     }
     return null;
   }
@@ -208,13 +176,113 @@ export class SharedPool {
   /** { baseId: left } snapshot (tests / diagnostics). */
   snapshot() {
     const o = {};
-    for (const [id, e] of this.entries) o[id] = e.left;
+    for (const [id, e] of this.entries) o[id] = Math.max(0, e.left);
     return o;
   }
 
   totalLeft() {
     let n = 0;
-    for (const e of this.entries.values()) n += e.left;
+    for (const e of this.entries.values()) n += Math.max(0, e.left);
     return n;
   }
 }
+
+/** Shared equipment stock, derived from actual ownership. Merges, equips and returns cannot lose a reservation:
+ * normal equipment occupies one, upgraded equipment two. Shop and reward displays reserve nothing. An already
+ * displayed shop card or item reward may be taken after `left` hits 0; `owe` records those copies and `repay`
+ * clears them first when a copy actually leaves the match (destroy, consume, elimination, a temp wipe). Rolls and
+ * `canGain` keep using the clamped `left`, so an empty item does not appear again until the debt is repaid and a
+ * copy is free. 整备 and ordinary grants stay limited. Fixed gift families may exceed the cap without a debt entry.
+ * Source: the original experiment BV1eLXXBqEgF, 1:30 and 2:30, extended to equipment by the maintainer on
+ * 2026-10-14 (#624). [ASSUMED] An item that is consumed, destroyed or removed by elimination no longer occupies
+ * stock, consistently with the video's ownership model; this is not a per-match purchase limit. */
+export class SharedItemPool {
+  constructor(gd, players) {
+    this.gd = gd;
+    this.players = players;
+    /** @type {Map<string, number>} base id → copies taken past the cap by an already-displayed card */
+    this.debt = new Map();
+  }
+  cap(id) { return this.gd.itemPoolCopies(id); }
+  need(id) { return this.gd.isGolden(id) ? 2 : 1; }
+  held(id) {
+    const base = this.gd.baseIdOf(id);
+    let count = 0;
+    const see = p => {
+      if (!p) return;
+      if (p.kind === 'item' && this.gd.baseIdOf(p.id) === base) count += this.need(p.id);
+      for (const item of p.items || []) if (this.gd.baseIdOf(item.id) === base) count += this.need(item.id);
+    };
+    for (const ps of this.players()) {
+      for (const p of ps.hand) see(p);
+      for (const p of ps.temp) see(p);
+      for (const p of ps.board.values()) see(p);
+    }
+    return count;
+  }
+  /** Signed cap − held. Infinity when the item has no shop cap. */
+  rawLeft(id) { const cap = this.cap(id); return cap == null ? Infinity : cap - this.held(id); }
+  left(id) { const raw = this.rawLeft(id); return raw === Infinity ? Infinity : Math.max(0, raw); }
+  canGain(id) { return this.left(id) >= this.need(id); }
+  debtOf(id) { return this.debt.get(this.gd.baseIdOf(id)) || 0; }
+  /** Record `copies` of debt on the base item. Uncapped items and non-positive counts record nothing. */
+  owe(id, copies) {
+    const n = Math.floor(Number(copies));
+    const base = this.gd.baseIdOf(id);
+    if (!(n > 0) || this.cap(base) == null) return 0;
+    this.debt.set(base, (this.debt.get(base) || 0) + n);
+    return n;
+  }
+  /** Repay up to `copies` of debt. Returns how many were repaid (0 when nothing is owed). */
+  repay(id, copies) {
+    const n = Math.floor(Number(copies));
+    const base = this.gd.baseIdOf(id);
+    const cur = this.debt.get(base) || 0;
+    if (!(n > 0) || cur <= 0) return 0;
+    const k = Math.min(cur, n);
+    if (cur === k) this.debt.delete(base);
+    else this.debt.set(base, cur - k);
+    return k;
+  }
+  /** Stock gates eligibility, not probability: retain the existing uniform item draw or explicit data weights.
+   * The measured stock table alone does not establish shop probabilities. */
+  pick(rng, ids, weights = null) {
+    const list = [...new Set(ids)].filter(id => this.canGain(id));
+    const pairs = list.map(id => [id, weights ? Math.max(0, Number(weights.get(id)) || 0) : 1]);
+    const total = pairs.reduce((n, p) => n + Math.max(0, p[1]), 0);
+    if (!(total > 0)) return null;
+    let r = rng() * total;
+    for (const [id, weight] of pairs) if ((r -= Math.max(0, weight)) < 0) return id;
+    return pairs.at(-1)?.[0] || null;
+  }
+}
+
+export function roomInactiveBonds(gd, rng) {
+  const off = new Set(gd.modeInactiveBonds);
+  const count = gd.largeRoomBonus;
+  if (!count) return off;
+  for (const core of [true, false]) {
+    const candidates = [...off].filter(id => {
+      const bond = gd.bond(id);
+      return bond && !!bond.isCore === core && Number(bond.weight) > 0;
+    });
+    if (!candidates.length) continue;
+    for (const id of sample(candidates, count, rng)) off.delete(id);
+  }
+  return off;
+}
+export function scalePoolEntries(entries, copiesMultiplier) {
+ // Apportion the rounded total of each tier, rather than rounding every card upwards.
+    if (copiesMultiplier > 1 && Number.isFinite(copiesMultiplier)) {
+      for (let tier = 1; tier <= 6; tier++) {
+        const group = [...entries].filter(([, entry]) => entry.tier === tier)
+          .map(([id, entry]) => ({ id, entry, scaled: entry.cap * copiesMultiplier }));
+        const target = Math.round(group.reduce((sum, row) => sum + row.scaled, 0));
+        let assigned = 0;
+        for (const row of group) { row.entry.cap = Math.floor(row.scaled); assigned += row.entry.cap; }
+        group.sort((a, b) => (b.scaled % 1) - (a.scaled % 1) || a.id.localeCompare(b.id));
+        for (let i = 0; i < target - assigned; i++) group[i].entry.cap++;
+        for (const row of group) row.entry.left = row.entry.cap;
+      }
+    }
+ }

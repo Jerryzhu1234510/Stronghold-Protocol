@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { AssaultRoom } from './assault.js';
 import { ERR, PHASE } from '../../shared/constants.js';
+import { t } from '../../shared/i18n.js';
 
 // Lobby adapter: use the existing authenticated connection and room lifecycle, not a second player session.
 export class VersusMatch {
@@ -73,7 +74,7 @@ export class VersusMatch {
     const p = this.players.get(id); if (!p) { this.spectators.delete(id); return; }
     p.connected = false;
     const d = this.game.duels.find(d => d.id === p.duel);
-    if (d && !d.done) this.game.finishDuel(d, d.pair.find(other => other !== p), '退出');
+    if (d && !d.done) this.game.finishDuel(d, d.pair.find(other => other !== p), t('退出'));
     p.eliminated = true; p.infoReady = true;
   }
   setLoadout(id, loadout) {

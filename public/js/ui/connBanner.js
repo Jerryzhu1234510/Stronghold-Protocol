@@ -37,7 +37,7 @@ export function ConnectionBanner() {
     return html`<div class="conn-banner" role="alert">
       <${Icon} name="refresh" />
       <span>${t('服务器已更新，本局结束后刷新')}</span>
-      ${globalThis.__SP_GENERATION ? html`<span>本局保持运行，结算后返回大厅即可载入新版</span>` : html`<${Button} size="sm" variant="secondary" icon="refresh" onClick=${() => location.reload()}>${t('刷新页面')}<//>`}
+      ${globalThis.__SP_GENERATION ? html`<span>${t('本局保持运行，结算后返回大厅即可载入新版')}</span>` : html`<${Button} size="sm" variant="secondary" icon="refresh" onClick=${() => location.reload()}>${t('刷新页面')}<//>`}
     </div>`;
   }
   if (!conn.everOnline && (conn.status === 'connecting' || conn.status === 'handshaking' || conn.status === 'idle')) return null;

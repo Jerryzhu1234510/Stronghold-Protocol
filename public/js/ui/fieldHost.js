@@ -1,5 +1,7 @@
-// Field view loader: mounts the Pixi engine, showing a temporary DOM view on slow
-// downloads and upgrading automatically when ready. Errors keep the fallback playable.
+import { waitForResourceController } from '../resources/client.js';
+// Field view loader: mounts the Pixi render engine (public/js/render/app.js → createFieldView, DESIGN §9)
+// into a host element, falling back to the DOM view (fallbackField.js) when the engine is missing, times
+// out or throws. Every call into the view goes through a guard so a render bug can never crash the HUD.
 // The shared asset store gets the game data's copy of the asset manifest (`seedAssets`, public issue #8 item 5), and the
 // prep cameras the HUD bands they keep clear (`hudBands`; the folded shop's band: public issue #5).
 //
@@ -12,20 +14,14 @@ import { createFallbackView } from './fallbackField.js';
 import { data } from '../data.js';
 import { audio } from '../audio.js';
 import { settingsStore } from './settings.js';
-import { store } from '../store.js';
-import { boardAppearance } from '../../../shared/roomDirectory.js';
-import { progressiveField } from './progressiveField.js';
-import { waitForResourceController } from '../resources/client.js';
 
 const LOAD_TIMEOUT_MS = 12000;
-const MODULE_TIMEOUT_MS = 45000;
-const INIT_TIMEOUT_MS = 20000;
 const METHODS = ['setStage', 'setCamera', 'setPrep', 'enterBattle', 'pushSnapshot', 'pushEvents', 'highlightTiles', 'on', 'resize', 'destroy'];
 // direction-step hooks (ui/facingWheel.js): optional — the wheel falls back to the engine's dev hooks when absent;
 // setPen (enemy preview pen list), prepField ({ kind, side, mirror } of the Final Assault prep), stripesUnder (the view
 // stripes range previews under the units itself), replayDeploys (the round start's Start-clip replay, PR #416) —
 // render/app.js; the DOM fallback lacks them (→ null)
-const OPTIONAL = ['pieceScreenRect', 'setSettings', 'off', 'tileScreen', 'holdPiece', 'setPieceDir', 'setPen', 'prepField', 'stripesUnder', 'replayDeploys'];
+const OPTIONAL = ['pieceScreenRect', 'pieceAtClientPoint', 'setSettings', 'off', 'tileScreen', 'holdPiece', 'setPieceDir', 'setPen', 'prepField', 'stripesUnder', 'replayDeploys'];
 
 /**
  * Camera padding (px) that keeps the field clear of the DOM HUD (top bar + bond strip, team panel, shop bar /
@@ -61,6 +57,11 @@ export const HUD_REM = Object.freeze({
   bondStripBottom: 2.16, shopBarTop: 2.64, shopBarBorderPx: 3, shopTabTop: 0.8, shopTabBorderPx: 3, cornerTop: 0.8,
 });
 
+/** Only short landscape phones use the compact camera clearance; tablets retain the full-board framing. */
+export function isMobileCamera(size, root = globalThis.document?.documentElement) {
+  return !!root?.classList?.contains('sp-coarse') && size?.width > size?.height && size.height <= 600;
+}
+
 /**
  * CSS px of HUD along the top edge (top bar + bond strip) and the bottom edge of the viewport during prep — the own
  * board ('prep') or the Final Assault half ('bossPrep'); null for every other camera. The prep camera keeps the bench /
@@ -83,13 +84,6 @@ export const HUD_REM = Object.freeze({
  * @param {{ shop?: boolean }} [opts] `shop: false` = the folded shop's band
  * @returns {{ top: number, bottom: number }|null}
  */
-export function isMobileCamera(size, root = globalThis.document?.documentElement) {
-  // Tablet landscape viewports have room for the normal framing. Applying the
-  // phone camera's 1.5x enlargement there crops the bench and far field.
-  return size.width <= 1024 && size.height <= 600
-    || size.height <= 600 && !!root?.classList?.contains('sp-coarse') && !root?.classList?.contains('sp-hover');
-}
-
 export function hudBands(kind, size, opts) {
   if (kind !== 'prep' && kind !== 'bossPrep') return null;
   const folded = !!opts && opts.shop === false;
@@ -98,8 +92,6 @@ export function hudBands(kind, size, opts) {
   let safeTop = 0;
   let safeBottom = 0;
   let corner = 0;
-  let mobileShopBand = 0;
-  let mobileBenchBand = 0;
   try {
     rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 100;
     // the HUD layer starts below the top safe-area inset and ends above the bottom one (css/devices.css .gm__hud)
@@ -108,22 +100,21 @@ export function hudBands(kind, size, opts) {
     if (folded) {
       if (hud && hud.bottom > 0) safeBottom = Math.max(0, h - hud.bottom);
       corner = cornerBand(h);
-    } else if (isMobileCamera(size) || size?.width <= 767) {
-      // Keep the original controls above the cards, reserving the complete dock so bench pads stay pressable.
-      const shop = document.querySelector('.shopbar')?.getBoundingClientRect();
-      // Use dock height, not its transient screen Y during viewport changes or the shop-up animation.
-      mobileShopBand = shop?.height > 0 ? shop.height + rem * 0.2 : rem * HUD_REM.shopBarTop + 51;
-      const cards = document.querySelector('.shopbar__row')?.getBoundingClientRect();
-      mobileBenchBand = (cards?.height > 0 ? cards.height : rem * 2.44 + HUD_REM.shopBarBorderPx) + rem * .2;
     }
   } catch { /* ignore */ }
-  const bottom = folded
+  let bottom = folded
     ? Math.max(safeBottom + rem * HUD_REM.shopTabTop + HUD_REM.shopTabBorderPx, corner || safeBottom + rem * HUD_REM.cornerTop)
-    : mobileShopBand || rem * HUD_REM.shopBarTop + HUD_REM.shopBarBorderPx;
+    : rem * HUD_REM.shopBarTop + HUD_REM.shopBarBorderPx;
+  // Measure height, not the animated Y position: the dock can be sliding as the camera resizes.
+  if (!folded && size?.width > h && h <= 600) {
+    try {
+      const dock = document.querySelector('.shopbar')?.getBoundingClientRect();
+      if (dock?.height > 0) bottom = Math.max(bottom, dock.height + 8);
+    } catch { /* no mounted dock */ }
+  }
   return {
     top: Math.min(h * 0.4, safeTop + rem * HUD_REM.bondStripBottom),
-    bottom: Math.min(h * (mobileShopBand ? 0.5 : 0.4), bottom),
-    ...(mobileBenchBand ? { benchBottom: mobileBenchBand } : {}),
+    bottom: Math.min(h * (size?.width > h && h <= 600 ? 0.6 : 0.4), bottom),
   };
 }
 
@@ -155,16 +146,32 @@ function renderPref() {
   return globalThis.__SP_RENDER__ === 'fallback' ? 'fallback' : 'auto';
 }
 
-function withTimeout(p, ms, what) {
-  let timer;
-  return Promise.race([p, new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`${what} timed out`)), ms); })])
-    .finally(() => clearTimeout(timer));
+function abortError(signal) {
+  return signal?.reason ?? new DOMException('Field view initialization cancelled', 'AbortError');
 }
 
-/** Download engine code in the room, before the first battlefield needs it. */
-export async function warmFieldRenderer() {
-  const [, mod] = await Promise.all([import('../assets.js'), import('../render/app.js')]);
-  await mod.ensurePixi();
+function checkActive(signal) {
+  if (signal?.aborted) throw abortError(signal);
+}
+
+function withTimeout(p, ms, what, signal) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer;
+    const finish = (done, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      done(value);
+    };
+    const onAbort = () => finish(reject, abortError(signal));
+    signal?.addEventListener('abort', onAbort, { once: true });
+    timer = setTimeout(() => finish(reject, new Error(`${what} timed out`)), ms);
+    // Keep a rejection handler attached even when cancellation wins before this promise settles.
+    Promise.resolve(p).then((value) => finish(resolve, value), (err) => finish(reject, err));
+    if (signal?.aborted) onAbort();
+  });
 }
 
 /**
@@ -198,14 +205,16 @@ export function guardView(view, kind) {
  * screen waits for them, gameComponents GAME_FILES) to the asset store, now or when they land: it then never downloads
  * the manifest a second time — after a page reload (a phone browser discarding a background tab, Chrome's Memory Saver)
  * that second download was the one createFieldView waited ≤ 4 s for, and a slow or failed one left every operator the
- * image-less placeholder (public issue #8 item 5). Without a copy the store fetches and retries by itself.
+ * image-less placeholder (public issue #8 item 5). Without a copy the store fetches and retries by itself. The copy as
+ * downloaded (data.getRaw): the store lays the cosmetic plugins over it itself (assets.js `cosmetics`), data.js's view
+ * of `assets` already has them.
  * @param {{ seed?: (m: any) => boolean, seedLocal?: (m: any) => boolean }} store public/js/assets.js store
  */
 export function seedAssets(store) {
   if (!store) return;
   const give = (name, fn) => {
     if (typeof fn !== 'function') return;
-    const now = data.get(name);
+    const now = data.getRaw(name);
     if (now) { fn(now); return; }
     // still loading (or failed): adopt it if it lands; a later success of the store's own fetch makes this a no-op
     Promise.resolve(data.load(name)).then((m) => { if (m) fn(m); }, () => {});
@@ -215,50 +224,59 @@ export function seedAssets(store) {
 }
 
 /**
- * Create a field view. Resolves with the first usable view; onView also receives a later engine upgrade.
+ * Create a field view in `host`: the render engine when available, else the DOM fallback.
  * @param {HTMLElement} host
+ * @param {{ signal?: AbortSignal }} [options] Cancels a pending mount without creating a fallback.
  * @returns {Promise<ReturnType<typeof guardView>>}
  */
-export async function mountFieldView(host, { signal, onView } = {}) {
-  if (!globalThis.SPAndroidResources?.getManifest) await waitForResourceController();
+export async function mountFieldView(host, { signal } = {}) {
+  await waitForResourceController();
+  checkActive(signal);
   const pref = renderPref();
-  const opts = { data, assets: data.get('assets'), audio, settings: settingsStore.get(), padding: hudPadding, hud: hudBands,
-    ...boardAppearance(store.get().match?.public?.mapVersion || store.get().room?.mapVersion),
-    mobileCamera: isMobileCamera };
-  const makeFallback = layer => guardView(createFallbackView(layer, { ...opts, assets: data.get('assets') }), 'fallback');
-  if (pref === 'fallback') {
-    const view = makeFallback(host);
-    onView?.(view);
-    return view;
-  }
-  const loadEngine = async layer => {
+  const opts = { data, assets: data.get('assets'), audio, settings: settingsStore.get(), padding: hudPadding, hud: hudBands };
+  if (pref !== 'fallback') {
+    const controller = new AbortController();
+    const onAbort = () => controller.abort(abortError(signal));
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+    let engineView = null;
+    const dispose = (view) => { try { view?.destroy?.(); } catch { /* ignore */ } };
+    try {
+      checkActive(controller.signal);
       // the shared asset store (public/js/assets.js) keeps its Spine cache across remounts (next match, reconnect)
-      const [am, mod] = await Promise.all([
-        withTimeout(import('../assets.js'), MODULE_TIMEOUT_MS, 'asset store import').catch(() => null),
-        withTimeout(import('../render/app.js'), MODULE_TIMEOUT_MS, 'render engine import'),
-      ]);
-      if (signal?.aborted) throw new Error('field mount cancelled');
+      const am = await withTimeout(import('../assets.js'), LOAD_TIMEOUT_MS, 'asset store import', controller.signal).catch(() => {
+        checkActive(controller.signal);
+        return null;
+      });
+      checkActive(controller.signal);
       if (am?.assets && typeof am.assets.ready === 'function') {
         opts.assets = am.assets;
         seedAssets(am.assets);
       }
+      const mod = await withTimeout(import('../render/app.js'), LOAD_TIMEOUT_MS, 'render engine import', controller.signal);
+      checkActive(controller.signal);
       if (typeof mod?.createFieldView !== 'function') throw new Error('createFieldView missing');
-      const pending = Promise.resolve(mod.createFieldView(layer, opts));
-      let view;
-      try { view = await withTimeout(pending, INIT_TIMEOUT_MS, 'createFieldView'); }
-      catch (err) {
-        // A timed-out constructor may still finish; release its ticker, listeners and GPU contexts.
-        pending.then(late => { try { late?.destroy?.(); } catch { /* ignore */ } }, () => {});
-        throw err;
-      }
+      // A factory that ignores cancellation still belongs to this attempt when it eventually returns.
+      const pending = Promise.resolve(mod.createFieldView(host, { ...opts, signal: controller.signal })).then((view) => {
+        if (controller.signal.aborted) dispose(view); else engineView = view;
+        return view;
+      });
+      const view = await withTimeout(pending, LOAD_TIMEOUT_MS, 'createFieldView', controller.signal);
+      checkActive(controller.signal);
       const missing = METHODS.filter((k) => typeof view?.[k] !== 'function');
-      if (missing.length) {
-        try { view?.destroy?.(); } catch { /* ignore */ }
-        throw new Error(`view lacks ${missing.join(', ')}`);
-      }
+      if (missing.length) throw new Error(`view lacks ${missing.join(', ')}`);
       return guardView(view, 'engine');
-  };
-  return progressiveField(host, loadEngine, makeFallback, { signal, onView, timeoutMs: LOAD_TIMEOUT_MS }).first;
+    } catch (err) {
+      controller.abort();
+      dispose(engineView);
+      checkActive(signal);
+      console.warn('[field] render engine unavailable, using the simplified view:', err?.message || err);
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+  checkActive(signal);
+  return guardView(createFallbackView(host, { ...opts, assets: data.get('assets') }), 'fallback');
 }
 
 /**
@@ -268,51 +286,45 @@ export async function mountFieldView(host, { signal, onView } = {}) {
 export function useFieldView(hostRef) {
   const [state, setState] = useState({ view: null, kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const retries = useRef(0);
   const viewRef = useRef(null);
   useEffect(() => {
-    let dead = false;
+    let dead = false, retrying = false;
     const host = hostRef.current;
     if (!host) return undefined;
-    const abort = new AbortController();
     setState({ view: null, kind: 'loading' });
-    const install = view => {
+    const controller = new AbortController();
+    mountFieldView(host, { signal: controller.signal }).then((view) => {
       if (dead) { view.destroy(); return; }
       viewRef.current = view;
+      if (view.kind === 'engine') retries.current = 0;
       globalThis.__SP_VIEW__ = view; // dev / E2E introspection (view.raw.stats?.())
       setState({ view, kind: view.kind });
-    };
-    mountFieldView(host, { signal: abort.signal, onView: install }).catch(err => { if (!dead) console.error('[field] mount failed', err); });
+    }, (err) => { if (!dead && !controller.signal.aborted) console.error('[field] mount failed', err); });
     const unsub = settingsStore.subscribe((s) => viewRef.current?.setSettings?.(s));
-    // ResizeObserver for the field can run before the responsive HUD finishes layout.
-    // Reframe on the next paint and when the shop's own size changes (rotation / viewport resize).
-    let frame = 0, observedShop = null;
-    const reframe = () => {
-      if (frame) cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => { frame = 0; if (!dead) viewRef.current?.resize(); });
-    };
-    const shopObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(reframe) : null;
-    const onResize = () => {
-      const shop = document.querySelector('.shopbar');
-      if (shop !== observedShop) {
-        if (observedShop) shopObserver?.unobserve(observedShop);
-        observedShop = shop;
-        if (shop) shopObserver?.observe(shop);
-      }
-      reframe();
+    const onResize = () => viewRef.current?.resize();
+    // A temporary network/vendor failure must not pin this mounted match to fallback forever. Retry on a useful
+    // user event, at most twice in succession; the effect cleanup disposes the old view before creating its successor.
+    const onRetry = () => {
+      if (dead || retrying || viewRef.current?.kind !== 'fallback' || renderPref() === 'fallback'
+        || document.visibilityState !== 'visible' || globalThis.navigator?.onLine === false || retries.current >= 2) return;
+      retrying = true; retries.current++; setAttempt((n) => n + 1);
     };
     window.addEventListener('resize', onResize);
+    window.addEventListener('online', onRetry);
+    document.addEventListener('visibilitychange', onRetry);
     return () => {
       dead = true;
-      abort.abort();
+      controller.abort();
       unsub();
       window.removeEventListener('resize', onResize);
-      shopObserver?.disconnect();
-      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener('online', onRetry);
+      document.removeEventListener('visibilitychange', onRetry);
       // the dev hook must not keep the destroyed view — and through its host the whole detached match screen — alive
       if (viewRef.current && globalThis.__SP_VIEW__ === viewRef.current) globalThis.__SP_VIEW__ = null;
       viewRef.current?.destroy();
       viewRef.current = null;
     };
   }, [attempt]);
-  return { ...state, retry: () => setAttempt(n => n + 1) };
+  return state;
 }

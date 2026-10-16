@@ -17,7 +17,9 @@
 // already did.
 // Watching a teammate (DESIGN §20.15, ui/watchBonds.js) the strip and the popup show THAT player's bonds and layers:
 // the strip carries an amber "👁 name" tag (`owner`, the observing pill's spelling, research 09 §3.1) and amber rings,
-// the popup a "👁 name 的盟约" line; its member list reads the teammate's operators on the field (no hand: never sent).
+// the popup a "👁 name 的盟约" line; its member list reads the teammate's operators on the field — in prep their bench
+// too, counted like their own popup counts it (ui/watchBonds.js ownerBoard: hand / temp by the scout's `area`, GitHub
+// #385); a battle sends no bench.
 // 0.2.0 补位: a member the player fields as its stand-in (the own m.private.standIns; a teammate's unit that says so —
 // UnitInfo `standInFor`) is drawn as the stand-in — avatar, name, a small 「替补」 mark on the thumbnail — and its row
 // opens the stand-in's card (gameLogic memberStandIn; the owner's recall of the official mode, 2026-10-06).
@@ -27,8 +29,6 @@
 // teammate's 自选 pieces on the field are rows too (their picks are not sent), opening THEIR operator's card (the unit's
 // pick goes with onMember: never the empty 甄选干员 slot's card).
 
-import { useRef } from '../../vendor/hooks.module.js';
-import { useOutsideDismiss } from './outsideDismiss.js';
 import { html, BondDisc, Icon, MicroLabel, Tooltip } from './components.js';
 import { RichText, UnitThumb, BondGlyph, GIcon } from './gameComponents.js';
 import { sortBonds, bondMembers, nextThreshold, bondTier, harmonyMembers, HARMONY_BOND, memberHeadCount, briefingBondTip, diyGetter, diyRecordFor, memberStandIn, standInForText } from './gameLogic.js';
@@ -66,7 +66,7 @@ export function BondStrip({ bonds, layersDisabled = false, onOpen, openId = null
       const th = Array.isArray(b.thresholds) && b.thresholds.length ? b.thresholds : rec?.thresholds || [];
       if (b.off) {
         // a bond the mode never activates, with members: the briefing's grey ✕ disc, no stack count, 本局禁用 under it
-        const name = rec?.name || t('资料加载中');
+        const name = rec?.name || b.bondId;
         return html`<div key=${b.bondId} role="listitem" data-bond=${b.bondId} data-off="1"
             class=${cx('bslot', 'is-off', openId === b.bondId && 'is-open')}>
           <${BondDisc} name=${name} icon=${bondIconUrl(m, b.bondId)} tier=${0} maxTier=${Math.max(1, th.length)} active=${false}
@@ -78,10 +78,10 @@ export function BondStrip({ bonds, layersDisabled = false, onOpen, openId = null
       const next = nextThreshold(b.count ?? 0, th);
       return html`<div key=${b.bondId} role="listitem" data-bond=${b.bondId} data-harmony=${b.harmony > 0 ? b.harmony : null}
           class=${cx('bslot', b.active && 'is-active', openId === b.bondId && 'is-open')}>
-        <${BondDisc} name=${rec?.name || t('资料加载中')} icon=${bondIconUrl(m, b.bondId)} layers=${rec?.noStack ? undefined : b.layers ?? 0}
+        <${BondDisc} name=${rec?.name || b.bondId} icon=${bondIconUrl(m, b.bondId)} layers=${rec?.noStack ? undefined : b.layers ?? 0}
           tier=${b.tier ?? 0} maxTier=${Math.max(1, th.length)} active=${!!b.active} size="sm" showName=${true}
           layersDisabled=${layersDisabled} onClick=${() => onOpen(b.bondId)}
-          title=${`${rec?.name || t('资料加载中')} ${b.count ?? 0}/${next ?? th[th.length - 1] ?? '-'}${b.harmony > 0 ? t('（含调和 +{harmony}）', { harmony: b.harmony }) : ''}`} />
+          title=${`${rec?.name || b.bondId} ${b.count ?? 0}/${next ?? th[th.length - 1] ?? '-'}${b.harmony > 0 ? t('（含调和 +{harmony}）', { harmony: b.harmony }) : ''}`} />
         <span class=${cx('bslot__count', 'num', next == null && 'is-max')}>${b.count ?? 0}<small>/${next ?? th[th.length - 1] ?? '-'}</small></span>
       </div>`;
     })}
@@ -104,10 +104,8 @@ export function BondStrip({ bonds, layersDisabled = false, onOpen, openId = null
  *   note, no 在场 count and no 当前效果 block (its numbers would promise an effect the mode never gives; the bond text stays).
  *   `entry.harmony` (the server's bond views: the +1 调和 added to `count`): 在场 n（含调和 +1） and the 调和 row
  */
-export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember, place = null, over = false, beside = null, owner = null, off = false, record = null }) {
-  const panel = useRef(null);
-  useOutsideDismiss(panel, onClose, '.bslot, button.dbond');
-  const b = record || data.lookup('bonds', bondId);
+export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember, place = null, over = false, beside = null, owner = null, off = false }) {
+  const b = data.lookup('bonds', bondId);
   if (!b) return null;
   const count = entry?.count ?? 0;
   const layers = entry?.layers ?? 0;
@@ -135,7 +133,7 @@ export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember,
   const harmonyName = data.lookup('bonds', HARMONY_BOND)?.name || tName('调和');
   const harmonyText = harmonyBy.length ? t('{names} 在场：核心盟约激活人数 +{harmony}', { names: harmonyBy.map((x) => x.name), harmony })
     : t('{harmonyName}已激活：核心盟约激活人数 +{harmony}', { harmonyName, harmony });
-  return html`<div ref=${panel} class=${cx('bpop', 'brackets', `bpop--${at}`, over && 'is-over', owner && 'is-other')} data-place=${at} data-owner=${owner || null}
+  return html`<div class=${cx('bpop', 'brackets', `bpop--${at}`, over && 'is-over', owner && 'is-other')} data-place=${at} data-owner=${owner || null}
       role="dialog" aria-label=${owner ? t('{owner} 的盟约：{name}', { owner, name: b.name }) : t('盟约：{name}', { name: b.name })}>
     <button type="button" class="bpop__close" aria-label=${t('关闭')} onClick=${onClose}><${Icon} name="close" /></button>
     <header class="bpop__head">

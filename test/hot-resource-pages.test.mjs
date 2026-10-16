@@ -12,7 +12,7 @@ test('resource page group preserves immutable modules, pinned imports and a real
   const fixture = await mkdtemp(path.join(root, '.cache/resource-page-test-'));
   let gateway, client;
   try {
-    for (const dir of ['server', 'shared', 'data']) await cp(path.join(root, dir), path.join(fixture, dir), { recursive: true });
+    for (const dir of ['server', 'shared', 'data', 'tools/assets']) await cp(path.join(root, dir), path.join(fixture, dir), { recursive: true });
     await cp(path.join(root, 'package.json'), path.join(fixture, 'package.json'));
     await cp(path.join(root, 'HOT-RELEASE.json'), path.join(fixture, 'HOT-RELEASE.json'));
     await writeFile(path.join(fixture, 'MANIFEST.json'), '{"files":{}}');

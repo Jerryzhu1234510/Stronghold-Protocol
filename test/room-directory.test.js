@@ -142,10 +142,10 @@ test('five-to-eight player creation still requires warning acceptance; map appea
   try { assert.equal(match.publicView().mapVersion, 'classic'); } finally { match.dispose(); }
   const previous = globalThis.location; globalThis.location = { search: '?board=3d' };
   try {
-    assert.equal(boardPreference(boardAppearance('new').board), '2d');
+    assert.equal(boardPreference(boardAppearance('new').board), '3d');
     assert.equal(boardAppearance('new').boardArt, false);
     globalThis.location.search = '?board=2d';
-    assert.equal(boardPreference(boardAppearance('classic').board), '3d');
+    assert.equal(boardPreference(boardAppearance('classic').board), '2d');
     assert.equal(boardAppearance('classic').boardArt, true);
   } finally { globalThis.location = previous; }
 });

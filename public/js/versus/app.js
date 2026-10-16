@@ -29,6 +29,7 @@ import { versusBondRecord } from '/shared/versusBonds.js';
 import { VERSUS_RULES } from '/shared/versusRules.js';
 import { detailUnit, monsterPreview } from './details.js';
 import { resourceDocumentUrl, waitForResourceController, requireLocalResourceController } from '../resources/client.js';
+import { t } from '../../../shared/i18n.js';
 
 async function bootVersus() {
 const canonical = resourceDocumentUrl(location.href, performance.getEntriesByType('navigation')[0]?.name, globalThis.__SP_GENERATION);
@@ -66,7 +67,7 @@ const image = card => !card ? null : card.kind === 'monster' ? assets.enemyIcon(
   : card.kind === 'equipment' ? assets.itemIcon(gameData.items[card.id] || card.id) : assets.avatar(card.avatar);
 const clock = seconds => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 function send(action, payload = {}) {
-  if (!online()) { showError?.('连接未就绪'); return; }
+  if (!online()) { showError?.(t('连接未就绪')); return; }
   if (embedded) { parent.postMessage({ type: 'versus-command', command: { action, ...payload } }, location.origin); return; }
   socket.send(JSON.stringify({ action, ...payload }));
 }
@@ -102,7 +103,7 @@ function connect() {
   });
   socket.addEventListener('close', e => {
     updateApp?.(latest, false);
-    if (e.code === 4001) { stopped = true; showError?.('另一页面已接管这个玩家'); }
+    if (e.code === 4001) { stopped = true; showError?.(t('另一页面已接管这个玩家')); }
     if (!stopped) setTimeout(connect, Math.min(10000, 500 * 2 ** attempt++));
   });
 }
@@ -176,7 +177,7 @@ function place(tile) {
     const own = operatorAt(tile); if (own) equipTarget?.(own, selected); return;
   }
   if (selected.kind === 'operator' && selected.row != null && tile.row < 2) { send('withdraw', { uid: selected.uid }); return; }
-  if (!legalTiles().some(([r,c]) => r === tile.row && c === tile.col)) { showError?.('这里不能放置'); return; }
+  if (!legalTiles().some(([r,c]) => r === tile.row && c === tile.col)) { showError?.(t('这里不能放置')); return; }
   openDetail?.(null);
   if (selected.kind === 'operator') {
     const current = latest.me.operators.find(o => o.uid === selected.uid);
@@ -257,27 +258,27 @@ function IconButton({ name, label, onClick, disabled, class: cls = '' }) {
   return html`<button class=${`icon-button ${cls}`} title=${label} aria-label=${label} onClick=${onClick} disabled=${disabled}><${Icon} name=${name}/></button>`;
 }
 function Card({ card, onClick, disabled, count, bench = false, active = false, piece = null, poor = false, index = null }) {
-  if (!card) return html`<div class="sold">已售出</div>`;
+  if (!card) return html`<div class="sold">${t('已售出')}</div>`;
   const url = !bench && card.kind === 'operator' ? portraitUrl(gameData.assets, card.avatar, { e2: card.isGolden }) || image(card) : image(card);
   const copies = card.kind === 'operator' ? latest?.me.operators.filter(o => o.id === card.id).length || 0 : 0;
   return html`<button class=${`${bench ? 'bench-card' : 'shop-card'} ${card.kind} ${card.isGolden ? 'elite' : ''} ${active ? 'active' : ''} ${poor ? 'poor' : ''}`} onClick=${onClick} disabled=${disabled}
     data-tier=${card.tier} data-id=${card.id} data-shop-index=${index} data-uid=${piece?.uid} onPointerDown=${bench && !disabled ? e => startDrag(e, piece) : null}
     onLostPointerCapture=${e => { if (drag?.id === e.pointerId) cancelDrag(); }}
-    title=${`${card.name}${bench ? '' : ` · ${card.price} 金币`}${card.kind === 'monster' && card.desc ? `\n${card.desc}` : ''}`} aria-label=${`${bench ? '选择' : '购买'}${card.name}`}>
+    title=${`${card.name}${bench ? '' : t(' · {price} 金币', { price: card.price })}${card.kind === 'monster' && card.desc ? `\n${card.desc}` : ''}`} aria-label=${`${bench ? t('选择') : t('购买')}${card.name}`}>
     ${url && html`<img src=${url} alt="" loading="lazy" draggable="false"/>`}
-    ${bench ? html`<span>${card.name}</span>${card.isGolden ? html`<b>精锐</b>` : count > 1 && html`<b>×${count}</b>`}` : html`<div class="card-text"><span class="card-name">${card.name}</span>
+    ${bench ? html`<span>${card.name}</span>${card.isGolden ? html`<b>${t('精锐')}</b>` : count > 1 && html`<b>×${count}</b>`}` : html`<div class="card-text"><span class="card-name">${card.name}</span>
       ${card.kind === 'monster' && html`<b class="card-quantity">×${card.quantity}</b>`}
-      ${active && html`<span class="buy-confirm">${poor ? '金币不足' : '确认购买'}</span>`}
-      <span class="card-detail">${card.kind === 'operator' ? card.bonds.map(id => gameData.bonds[id]?.name).join(' / ') : card.kind === 'monster' ? `${card.stats.motion === 'FLY' ? '飞行' : '地面'} · 生命 ${card.stats.maxHp}` : card.desc}</span>
+      ${active && html`<span class="buy-confirm">${poor ? t('金币不足') : t('确认购买')}</span>`}
+      <span class="card-detail">${card.kind === 'operator' ? card.bonds.map(id => gameData.bonds[id]?.name).join(' / ') : card.kind === 'monster' ? t('{0} · 生命 {maxHp}', { 0: card.stats.motion === 'FLY' ? t('飞行') : t('地面'), maxHp: card.stats.maxHp }) : card.desc}</span>
       <span class="card-price">${card.price}</span><small class="card-tier">${['','I','II','III','IV','V','VI'][card.tier]}</small>
       ${card.kind === 'operator' && html`<span class="card-bonds">${card.bonds.map(id => html`<img src=${assets.bondIcon(id)} alt=${gameData.bonds[id]?.name} title=${gameData.bonds[id]?.name}/>` )}</span>
-        ${copies > 0 && html`<span class="merge-pips" title=${`已拥有 ${copies}/3`}>${[0,1,2].map(i => html`<i class=${i < copies ? 'on' : ''}></i>`)}</span>`}`}</div>`}
+        ${copies > 0 && html`<span class="merge-pips" title=${t('已拥有 {copies}/3', { copies })}>${[0,1,2].map(i => html`<i class=${i < copies ? 'on' : ''}></i>`)}</span>`}`}</div>`}
   </button>`;
 }
 function App() {
   const [packet, setPacket] = useState(latest), [connected, setConnected] = useState(online());
   const [facing, changeFacing] = useState(null);
-  const [name, setName] = useState(localStorage.getItem('versusName') || '博士'), [code, setCode] = useState(new URLSearchParams(location.search).get('room') || '');
+  const [name, setName] = useState(localStorage.getItem('versusName') || t('博士')), [code, setCode] = useState(new URLSearchParams(location.search).get('room') || '');
   const [roster, setRoster] = useState(false), [bracket, setBracket] = useState(false), [detail, setDetail] = useState(null);
   const [resultOpen, setResultOpen] = useState(false);
   const [replacement, setReplacement] = useState(null), [rewardLater, setRewardLater] = useState(false);
@@ -339,7 +340,7 @@ function App() {
       }, true);
       setLoading(false); syncField();
       window.__versusView = v;
-    }).catch(e => { setLoading(false); showError(`战场加载失败：${e.message}`); });
+    }).catch(e => { setLoading(false); showError(t('战场加载失败：{message}', { message: e.message })); });
     return () => { active = false; view?.destroy(); view = null; };
   }, [mapVersion]);
   useEffect(() => settingsStore.subscribe(settings => view?.setSettings(settings)), []);
@@ -375,7 +376,7 @@ function App() {
   useEffect(() => { setDetail(null); setArmed(null); }, [packet?.field?.meta.fieldId]);
   const fieldBonds = packet?.field?.bonds || me?.bonds || {};
   const bondEntries = Object.entries(fieldBonds).filter(([, b]) => b.count > 0).map(([bondId, b]) => ({ bondId, ...b }));
-  const portrait = p => p && html`<button class=${`player-avatar ${focusedId === p.id ? 'active' : ''}`} aria-label=${`查看${p.name}的战场`} aria-pressed=${focusedId === p.id}
+  const portrait = p => p && html`<button class=${`player-avatar ${focusedId === p.id ? 'active' : ''}`} aria-label=${t('查看{name}的战场', { name: p.name })} aria-pressed=${focusedId === p.id}
     title=${p.name} style=${{ borderColor: p.color, color: p.color }} onClick=${() => { overview = false; send('watch', { id: p.duel, playerId: p.id }); camera(); }}>${p.initial}</button>`;
   const ownDuel = room?.duels.find(d => d.players.includes(me.id));
   const editable = connected && !!room && !packet?.spectator && !my?.eliminated && ['preparation','combat'].includes(room.status) && !ownDuel?.done;
@@ -388,7 +389,7 @@ function App() {
   const liveDetail = detailUnit(packet, detail, overview)?.live || (!detail?.readOnly ? monsterPreview(detailCard, duel?.power) : null);
   const nativeDetail = !detailCard || !detailPiece ? null : detailCard.kind === 'operator' ? { type: 'chess', chess: gameData.chess[detailCard.id],
     piece: detail.shop ? null : { ...detailPiece, kind: 'chess', items: (detailPiece.items || []).map((id, i) => typeof id === 'string' ? ({ id, uid: i }) : id) },
-    garrisons: (detailCard.traits || []).map((t, i) => ({ garrisonId: `versus:${i}`, eventTypeDesc: '对抗模式（测试）', descRaw: `${t.desc}\n${t.ready ? t.conversion : '验收版暂未接入'}` })) }
+    garrisons: (detailCard.traits || []).map((t, i) => ({ garrisonId: `versus:${i}`, eventTypeDesc: t('对抗模式（测试）'), descRaw: `${t.desc}\n${t.ready ? t.conversion : t('验收版暂未接入')}` })) }
     : detailCard.kind === 'monster' ? { type: 'enemy', enemy: gameData.enemies[detailCard.id], count: detail.shop ? detailCard.quantity : detail.readOnly ? null : me.monsters[detail.id] }
     : { type: 'item', item: gameData.items[detailCard.id], piece: detail };
   const sellCount = detailCard?.kind === 'monster' ? Math.min(detailCard.quantity, me?.monsters[detail.id] || 0) : 1;
@@ -441,79 +442,79 @@ function App() {
   const create = () => { saveName(); setRoster(true); send('create', { name }); };
   const join = () => { saveName(); setRoster(true); send('join', { name, code }); };
   const restart = () => { if (embedded) { send('return'); return; } stopped = true; sessionStorage.removeItem('versusToken'); location.href = '/versus.html'; };
-  const statusText = !room ? '未加入' : my?.eliminated && room.status !== 'complete' ? '已淘汰 · 观战中' : room.status === 'lobby' ? '等待开局' : room.status === 'info' ? '确认信息' : ownDuel?.preparing ? '攻守整备' : room.status === 'complete' ? '对抗结束' : ownDuel?.done ? '等待晋级' : me?.role==='attack'?'攻方 · 交战中':'守方 · 交战中';
+  const statusText = !room ? t('未加入') : my?.eliminated && room.status !== 'complete' ? t('已淘汰 · 观战中') : room.status === 'lobby' ? t('等待开局') : room.status === 'info' ? t('确认信息') : ownDuel?.preparing ? t('攻守整备') : room.status === 'complete' ? t('对抗结束') : ownDuel?.done ? t('等待晋级') : me?.role==='attack'?t('攻方 · 交战中'):t('守方 · 交战中');
   const resultPlayers = room?.results || settled?.results || [];
   return html`<main class=${`shell role-${me?.role || 'defend'} ${shopFolded ? 'shop-folded' : ''}`} style=${{ '--unit-slots': Math.max(1, roleOffers.filter(o => o.kind !== 'equipment').length) }}>
-    <header class="topbar"><div class="battle-time" aria-label="对抗进度"><span class="build-tag">测试</span><span class=${my?.eliminated ? 'eliminated-status' : ''}>${statusText}</span><strong>${duel?.preparing || clock(duel?.remaining ?? 480)}</strong><span class="power">第${duel?.leg || 1}/2段 · 怪物生命 ×${(duel?.power.hp || 1).toFixed(2)}</span></div>
-      <div class="top-end">${!connected && html`<small class="reconnect">连接中</small>`}
-        <button class="versus-rules-button" aria-label="对抗模式规则" title="对抗模式规则（测试版）" onClick=${() => setRulesOpen(true)}><${Icon} name="book"/><span>规则</span></button>
-        <${IconButton} name=${shopFolded ? 'book' : 'collapse'} label=${shopFolded ? '展开商店' : '收起商店'} onClick=${() => setShopFolded(!shopFolded)}/>
+    <header class="topbar"><div class="battle-time" aria-label=${t('对抗进度')}><span class="build-tag">${t('测试')}</span><span class=${my?.eliminated ? 'eliminated-status' : ''}>${statusText}</span><strong>${duel?.preparing || clock(duel?.remaining ?? 480)}</strong><span class="power">${t('第')}${duel?.leg || 1}${t('/2段 · 怪物生命 ×')}${(duel?.power.hp || 1).toFixed(2)}</span></div>
+      <div class="top-end">${!connected && html`<small class="reconnect">${t('连接中')}</small>`}
+        <button class="versus-rules-button" aria-label=${t('对抗模式规则')} title=${t('对抗模式规则（测试版）')} onClick=${() => setRulesOpen(true)}><${Icon} name="book"/><span>${t('规则')}</span></button>
+        <${IconButton} name=${shopFolded ? 'book' : 'collapse'} label=${shopFolded ? t('展开商店') : t('收起商店')} onClick=${() => setShopFolded(!shopFolded)}/>
         ${room?.status === 'lobby' && html`<button onClick=${() => setRoster(true)}><${Icon} name="users"/>${room.players.length}/4</button>`}
-        <${IconButton} name="eye" label="淘汰赛与观战" onClick=${() => setBracket(!bracket)} disabled=${!room?.round}/>
-        <${IconButton} name="expand" label="全屏" onClick=${() => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => {})}/>
-        <${IconButton} name="exit" label=${room?.status === 'complete' ? '返回房间' : my?.eliminated || packet?.spectator ? '退出观战' : '认输'} onClick=${() => room?.status === 'complete' ? restart() : my?.eliminated || packet?.spectator ? embedded ? send('leave') : restart() : setConfirm(true)} disabled=${!deployable && !my?.eliminated && !packet?.spectator && room?.status !== 'complete'}/>
+        <${IconButton} name="eye" label=${t('淘汰赛与观战')} onClick=${() => setBracket(!bracket)} disabled=${!room?.round}/>
+        <${IconButton} name="expand" label=${t('全屏')} onClick=${() => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => {})}/>
+        <${IconButton} name="exit" label=${room?.status === 'complete' ? t('返回房间') : my?.eliminated || packet?.spectator ? t('退出观战') : t('认输')} onClick=${() => room?.status === 'complete' ? restart() : my?.eliminated || packet?.spectator ? embedded ? send('leave') : restart() : setConfirm(true)} disabled=${!deployable && !my?.eliminated && !packet?.spectator && room?.status !== 'complete'}/>
       </div>
     </header>
-    <section class="workspace" aria-label="对抗战场">
+    <section class="workspace" aria-label=${t('对抗战场')}>
       <div class="field" ref=${host}></div>
-      <div class="field-tools"><button class=${overview ? 'active' : ''} title=${overview ? '返回局部地图' : '查看完整战场'} aria-label="大地图" aria-pressed=${overview} disabled=${!packet?.field} onClick=${() => { overview = !overview; camera(); syncField(); setPacket({ ...packet }); }}><${Icon} name="search"/><span>${overview ? '局部' : '大地图'}</span></button>
-        ${settled && html`<button aria-label="查看对抗结算" title="对抗结算" onClick=${() => setResultOpen(true)}><${Icon} name="crown"/><span>结算</span></button>`}</div>
-      ${loading && html`<div class="finish-banner">战场加载中…</div>`}
+      <div class="field-tools"><button class=${overview ? 'active' : ''} title=${overview ? t('返回局部地图') : t('查看完整战场')} aria-label=${t('大地图')} aria-pressed=${overview} disabled=${!packet?.field} onClick=${() => { overview = !overview; camera(); syncField(); setPacket({ ...packet }); }}><${Icon} name="search"/><span>${overview ? t('局部') : t('大地图')}</span></button>
+        ${settled && html`<button aria-label=${t('查看对抗结算')} title=${t('对抗结算')} onClick=${() => setResultOpen(true)}><${Icon} name="crown"/><span>${t('结算')}</span></button>`}</div>
+      ${loading && html`<div class="finish-banner">${t('战场加载中…')}</div>`}
       <div class="field-labels">
-        <div class="gate">${portrait(left)}<div class="gate-info"><div class="gate-name"><span>${left?.name || '左侧'}${left?.id === me?.id ? ' · 你' : ''}</span><strong>${left?.role==='attack'?'攻':left?.hp ?? 20}</strong></div><div class="hp-track"><i style=${{ width: `${left?.role==='attack'?0:(left?.hp ?? 20) * 5}%` }}></i></div></div></div>
-        <div class="gate enemy"><div class="gate-info"><div class="gate-name"><span>${right?.name || '右侧'}${right?.id === me?.id ? ' · 你' : ''}</span><strong>${right?.role==='attack'?'攻':right?.hp ?? 20}</strong></div><div class="hp-track"><i style=${{ width: `${right?.role==='attack'?0:(right?.hp ?? 20) * 5}%` }}></i></div></div>${portrait(right)}</div>
+        <div class="gate">${portrait(left)}<div class="gate-info"><div class="gate-name"><span>${left?.name || t('左侧')}${left?.id === me?.id ? t(' · 你') : ''}</span><strong>${left?.role==='attack'?t('攻'):left?.hp ?? 20}</strong></div><div class="hp-track"><i style=${{ width: `${left?.role==='attack'?0:(left?.hp ?? 20) * 5}%` }}></i></div></div></div>
+        <div class="gate enemy"><div class="gate-info"><div class="gate-name"><span>${right?.name || t('右侧')}${right?.id === me?.id ? t(' · 你') : ''}</span><strong>${right?.role==='attack'?t('攻'):right?.hp ?? 20}</strong></div><div class="hp-track"><i style=${{ width: `${right?.role==='attack'?0:(right?.hp ?? 20) * 5}%` }}></i></div></div>${portrait(right)}</div>
       </div>
-      ${room?.round > 0 && html`<aside class="player-list" aria-label="玩家视角"><div class="watch-roster">${room.players.map(p => html`<button class=${focusedId === p.id ? 'active' : ''} aria-label=${`查看${p.name}的战场`} title=${p.name} disabled=${!room.duels.some(d => d.id === p.duel)} style=${{ borderLeft: `3px solid ${p.color || '#777'}` }} onClick=${() => { overview = false; send('watch', { id: p.duel, playerId: p.id }); camera(); }}><b style=${{ color: p.color }}>${p.initial}</b><span>${p.name}</span><small>${p.eliminated ? '败' : p.hp}</small></button>`)}</div></aside>`}
-      ${selectedCard && html`<div class="selection-note"><span>${selectedCard.name}</span><small>${selected.kind === 'monster' ? '前沿投放' : selected.kind === 'equipment' ? '装备' : '待部署'}</small><${IconButton} name="close" label="取消选择" onClick=${() => { selected = null; highlight(); setPacket({ ...packet }); }}/></div>`}
-      ${room?.status === 'complete' && html`<div class="finish-banner"><h2><${Icon} name="crown"/> ${room.players.find(p => p.id === room.champion)?.name}</h2><p>最终胜者</p></div>`}
-      <section class="inventory" aria-label="备战区" ref=${benchHost} hidden=${focusedId !== me?.id}>
+      ${room?.round > 0 && html`<aside class="player-list" aria-label=${t('玩家视角')}><div class="watch-roster">${room.players.map(p => html`<button class=${focusedId === p.id ? 'active' : ''} aria-label=${t('查看{name}的战场', { name: p.name })} title=${p.name} disabled=${!room.duels.some(d => d.id === p.duel)} style=${{ borderLeft: `3px solid ${p.color || '#777'}` }} onClick=${() => { overview = false; send('watch', { id: p.duel, playerId: p.id }); camera(); }}><b style=${{ color: p.color }}>${p.initial}</b><span>${p.name}</span><small>${p.eliminated ? t('败') : p.hp}</small></button>`)}</div></aside>`}
+      ${selectedCard && html`<div class="selection-note"><span>${selectedCard.name}</span><small>${selected.kind === 'monster' ? t('前沿投放') : selected.kind === 'equipment' ? t('装备') : t('待部署')}</small><${IconButton} name="close" label=${t('取消选择')} onClick=${() => { selected = null; highlight(); setPacket({ ...packet }); }}/></div>`}
+      ${room?.status === 'complete' && html`<div class="finish-banner"><h2><${Icon} name="crown"/> ${room.players.find(p => p.id === room.champion)?.name}</h2><p>${t('最终胜者')}</p></div>`}
+      <section class="inventory" aria-label=${t('备战区')} ref=${benchHost} hidden=${focusedId !== me?.id}>
         <div class="bench">${bench.slice(pageIndex * 12, pageIndex * 12 + 12).map((piece, slot) => html`<div class="bench-slot" data-slot=${slot} key=${piece.uid}>
           <${Card} piece=${piece} card=${cards.get(piece.id) || (gameData.items[piece.id] && { ...gameData.items[piece.id], kind: 'equipment' })} bench=${true} count=${piece.count} disabled=${!deployable} active=${selected?.uid === piece.uid} onClick=${() => { if (selected?.kind === 'equipment' && piece.kind === 'operator') equipTarget(piece, selected); else { choose(piece, piece.kind); openDetail(piece); } }}/>
         </div>`)}</div>
-        ${pages > 1 && html`<div class="bench-pages"><${IconButton} name="chevronLeft" label="上一页备战区" disabled=${pageIndex === 0} onClick=${() => setBenchPage(pageIndex - 1)}/><span>${pageIndex + 1}/${pages}</span><${IconButton} name="chevronRight" label="下一页备战区" disabled=${pageIndex === pages - 1} onClick=${() => setBenchPage(pageIndex + 1)}/></div>`}
+        ${pages > 1 && html`<div class="bench-pages"><${IconButton} name="chevronLeft" label=${t('上一页备战区')} disabled=${pageIndex === 0} onClick=${() => setBenchPage(pageIndex - 1)}/><span>${pageIndex + 1}/${pages}</span><${IconButton} name="chevronRight" label=${t('下一页备战区')} disabled=${pageIndex === pages - 1} onClick=${() => setBenchPage(pageIndex + 1)}/></div>`}
       </section>
-      ${bracket && html`<aside class="bracket"><h3>淘汰赛 · ${room.round ? ['4 进 2','2 进 1'][room.round - 1] : '等待开局'}</h3>
-        ${room.duels.map(d => html`<button class=${`duel-row ${duel?.id === d.id ? 'active' : ''}`} onClick=${() => send('watch', { id: d.id })}>${d.players.map(id => { const p = room.players.find(p => p.id === id); return html`<span class=${d.winner === id ? 'winner' : ''}>${p.name}<b>${d.winner === id ? '胜' : p.hp}</b></span>`; })}</button>`)}
-        ${room.history.length > 0 && html`<h3 style="margin-top:14px">已结束</h3>`}${room.history.map(entry => html`<div class="duel-row"><span>第 ${entry.round} 轮 <b class="winner">${room.players.find(p => p.id === entry.winner)?.name}</b></span><small>${entry.reason} · ${clock(entry.time)}</small></div>`)}</aside>`}
+      ${bracket && html`<aside class="bracket"><h3>${t('淘汰赛 ·')} ${room.round ? [t('4 进 2'),t('2 进 1')][room.round - 1] : t('等待开局')}</h3>
+        ${room.duels.map(d => html`<button class=${`duel-row ${duel?.id === d.id ? 'active' : ''}`} onClick=${() => send('watch', { id: d.id })}>${d.players.map(id => { const p = room.players.find(p => p.id === id); return html`<span class=${d.winner === id ? 'winner' : ''}>${p.name}<b>${d.winner === id ? t('胜') : p.hp}</b></span>`; })}</button>`)}
+        ${room.history.length > 0 && html`<h3 style="margin-top:14px">${t('已结束')}</h3>`}${room.history.map(entry => html`<div class="duel-row"><span>${t('第 {round} 轮', { round: entry.round })} <b class="winner">${room.players.find(p => p.id === entry.winner)?.name}</b></span><small>${entry.reason} · ${clock(entry.time)}</small></div>`)}</aside>`}
     </section>
     <${ShopBar} priv=${nativePriv} editable=${editable} collapsed=${shopFolded} onCollapse=${setShopFolded} allowFreeze=${false}
       reward=${me?.role==='defend'&&!rewardLater?me?.rewardOffer:null} onReward=${index=>send('reward',{index})} onRewardLater=${()=>setRewardLater(true)}
-      levelReason=${!editable ? '当前不能升级' : me?.upgrade?.reason} onLevel=${() => send('upgrade')} onRefresh=${() => send('refresh')} onRefuse=${showError}
+      levelReason=${!editable ? t('当前不能升级') : me?.upgrade?.reason} onLevel=${() => send('upgrade')} onRefresh=${() => send('refresh')} onRefuse=${showError}
       onBuy=${i=>{const offer=roleOffers[i];send('buy',{kind:offer.kind,index:offer.index});}}
       onDetail=${(id, kind) => { const [group,index] = kind.split(':'); const offer=me?.rewardOffer&&!rewardLater?{kind:'reward'}:kind==='chess'||kind==='item'?roleOffers.find(o=>o.id===id):{kind:group,index:Number(index)};setDetail({id,shop:offer}); }} onDetailClose=${() => setDetail(null)}
-      income=${html`<span class="income">每${me?.incomeInterval || 2}秒 +1 · 上限100</span><small class="upgrade-status" role="status">${me?.upgrade?.cooldown ? `${me.upgrade.cooldown}秒` : me?.upgrade?.required > me?.upgrade?.deployed ? `部署 ${me.upgrade.deployed}/${me.upgrade.required}` : ''}</small>`}
+      income=${html`<span class="income">${t('每')}${me?.incomeInterval || 2}${t('秒 +1 · 上限100')}</span><small class="upgrade-status" role="status">${me?.upgrade?.cooldown ? t('{cooldown}秒', { cooldown: me.upgrade.cooldown }) : me?.upgrade?.required > me?.upgrade?.deployed ? t('部署 {deployed}/{required}', { deployed: me.upgrade.deployed, required: me.upgrade.required }) : ''}</small>`}
       renderOffers=${me?.role==='attack'?({ armed: nativeArmed, tapCard }) => roleOffers.map(({ kind, id, index }, i) => {
-        const reason = !editable ? '当前只能查看' : (cards.get(id)?.price || 0) > me?.coins ? '资金不足' : null;
+        const reason = !editable ? t('当前只能查看') : (cards.get(id)?.price || 0) > me?.coins ? t('资金不足') : null;
         const slot = nativePriv.shop.slots[i], key = kind === 'equipment' ? 'i' : 'c';
         return html`<${VersusShopCard} key=${`${kind}:${index}:${id}`} card=${cards.get(id)} kind=${kind} index=${index} priv=${nativePriv}
           reason=${reason} armed=${nativeArmed === armKey(key,i,slot)} image=${image(cards.get(id))} onTap=${() => tapCard(key,i,slot,`${kind}:${index}`,reason,() => send('buy',{kind,index}))}/>`;
       }):null}/>
     ${toast && html`<div class="toast" role="alert">${toast}</div>`}
-    ${me?.rewardOffer && rewardLater && html`<button class="versus-reward-pill" onClick=${() => setRewardLater(false)}><${Icon} name="gift"/>晋升奖励 · 免费选一名</button>`}
+    ${me?.rewardOffer && rewardLater && html`<button class="versus-reward-pill" onClick=${() => setRewardLater(false)}><${Icon} name="gift"/>${t('晋升奖励 · 免费选一名')}</button>`}
     ${replacement && html`<${EquipReplaceDialog} request=${replacement} getItem=${id => gameData.items[id]} onCancel=${() => setReplacement(null)} onConfirm=${replaceIndex => { send('equip', { uid: replacement.targetUid, itemUid: replacement.item.uid, replaceIndex }); setReplacement(null); }}/>`}
-    ${resultOpen && resultPlayers.length > 0 && html`<div class="overlay"><section class="modal versus-result" role="dialog" aria-modal="true" aria-labelledby="versus-result-title"><div class="modal-head"><div><small>对抗模式（测试）</small><h2 id="versus-result-title">${room.status === 'complete' ? '对抗结算' : settled.winner === me.id ? '本场胜利 · 晋级' : '本场落败'}</h2></div><${IconButton} name="close" label="关闭对抗结算" onClick=${() => setResultOpen(false)}/></div>
-      <div class="result-roster">${resultPlayers.map(p => html`<article class=${`result-player ${p.id === me.id ? 'self' : ''}`}><header><b>${p.placement === 1 ? '冠军' : p.placement ? `${p.placement === 2 ? '' : '并列'}第 ${p.placement} 名` : '晋级'}</b><span>${p.name}${p.id === me.id ? ' · 你' : ''}</span></header><div class="result-lineup">${p.lineup.map(o => html`<img src=${image(cards.get(o.id))} title=${cards.get(o.id)?.name} alt=${cards.get(o.id)?.name}/>` )}</div>
-        <dl>${[['剩余生命',p.hp],['击倒敌人',p.stats.kills],['投放怪物',p.stats.launched],['漏怪数量',p.stats.leaks],['晋升次数',p.stats.merges],['消耗金币',p.stats.spent]].map(([label,value]) => html`<div><dt>${label}</dt><dd>${value}</dd></div>`)}</dl>
-        ${(p.defense||[]).map((leg,i)=>html`<p class="room-caption">第${i+1}轮防守：漏怪 ${leg.leaks} · 坚守 ${clock(leg.heldSeconds)} · 击杀价值 ${leg.killValue}</p>`)}
+    ${resultOpen && resultPlayers.length > 0 && html`<div class="overlay"><section class="modal versus-result" role="dialog" aria-modal="true" aria-labelledby="versus-result-title"><div class="modal-head"><div><small>${t('对抗模式（测试）')}</small><h2 id="versus-result-title">${room.status === 'complete' ? t('对抗结算') : settled.winner === me.id ? t('本场胜利 · 晋级') : t('本场落败')}</h2></div><${IconButton} name="close" label=${t('关闭对抗结算')} onClick=${() => setResultOpen(false)}/></div>
+      <div class="result-roster">${resultPlayers.map(p => html`<article class=${`result-player ${p.id === me.id ? 'self' : ''}`}><header><b>${p.placement === 1 ? t('冠军') : p.placement ? t('{0}第 {placement} 名', { 0: p.placement === 2 ? '' : t('并列'), placement: p.placement }) : t('晋级')}</b><span>${p.name}${p.id === me.id ? t(' · 你') : ''}</span></header><div class="result-lineup">${p.lineup.map(o => html`<img src=${image(cards.get(o.id))} title=${cards.get(o.id)?.name} alt=${cards.get(o.id)?.name}/>` )}</div>
+        <dl>${[[t('剩余生命'),p.hp],[t('击倒敌人'),p.stats.kills],[t('投放怪物'),p.stats.launched],[t('漏怪数量'),p.stats.leaks],[t('晋升次数'),p.stats.merges],[t('消耗金币'),p.stats.spent]].map(([label,value]) => html`<div><dt>${label}</dt><dd>${value}</dd></div>`)}</dl>
+        ${(p.defense||[]).map((leg,i)=>html`<p class="room-caption">${t('第')}${i+1}${t('轮防守：漏怪 {leaks} · 坚守', { leaks: leg.leaks })} ${clock(leg.heldSeconds)} ${t('· 击杀价值 {killValue}', { killValue: leg.killValue })}</p>`)}
         <div class="result-bonds">${resultBonds(Object.entries(p.bonds || {}).map(([bondId,b])=>({ ...b,bondId })),id=>gameData.bonds[id]).map(b=>html`<span key=${b.bondId} data-bond=${b.bondId}><img src=${assets.bondIcon(b.bondId)} alt=""/>${gameData.bonds[b.bondId]?.name}${b.hideLayers ? '' : ` ${b.layers ?? 0}`}</span>`)}</div></article>`)}</div>
-      <div class="form-actions"><button onClick=${() => setResultOpen(false)}>${room.status === 'complete' ? '查看战场' : my?.eliminated ? '继续观战' : '继续对抗'}</button>
-        ${room.status === 'complete' || my?.eliminated ? html`<button class="primary" aria-label=${room.status === 'complete' ? '结算返回房间' : '结算退出观战'} onClick=${() => room.status === 'complete' ? restart() : embedded ? send('leave') : restart()}>${room.status === 'complete' ? '返回房间' : '退出观战'}</button>` : null}</div>
+      <div class="form-actions"><button onClick=${() => setResultOpen(false)}>${room.status === 'complete' ? t('查看战场') : my?.eliminated ? t('继续观战') : t('继续对抗')}</button>
+        ${room.status === 'complete' || my?.eliminated ? html`<button class="primary" aria-label=${room.status === 'complete' ? t('结算返回房间') : t('结算退出观战')} onClick=${() => room.status === 'complete' ? restart() : embedded ? send('leave') : restart()}>${room.status === 'complete' ? t('返回房间') : t('退出观战')}</button>` : null}</div>
     </section></div>`}
     ${!embedded && (!room || room.status === 'lobby' && roster) && html`<div class="overlay"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="entry-title">
-      <div class="modal-head"><h2 id="entry-title">${room ? '对抗房间' : '卫戍对抗'}</h2>${room ? html`<${IconButton} name="close" label="关闭房间设置" onClick=${() => setRoster(false)}/>` : html`<span class="build-tag">本地验收版</span>`}</div>
-      ${!room ? html`<label class="form-label">博士昵称<input maxLength="16" value=${name} onInput=${e => setName(e.target.value)}/></label>
-        <button class="primary" style="width:100%" disabled=${!connected || !name.trim()} onClick=${create}><${Icon} name="plus"/>创建 4 人房间</button>
-        <div class="join-row"><input aria-label="房间代码" placeholder="房间代码" maxLength="4" value=${code} onInput=${e => setCode(e.target.value)}/><button disabled=${!connected || !name.trim() || code.length !== 4} onClick=${join}>加入房间</button></div>` : html`<div class="room-caption">房间<strong>${room.code}</strong>${room.players.length}/4 <${IconButton} name="copy" label="复制房间代码" onClick=${() => navigator.clipboard.writeText(room.code).catch(() => showError(room.code))}/></div>
-        <div class="room-roster">${Array.from({ length: 4 }, (_, i) => { const p = room.players[i]; return html`<div class=${`seat ${p ? '' : 'empty'}`}><${Icon} name=${p?.bot ? 'robot' : 'user'}/><span>${p?.name || '等待加入'}${p?.id === me.id ? ' · 你' : ''}</span></div>`; })}</div>
-        ${room.host === me.id ? html`<div class="form-actions"><button onClick=${() => { send('start', { fillAI: true }); setRoster(false); }} class="primary"><${Icon} name="robot"/>补齐 AI 并开始</button><button disabled=${room.players.length < 4} onClick=${() => { send('start'); setRoster(false); }}><${Icon} name="play"/>开始</button></div>` : html`<p class="room-caption">等待房主开始</p>`}`}
+      <div class="modal-head"><h2 id="entry-title">${room ? t('对抗房间') : t('卫戍对抗')}</h2>${room ? html`<${IconButton} name="close" label=${t('关闭房间设置')} onClick=${() => setRoster(false)}/>` : html`<span class="build-tag">${t('本地验收版')}</span>`}</div>
+      ${!room ? html`<label class="form-label">${t('博士昵称')}<input maxLength="16" value=${name} onInput=${e => setName(e.target.value)}/></label>
+        <button class="primary" style="width:100%" disabled=${!connected || !name.trim()} onClick=${create}><${Icon} name="plus"/>${t('创建 4 人房间')}</button>
+        <div class="join-row"><input aria-label=${t('房间代码')} placeholder=${t('房间代码')} maxLength="4" value=${code} onInput=${e => setCode(e.target.value)}/><button disabled=${!connected || !name.trim() || code.length !== 4} onClick=${join}>${t('加入房间')}</button></div>` : html`<div class="room-caption">${t('房间')}<strong>${room.code}</strong>${room.players.length}/4 <${IconButton} name="copy" label=${t('复制房间代码')} onClick=${() => navigator.clipboard.writeText(room.code).catch(() => showError(room.code))}/></div>
+        <div class="room-roster">${Array.from({ length: 4 }, (_, i) => { const p = room.players[i]; return html`<div class=${`seat ${p ? '' : 'empty'}`}><${Icon} name=${p?.bot ? 'robot' : 'user'}/><span>${p?.name || t('等待加入')}${p?.id === me.id ? t(' · 你') : ''}</span></div>`; })}</div>
+        ${room.host === me.id ? html`<div class="form-actions"><button onClick=${() => { send('start', { fillAI: true }); setRoster(false); }} class="primary"><${Icon} name="robot"/>${t('补齐 AI 并开始')}</button><button disabled=${room.players.length < 4} onClick=${() => { send('start'); setRoster(false); }}><${Icon} name="play"/>${t('开始')}</button></div>` : html`<p class="room-caption">${t('等待房主开始')}</p>`}`}
     </section></div>`}
     <div class="gm__hud">
-    <div class="gm__bonds" ref=${bondsHost} aria-label="当前战场盟约">
+    <div class="gm__bonds" ref=${bondsHost} aria-label=${t('当前战场盟约')}>
       <button type="button" class="bonds-toggle" aria-expanded=${!bondsCollapsed} aria-controls="versus-bond-strip"
-        aria-label=${bondsCollapsed ? '展开盟约' : '收起盟约'} title=${bondsCollapsed ? '展开盟约' : '收起盟约'}
+        aria-label=${bondsCollapsed ? t('展开盟约') : t('收起盟约')} title=${bondsCollapsed ? t('展开盟约') : t('收起盟约')}
         onKeyDown=${e => { if (e.key === ' ') e.stopPropagation(); }}
         onClick=${() => { if (!bondsCollapsed) setBondOpen(null); setBondsCollapsed(!bondsCollapsed); }}>
-        <${Icon} name=${bondsCollapsed ? 'chevronRight' : 'chevronLeft'}/><span>盟约</span>
+        <${Icon} name=${bondsCollapsed ? 'chevronRight' : 'chevronLeft'}/><span>${t('盟约')}</span>
       </button>
       <div id="versus-bond-strip" class="gm__bond-list" hidden=${bondsCollapsed || !bondEntries.length}>
         <${BondStrip} bonds=${bondEntries} max=${bondEntries.length} openId=${bondOpen} onOpen=${id => setBondOpen(bondOpen === id ? null : id)}/>
@@ -526,13 +527,13 @@ function App() {
       name=${detailCard.name} busy=${!deployable} actions=${{ retreat: detailCard.kind === 'operator' && detailPiece.row != null, sell: sellValue }}
       onRetreat=${() => send('withdraw', { uid: detailPiece.uid })} onSell=${() => { send('sell', { uid: detailPiece.uid, id: detailPiece.id, kind: detailCard.kind }); setDetail(null); }}/>`}
     </div>
-    ${confirm && html`<div class="overlay"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><div class="modal-head"><h2 id="confirm-title">确认认输？</h2></div><p class="confirm-text">本场将判负，之后进入观战。</p><div class="form-actions"><button onClick=${() => setConfirm(false)}>取消</button><button class="danger" onClick=${() => { send('forfeit'); setConfirm(false); }}>确认认输</button></div></section></div>`}
+    ${confirm && html`<div class="overlay"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title"><div class="modal-head"><h2 id="confirm-title">${t('确认认输？')}</h2></div><p class="confirm-text">${t('本场将判负，之后进入观战。')}</p><div class="form-actions"><button onClick=${() => setConfirm(false)}>${t('取消')}</button><button class="danger" onClick=${() => { send('forfeit'); setConfirm(false); }}>${t('确认认输')}</button></div></section></div>`}
     ${bondOpen && html`<${BondPopup} bondId=${bondOpen} record=${versusBondRecord(gameData.bonds[bondOpen])} entry=${fieldBonds[bondOpen]} priv=${focusedId === me?.id && me?.role === 'defend' ? nativePriv : { board: packet.field.meta.units.filter(u => u.kind === 'op').map(u => ({ id: u.defId, kind: 'chess', items: u.items || [] })), hand: [] }} banned=${room?.bannedChess || []} onClose=${() => setBondOpen(null)} />`}
-    <${Modal} open=${rulesOpen} title="对抗模式规则（测试版）" micro="4 人攻守淘汰赛" class="versus-rules" width="min(520px, 94vw)" trapFocus=${true} onClose=${() => setRulesOpen(false)}
-      actions=${html`<button aria-label="关闭规则" onClick=${() => setRulesOpen(false)}><${Icon} name="close"/>关闭</button>`}>
+    <${Modal} open=${rulesOpen} title=${t('对抗模式规则（测试版）')} micro=${t('4 人攻守淘汰赛')} class="versus-rules" width="min(520px, 94vw)" trapFocus=${true} onClose=${() => setRulesOpen(false)}
+      actions=${html`<button aria-label=${t('关闭规则')} onClick=${() => setRulesOpen(false)}><${Icon} name="close"/>${t('关闭')}</button>`}>
       <dl>${VERSUS_RULES.map(([title, text]) => html`<div key=${title}><dt>${title}</dt><dd>${text}</dd></div>`)}</dl>
     <//>
-    ${room?.status === 'info' && !embedded && html`<div class="overlay"><section class="modal"><h2>对抗模式（测试） · 确认信息</h2><p class="confirm-text">战场：${gameData.stages[room.stageId]?.name}<br/>本局禁用盟约：${room.disabledBonds.map(id => gameData.bonds[id]?.name).join('、')}</p><button class="primary" disabled=${my?.infoReady} onClick=${() => send('infoReady')}>${my?.infoReady ? '已就绪' : '准备就绪'} · ${room.countdown}</button></section></div>`}
+    ${room?.status === 'info' && !embedded && html`<div class="overlay"><section class="modal"><h2>${t('对抗模式（测试） · 确认信息')}</h2><p class="confirm-text">${t('战场：')}${gameData.stages[room.stageId]?.name}<br/>${t('本局禁用盟约：')}${room.disabledBonds.map(id => gameData.bonds[id]?.name).join('、')}</p><button class="primary" disabled=${my?.infoReady} onClick=${() => send('infoReady')}>${my?.infoReady ? t('已就绪') : t('准备就绪')} · ${room.countdown}</button></section></div>`}
     ${facing && view && html`<${FacingWheel} view=${{ tileScreen: (...args) => { const pos = view.tileScreen(...args); return pos && { ...pos, s: Math.min(54, pos.s) }; }, highlightTiles: (...args) => view.highlightTiles(...args), stripesUnder: (...args) => view.stripesUnder?.(...args) }} row=${facing.row} col=${facing.col} grid=${gameData.chess[facing.id]?.rangeGrid} name=${cards.get(facing.id)?.name} onCommit=${dir => { send(facing.action, { uid: facing.uid, ...(['deploy', 'move'].includes(facing.action) ? { row: facing.row, col: facing.col } : {}), dir: boardDir(dir, me.side === 'R') }); changeFacing(null); }} onCancel=${() => changeFacing(null)}/>`}
   </main>`;
 }
@@ -548,5 +549,5 @@ window.__versusState = () => latest;
 bootVersus().catch(error => {
   console.error('[versus] boot failed', error);
   const root = document.getElementById('app');
-  if (root) root.textContent = '对抗战场加载失败，请检查网络后刷新。';
+  if (root) root.textContent = t('对抗战场加载失败，请检查网络后刷新。');
 });

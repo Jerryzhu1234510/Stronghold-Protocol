@@ -1,9 +1,10 @@
 // server/sim/snapshot.js — compact serialization for clients (DESIGN §8.2).
 //
-// b.snap  = { fieldId, t, units: [[id, x, y, hp, maxHp, sp, spMax, flags, anim]], dp, killed, total }
+// b.snap  = { fieldId, t, units: [[id, x, y, hp, maxHp, sp, spMax, flags, anim]], dp, killed, total, resolved }
 //   (hp of a countdown summon — unit.countdown, content/tokens.js startCountdown — is maxHp × the share of its life left)
 // UnitInfo = { id, kind, side, ownerId, defId, name, tier, golden, spine, avatar, x, y, facing, dir, maxHp, motion?, boss?, uid?,
-//   form?, skillIndex?, moduleId?, items?, standInFor?, diy? }  (standInFor = the replaced operator's charId of a 补位
+//   form?, skillIndex?, ammoSkill?, moduleId?, items?, standInFor?, diy? }  (ammoSkill = an ally whose skill is an ammo
+//   magazine: the HP bar shows its rounds as cells, b.snap `ammo`; standInFor = the replaced operator's charId of a 补位
 //   stand-in; diy = a 自选 piece's pick { charId, skillIndex, uniEquipId } — defId is its slot, spine / avatar the operator's;
 //   form = the unit's current model form — an enemy's, content/enemies/helpers.js setForm:
 //   掠海漂移体 'crawl', 暴鸰 'bombed', 转译基底·α's forms …; a 傀儡师 fighting as its 替身 'doll', professions.js — a view built
@@ -48,6 +49,8 @@ export function unitInfo(u) {
     uid: u.uid ?? undefined,
     // DESIGN §16: the equipped skill's index (the renderer / audio pick that skill's Spine clip and sound)
     skillIndex: u.side === 'ally' && Number.isInteger(d.skill?.index) ? d.skill.index : undefined,
+    // an ally whose skill is an ammo magazine: the renderer shows it as the segmented bar under the HP bar (b.snap `ammo`) and
+    // draws no sustained skill aura for it — known from the unit's first appearance, before any snapshot or skill event
     ammoSkill: u.side === 'ally' && u.skill?.kind === 'ammo' ? true : undefined,
     // DESIGN §16: an elite ally's equipped module (uniEquipId | 'none'; display only — a teammate's unit in a shared
     // field shows its owner's module in the detail card)
@@ -60,6 +63,10 @@ export function unitInfo(u) {
     standInFor: u.side === 'ally' && u.kind === 'op' && typeof d.standInFor === 'string' ? d.standInFor : undefined,
     // 自选: the pick of a DIY slot's piece (the detail card composes its record, shared/diy.js diyRecord)
     diy: u.side === 'ally' && u.kind === 'op' && d.diyFor && d.loadout?.diy ? { ...d.loadout.diy } : undefined,
+    // 0.2.2: an ally operator's potential below 6 and its 练度 tier (a teammate's unit shows ITS owner's numbers; absent:
+    // full potential, no 练度 — a stand-in, a prototype 自选 pick)
+    potential: u.side === 'ally' && u.kind === 'op' && d.loadout?.potentialIsDefault === false ? d.loadout.potential : undefined,
+    cultivate: u.side === 'ally' && u.kind === 'op' && Number.isInteger(u.cultivate) ? u.cultivate : undefined,
   };
 }
 
@@ -80,7 +87,7 @@ export function flagsOf(u) {
   if (f.invulnerable) bits |= UF.INVULN;
   if (f.cold) bits |= UF.COLD;
   if (f.sleep) bits |= UF.SLEEP;
-  if (u.isFlying || f.liftoff) bits |= UF.FLYING;
+  if (u.motion === 'FLY') bits |= UF.FLYING;
   return bits;
 }
 
@@ -119,17 +126,15 @@ export function unitTuple(u, t) {
   return [u.id, r2(u.x), r2(u.y), hp, maxHp, r1(sp), spMax, flagsOf(u), animOf(u, t)];
 }
 
-/** Units included in a snapshot: deployed & visible, plus recently dead ones (DIE animation). */
-export function snapshotUnits(units, t) {
-  const out = [];
-  for (const u of units) {
-    if (u.hidden) continue;
-    if (u.alive && u.deployed) out.push(unitTuple(u, t));
-    else if (!u.alive && t - u.deathAt < DIE_ANIM_TIME && u.deathAt > -Infinity) out.push(unitTuple(u, t));
-  }
-  return out;
-}
-
+/**
+ * The optional HUD readouts of b.snap (events.js snapshot(); each only for a living, deployed, visible unit and only
+ * when it has one). They ride beside the 9-field tuples — the tuple, and the SP fraction the ammo skill still puts in
+ * it, stay as they are.
+ *
+ * `ammoView(u)` = `[rounds left, rounds in the magazine]` of a running ammo skill (whole numbers; the magazine is the
+ * activation's real total — extra bullets and refills included — that unitTuple's SP fraction runs on): the segmented
+ * yellow bar under the HP bar (隐现's S2 holds 14 rounds, skill_table skchr_inside_2 `attack@trigger_time`).
+ */
 export function ammoView(u) {
   const sk = u.skill;
   if (u.side !== 'ally' || !sk || !sk.active || sk.kind !== 'ammo') return null;
@@ -140,6 +145,19 @@ export function ammoView(u) {
 /** 琳琅诗怀雅's skill purse: zero is a balance; no purse is null. Display only. */
 export function coinView(u) {
   const n = u.mem?.coins, max = u.skill?.bb?.sp;
+  if (u.side !== 'ally' || !Number.isSafeInteger(n) || n < 0 || !Number.isSafeInteger(max) || max < 1) return null;
+  return [Math.min(n, max), max];
+}
+
+/**
+ * `mysticView(u)` = `[stored attack energies, the trait's maximum]` of a 秘术师 (professions.js installMystic keeps the
+ * count in `trait.stored` — the trait's storeEnergy adds one when the attack finds no target, releaseEnergy empties the
+ * lot into the next one — and the cap is `profile.storeMax`: the trait's 最多3个, 4 for 深靛's MSC-X module, TUNE
+ * mystic): the number under the HP bar. Zero is a count. Kits that keep a store of their own (维伊's 转置能量, 黑键's
+ * elite energies) replace `storeEnergy` and never set `trait.stored`: no row. Display only.
+ */
+export function mysticView(u) {
+  const n = u.trait?.stored, max = u.profile?.storeMax;
   if (u.side !== 'ally' || !Number.isSafeInteger(n) || n < 0 || !Number.isSafeInteger(max) || max < 1) return null;
   return [Math.min(n, max), max];
 }
@@ -167,3 +185,34 @@ export function negView(u) {
   return v > 0 ? Math.min(1, Math.max(0.01, r2(v))) : null;
 }
 
+/**
+ * `layerView(u)` = the hit-negating 护盾 layers a unit holds (the sum of its buffs' shieldHits — 泥岩's 沃土予身), null
+ * without any. Display only: render/vfx/talentfx.js shows the official effect of that many layers (mudrok_buff_03 / 02 /
+ * 01_start).
+ */
+export function layerView(u) {
+  let n = 0;
+  for (const b of u.buffs) if (b.shieldHits > 0) n += b.shieldHits;
+  return n >= 1 ? Math.min(999, Math.floor(n)) : null;
+}
+
+/**
+ * `chargeView(u)` = `[charges stored, the skill's maximum]` of an ally whose skill stores charges (maxCharges > 1, 卡涅利安):
+ * the 技能充能 the official sand armour shows (render/vfx/skillfx.js, the `[eff_cond]` buffs). Display only.
+ */
+export function chargeView(u) {
+  const sk = u.skill;
+  if (u.side !== 'ally' || !sk || sk.noSkill || !(sk.maxCharges > 1)) return null;
+  return [Math.max(0, Math.min(sk.maxCharges, Math.floor(sk.charges || 0))), sk.maxCharges];
+}
+
+/** Units included in a snapshot: deployed & visible, plus recently dead ones (DIE animation). */
+export function snapshotUnits(units, t) {
+  const out = [];
+  for (const u of units) {
+    if (u.hidden) continue;
+    if (u.alive && u.deployed) out.push(unitTuple(u, t));
+    else if (!u.alive && t - u.deathAt < DIE_ANIM_TIME && u.deathAt > -Infinity) out.push(unitTuple(u, t));
+  }
+  return out;
+}

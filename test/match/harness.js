@@ -7,7 +7,10 @@
 // seed, matchNo (the room's match number: part of the battleId prefix), data (default: real data/*.json),
 // fake (true → test/match/fakeBattle.js as BattleClass), script (FakeBattle.script), registry, instant (virtual
 // scheduler runs battles synchronously; default true), timerScale, battleContent, botRehearsal (default 0),
-// botSliceMs (bot rehearsal slice budget; default: unbounded in virtual time).
+// botSliceMs (bot rehearsal slice budget; default: unbounded in virtual time), aiPicksLast (the room option
+// AI 队友最后选择: the drafts order every human seat before every AI seat), hostId / botRehearsalDelegate /
+// botRehearsalDelegateMs (the delegated bot rehearsal, DESIGN §14: test/match/rehearsal-delegate.test.js),
+// cs / vs / requireCs (a gameplay-plugin room: host rehearsal stays off).
 // Combat mode: clientCombat (default false here: the legacy server-run mode most suites were written for; production
 // defaults to client-side combat, DESIGN §14). With clientCombat: true every human gets a scripted browser
 // (test/match/simClient.js SimClient: h.clients) unless clients: false; pace 'instant' | 'paced', perPlayer
@@ -55,7 +58,7 @@ export function makeMatch(o = {}) {
     if (o.script) FakeBattle.script = o.script;
   }
   h.m = new Match({
-    roomCode: 'TEST', extensions: o.extensions, mode, gameMode: o.gameMode, capacity: o.capacity, difficulty, seats, spectators: o.spectators, seed: o.seed ?? 1, matchNo: o.matchNo, data: o.data ?? DATA, log,
+    roomCode: 'TEST', mode, difficulty, extensions: o.extensions, capacity: o.capacity, gameMode: o.gameMode, mapVersion: o.mapVersion, seats, spectators: o.spectators, seed: o.seed ?? 1, matchNo: o.matchNo, data: o.data ?? DATA, log,
     send: (id, msg) => {
       for (const fn of h.onSend) fn(id, msg);
       if (msg.t === 'b.snap' || msg.t === 'b.ev') { h.frames++; if (!captureFrames) return true; }
@@ -65,9 +68,6 @@ export function makeMatch(o = {}) {
     },
     broadcast: (msg) => { for (const fn of h.onBroadcast) fn(msg); checkFrame(msg); h.bc.push(msg); },
     onEnd: (s) => { h.ended = s; h.endedCount++; },
-    onAfk: o.onAfk,
-    // Many engine fixtures intentionally let all human decisions time out.
-    afkKickEnabled: o.afkKickEnabled ?? false,
     scheduler: sched,
     registry: o.registry,
     BattleClass: o.fake ? FakeBattle : undefined,
@@ -80,6 +80,18 @@ export function makeMatch(o = {}) {
     clientCombat: o.clientCombat ?? false,
     verify: o.verify ?? 'off',
     headlessSliceMs: o.headlessSliceMs,
+    aiPicksLast: o.aiPicksLast,
+    // a bot prep's layout rehearsal delegated to the room's host (DESIGN §14; test/match/rehearsal-delegate.test.js):
+    // `hostId` is the executor a task is sent to, `botRehearsalDelegateMs` its answer window
+    hostId: o.hostId,
+    botRehearsalDelegate: o.botRehearsalDelegate,
+    botRehearsalDelegateMs: o.botRehearsalDelegateMs,
+    // a gameplay-plugin room (DESIGN §32.6): host rehearsal stays off there (match/rehearsal.js requireCs)
+    cs: o.cs,
+    vs: o.vs,
+    requireCs: o.requireCs,
+    onAfk: o.onAfk,
+    afkKickEnabled: o.afkKickEnabled,
   });
   const m = h.m;
   if (m.clientCombat && o.clients !== false) {
@@ -125,6 +137,7 @@ export function makeMatch(o = {}) {
           if (idx != null) m.handle(ps.playerId, { t: 'g.choice', idx });
         }
         if (ready && m.phase === 'PREP' && ps.alive && !ps.ready) {
+          if (ps.personalChoice) m.handle(ps.playerId, { t: 'g.choice', idx: 0, choiceId: ps.personalChoice.id });
           if (!ps.tempEmpty) ps.resolveTemp();
           m.handle(ps.playerId, { t: 'g.ready', ready: true });
         }
@@ -164,8 +177,8 @@ function legacyInvariants(m) {
   for (const ps of m.players.values()) {
     assert.ok(Number.isInteger(ps.funds) && ps.funds >= 0, `${ps.playerId} funds ${ps.funds}`);
     assert.ok(Number.isInteger(ps.pendingFunds) && ps.pendingFunds >= 0, `${ps.playerId} pending ${ps.pendingFunds}`);
-    assert.equal(ps.hand.length, GEO.HAND_SIZE);
-    assert.equal(ps.temp.length, GEO.TEMP_SIZE);
+    assert.equal(ps.hand.length, m.isClone ? 18 : GEO.HAND_SIZE);
+    assert.ok(ps.temp.length >= m.gd.tempSize, 'official overflow queue retains every pending piece');
     assert.ok(ps.shop.level >= 1 && ps.shop.level <= m.gd.maxShopLevel);
     assert.ok(ps.shop.upgradePrice >= 0);
     assert.ok(ps.shop.freeRefreshes >= 0);
@@ -240,7 +253,7 @@ export function give(m, ps, chessId, where = 'hand', at = null) {
   const rec = m.gd.chess(chessId);
   assert.ok(rec, `unknown chess ${chessId}`);
   const base = m.gd.baseIdOf(chessId);
-  const taken = ps.poolOf(base).take(base, rec.isGolden ? m.gd.goldenCopies : 1);
+  const taken = m.pool.take(base, rec.isGolden ? m.gd.goldenCopies : 1);
   const piece = ps.newPiece('chess', chessId, { poolCopies: taken });
   if (where === 'board') {
     ps.board.set(tileKey(at[0], at[1]), piece);

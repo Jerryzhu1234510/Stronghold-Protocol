@@ -19,10 +19,20 @@ import { parseObj } from './obj.js';
 export const THREE_URL = '/vendor/three.module.js';
 
 let threePromise = null;
+let threeFailures = 0;
 /** Dynamic import of the vendored three.js ESM build (browser only); null when unavailable. */
 export function loadThree(url = THREE_URL) {
   if (!threePromise) {
-    threePromise = import(/* @vite-ignore */ url).then((m) => (m && m.WebGLRenderer ? m : null), () => null);
+    // Browsers also cache failed module imports. Two bounded retry URLs permit a transient download failure to
+    // recover; clearing only our promise would keep receiving that same cached rejection without another request.
+    if (threeFailures >= 3) return Promise.resolve(null);
+    const source = new URL(url, import.meta.url);
+    if (threeFailures) source.searchParams.set('sp-retry', String(threeFailures));
+    const pending = import(/* @vite-ignore */ source.href).then((m) => (m && m.WebGLRenderer ? m : null), () => null).then((m) => {
+      if (!m && threePromise === pending) { threePromise = null; threeFailures++; }
+      return m;
+    });
+    threePromise = pending;
   }
   return threePromise;
 }
@@ -59,12 +69,14 @@ export const PACK_IMAGES = Object.freeze({
   waterN: ['map/water', '[ucp]TX_water_normal'],
   caustics: ['map/water', 'TX_Caustics256'],
   noise: ['map/water', 'T_noise_clouds_01'],
+  platform: ['mesh/trap_110', 'TX_trap_1106_achplat'],
 });
 
 export const PACK_MESHES = Object.freeze({
   crate: ['mesh/s_common_box_01', 'pCube2'],
   blower: ['mesh/s_wind_device', 'S_wild_wind_device'],
   bgPlane: ['mesh/s_background_common', 'pPlane1'],
+  platform: ['mesh/trap_110', 'trap_1106_achplat'],
 });
 
 /** The official gate / objective boxes: prefab node → pack slot (meshes resolved through map/fx/prefab.json). */
@@ -98,7 +110,7 @@ async function fetchJson(url) {
  */
 export function loadBoardPack(assets) {
   if (cached) return cached;
-  cached = (async () => {
+  const pending = (async () => {
     if (!assets || typeof assets.local !== 'function' || typeof assets.localUrl !== 'function' || typeof assets.image !== 'function') return null;
     const manifest = await assets.local().catch(() => null);
     if (!isObj(manifest)) return null;
@@ -109,16 +121,17 @@ export function loadBoardPack(assets) {
     await Promise.all(Object.entries(PACK_IMAGES).map(async ([k, [g, n]]) => {
       const u = url(g, n);
       if (!u) return;
-      const img = await assets.image(u).catch(() => null);
+      const img = await assets.image(u, { retry: true }).catch(() => null);
       if (img && (img.width || img.naturalWidth) > 0) images[k] = img;
     }));
     if (!images.D) return null;
     const dir = dUrl.replace(/\/[^/]*$/, '');
-    const [tiles, theme, fxMats, fxPrefab] = await Promise.all([
+    const [tiles, theme, fxMats, fxPrefab, trapMats] = await Promise.all([
       fetchJson(`${dir}/tiles.json`),
       (async () => { const u = url('map/autochess', 'materials'); return u ? fetchJson(u) : null; })(),
       (async () => { const u = url('map/fx', 'materials'); return u ? fetchJson(u) : null; })(),
       (async () => { const u = url('map/fx', 'prefab'); return u ? fetchJson(u) : null; })(),
+      (async () => { const u = url('mesh/trap_110', 'materials'); return u ? fetchJson(u) : null; })(),
     ]);
     const meshes = { gate: {} };
     await Promise.all(Object.entries(PACK_MESHES).map(async ([k, [g, n]]) => {
@@ -139,10 +152,16 @@ export function loadBoardPack(assets) {
     return {
       key: `${dUrl}#${tiles?.version || 0}`,
       images, meshes, tiles: isObj(tiles) ? tiles : null, uv: resolveUvTable(isObj(tiles) ? tiles : null),
-      materials: { theme: isObj(theme) ? theme : null, fx: isObj(fxMats) ? fxMats : null },
+      materials: { theme: isObj(theme) ? theme : null, fx: isObj(fxMats) ? fxMats : null, trap: isObj(trapMats) ? trapMats : null },
     };
-  })().catch((err) => { console.warn('[board3d] art load failed', err); return null; });
-  return cached;
+  })().catch((err) => { console.warn('[board3d] art load failed', err); return null; }).then((pack) => {
+    // A timeout / failed atlas is not proof the host lacks 3D art. A later mount or visibility change may retry.
+    // An older attempt finishing after reset must not discard a newer cached request.
+    if (!pack && cached === pending) cached = null;
+    return pack;
+  });
+  cached = pending;
+  return pending;
 }
 
 /** Manifest group of a stage's official scene, and of the textures the scenes share. */
@@ -186,7 +205,28 @@ export function parseSceneChunks(doc, buf) {
  * @param {{ kind?: string }|null} info scene.json materials[name]
  */
 export function sceneMaterialKey(chunk, info) {
-  return `${chunk?.material}|${info?.kind === 'water' ? '' : chunk?.lightmap}`;
+  return `${chunk?.material}|${info?.kind === 'water' || isSceneWater(info, chunk?.material) ? '' : chunk?.lightmap}`;
+}
+
+/** Surface water, not the DynamicWaterTile platform decal (both were extracted as kind: water). */
+export function isSceneWater(info, name = '') {
+  if (!isObj(info)) return false;
+  const shader = typeof info.shader === 'string' ? info.shader : '';
+  if (shader.endsWith('/DynamicWaterTile')) return false;
+  return shader.endsWith('/StylizedWater') || /_water\d*$/i.test(name);
+}
+
+/**
+ * Pick this map's water record by shader, then by name, never by a theme-specific name. An explicit surface pick
+ * wins. [ASSUMED] With several surfaces the board takes the first StylizedWater; each scene mesh keeps its own
+ * record (including water2). No surface record → null, so the caller restores the procedural water defaults.
+ */
+export function sceneWaterInfo(doc) {
+  const mats = isObj(doc?.materials) ? doc.materials : {};
+  const name = doc?.waterMaterial;
+  if (typeof name === 'string' && isSceneWater(mats[name], name)) return mats[name];
+  const entries = Object.entries(mats).filter(([n, info]) => isSceneWater(info, n));
+  return entries.find(([, info]) => typeof info.shader === 'string' && info.shader.endsWith('/StylizedWater'))?.[1] || entries[0]?.[1] || null;
 }
 
 /**
@@ -272,8 +312,9 @@ export async function sceneListed(assets, stageId) {
 }
 
 /**
- * Load a stage's official scene (scene.json + scene.bin + lightmap pages + albedo textures). A missing texture or
- * lightmap page only drops that map; a missing or malformed scene gives null (→ the procedural board).
+ * Load a stage's official scene (scene.json + scene.bin + lightmap pages + the materials' albedo (`images.tex`) and
+ * normal / metallic-gloss (`images.data`) textures + the reflection atlas `images.env`). A missing texture, lightmap
+ * page or atlas only drops that map; a missing or malformed scene gives null (→ the procedural board).
  * @returns {Promise<object|null>}
  */
 export function loadScenePack(assets, stageId) {
@@ -293,15 +334,19 @@ export function loadScenePack(assets, stageId) {
       return i && (i.width || i.naturalWidth) > 0 ? i : null;
     };
     const mats = isObj(doc.materials) ? doc.materials : {};
-    const names = [...new Set(Object.values(mats).map((m) => (isObj(m) && typeof m.map === 'string' ? m.map : null)).filter(Boolean))];
+    const namesOf = (...keys) => [...new Set(Object.values(mats).flatMap((m) => keys.map((k) => (isObj(m) && typeof m[k] === 'string' ? m[k] : null))).filter(Boolean))];
+    const names = namesOf('map'), dataNames = namesOf('normalMap', 'glossMap');
     const pages = Math.max(0, Math.min(16, doc.lightmaps | 0));
-    const [texList, lm] = await Promise.all([
+    const [texList, dataList, lm, env] = await Promise.all([
       Promise.all(names.map((n) => img(url(SCENE_TEX_GROUP, n)))),
+      Promise.all(dataNames.map((n) => img(url(SCENE_TEX_GROUP, n)))),
       Promise.all(Array.from({ length: pages }, (_, i) => img(url(group, `lm${i}`)))),
+      isObj(doc.env) ? img(url(group, 'env')) : null,
     ]);
-    const tex = {};
+    const tex = {}, data = {};
     names.forEach((n, i) => { if (texList[i]) tex[n] = texList[i]; });
-    return { key: `${url(group, 'scene')}#${doc.binBytes | 0}`, stage: stageId, doc, chunks, groups: sceneGroupRects(chunks), images: { tex, lm } };
+    dataNames.forEach((n, i) => { if (dataList[i]) data[n] = dataList[i]; });
+    return { key: `${url(group, 'scene')}#${doc.binBytes | 0}`, stage: stageId, doc, chunks, groups: sceneGroupRects(chunks), images: { tex, data, lm, env } };
   })().catch((err) => { console.warn('[board3d] scene load failed', err); return null; }).then((pack) => {
     if (!pack && sceneCache.get(stageId) === pending) sceneCache.delete(stageId);
     return pack;
@@ -310,5 +355,5 @@ export function loadScenePack(assets, stageId) {
   return pending;
 }
 
-/** Forget the cached pack (tests / hot reload). */
-export function resetBoardPack() { cached = null; threePromise = null; sceneCache.clear(); }
+/** Forget the cached pack and the three.js import attempt (tests / hot reload). */
+export function resetBoardPack() { cached = null; threePromise = null; threeFailures = 0; sceneCache.clear(); }

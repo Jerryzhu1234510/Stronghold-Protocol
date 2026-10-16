@@ -29,13 +29,11 @@ function prepPair(pub, myId) {
 export function prepCamera(pub, myId, priv = null) {
   const normal = { kind: 'prep', opts: { rect: { ...GEO.NORMAL_RECT }, side: 'L' } };
   const r = pub?.round;
-  if (!Number.isInteger(r) || r <= 0) return normal;
-  // The current-round server assignment is authoritative, even if public boss metadata is missing.
-  const assigned = priv?.playerId === myId && priv.alive !== false ? priv.prepField : null;
-  if (assigned?.kind === 'bossPrep' && assigned.round === r && (assigned.side === 'L' || assigned.side === 'R')) {
+  const assigned = priv?.prepField;
+  if (priv?.playerId === myId && priv.alive !== false && assigned?.kind === 'bossPrep'
+    && assigned.round === r && (assigned.side === 'L' || assigned.side === 'R'))
     return { kind: 'bossPrep', opts: { side: assigned.side } };
-  }
-  if (!(r === pub.bossRound || r === pub.hiddenRound)) return normal;
+  if (!Number.isInteger(r) || r <= 0 || !(r === pub.bossRound || r === pub.hiddenRound)) return normal;
   const idx = prepPair(pub, myId).indexOf(myId);
   if (idx < 0) return normal; // eliminated / unknown: no board of its own on the boss field
   return { kind: 'bossPrep', opts: { side: idx % 2 === 1 ? 'R' : 'L' } };
@@ -97,8 +95,25 @@ export function foldCamera(s) {
   if (!s || !s.ownPrep || s.pen || s.busy) return null;
   const want = prepCameraFor(s.pub, s.myId, !!s.folded, s.priv);
   const cur = s.current;
-  if (cur && cur.kind === want.kind && cur.opts?.side === want.opts.side && (cur.opts?.shop !== false) === want.opts.shop) return null;
+  if (cur && cur.kind === want.kind && (cur.opts?.shop !== false) === want.opts.shop
+    && (cur.opts?.side || 'L') === want.opts.side) return null;
   return want;
+}
+
+/**
+ * Whether a deploy interaction temporarily folds the shop and zooms the own prep board (public issue #602 "部署干员、
+ * 装备时棋盘缩放": the official client folds the shop and takes the shop-collapsed prep camera while a piece is picked
+ * up for 部署干员 / 装备 / repositioning, and while the dropped piece's direction wheel is open, then gives the
+ * player's own shop state back — the board was too small to aim on phones): the viewer edits the own prep board
+ * (`ownPrep`, `editable`), the camera is not over the enemy pen (`pen`), and a piece is dragged (`drag`) or the
+ * direction wheel of a legal drop is open (`facing`; equipment and summons skip the wheel and restore on drop).
+ * Unlike a hand-made fold this one never waits for the interaction to end — it zooms as the piece is picked up. It is
+ * derived from the interaction state and never writes the player's 收起/展开 state.
+ * @param {{ ownPrep?: boolean, editable?: boolean, pen?: boolean, drag?: boolean, facing?: boolean }|null|undefined} o
+ * @returns {boolean}
+ */
+export function deployFoldsShop(o) {
+  return !!o && !!o.ownPrep && !!o.editable && !o.pen && (!!o.drag || !!o.facing);
 }
 
 /**

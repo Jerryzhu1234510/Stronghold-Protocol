@@ -6,13 +6,15 @@
 //   * DEBUG → the console logger's debug level;
 //   * SP_ASSET_INDEX=0 (or the `assetIndex: false` option) → no content-hash index: plain asset URLs, size-mtime ETags
 //     (assetIndex.js); the index of the default public/ persists in .cache/asset-hashes.json;
-//   * the served directories (public/, data/, shared/ and the content packs' packs/ of this repository unless the
-//     options name others), and which startServer() options are handed on to net.js Network and lobby.js Lobby.
+//   * the served directories (public/, data/, shared/, the content packs' packs/ and the plugins' plugins/ of this
+//     repository unless the options name others), and which startServer() options are handed on to net.js Network and
+//     lobby.js Lobby.
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** Repository root. */
+export const DEFAULT_BIND_HOST = '::';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 export const noopLog = { info() {}, warn() {}, error() {}, debug() {} };
@@ -30,21 +32,35 @@ const LOBBY_OPTION_KEYS = ['lobbyGraceMs', 'maxRooms', 'maxRoomsPerAddr', 'maxMa
  */
 export function listenAddress(opts) {
   const port = opts.port ?? (process.env.PORT != null && process.env.PORT !== '' ? Number(process.env.PORT) : 3000);
-  const host = opts.host ?? process.env.HOST ?? '0.0.0.0';
+  const host = (opts.host || process.env.HOST) || DEFAULT_BIND_HOST;
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new RangeError(`invalid PORT ${port}`);
   return { port, host };
 }
 
 /**
- * The directories the static server reads (packsDir: the pack folders, server/packs.js).
- * @param {{ publicDir?: string, dataDir?: string, sharedDir?: string, packsDir?: string }} opts
+ * The hosts to try, in order, for a bind. Only the default is retried: a host with IPv6 switched off refuses `::`
+ * with EAFNOSUPPORT / EADDRNOTAVAIL / EINVAL, and falling back to IPv4 beats not booting. An explicit HOST is literal.
+ * @param {string} host a host out of listenAddress()
+ * @returns {string[]}
+ */
+export function bindCandidates(host) {
+  return host === DEFAULT_BIND_HOST ? [DEFAULT_BIND_HOST, '0.0.0.0'] : [host];
+}
+
+/**
+ * The directories the static server reads (packsDir: the pack folders, pluginsDir: the plugin folders —
+ * server/plugins/registry.js; default: the plugins/ folder beside packsDir, so a server given its own packs folder —
+ * a test — never reads this checkout's plugins).
+ * @param {{ publicDir?: string, dataDir?: string, sharedDir?: string, packsDir?: string, pluginsDir?: string }} opts
  */
 export function serveDirs(opts) {
+  const packsDir = opts.packsDir || path.join(ROOT, 'packs');
   return {
     publicDir: opts.publicDir || path.join(ROOT, 'public'),
     dataDir: opts.dataDir || path.join(ROOT, 'data'),
     sharedDir: opts.sharedDir || path.join(ROOT, 'shared'),
-    packsDir: opts.packsDir || path.join(ROOT, 'packs'),
+    packsDir,
+    pluginsDir: opts.pluginsDir || path.join(path.dirname(path.resolve(packsDir)), 'plugins'),
   };
 }
 

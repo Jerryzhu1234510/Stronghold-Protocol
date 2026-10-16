@@ -308,7 +308,7 @@ describe('#7 audit: every stage × deploy field (server = official level data = 
     assert.match(src, /fieldTile\(st\.deployField, row, col\)/, 'the fallback maps its board tiles through fieldTile in prep');
     assert.match(src, /st\.deployField = kind === 'bossPrep' \? \(o\?\.side === 'R' \? 'bossR' : 'bossL'\) : 'normal'/);
     const game = readFileSync(join(ROOT, 'public/js/screens/game.js'), 'utf8');
-    assert.match(game, /const prepCam = prepCamera\(pub, myId, priv\);/, 'the match screen uses the server-assigned boss prep camera too');
+    assert.match(game, /const prepCam = prepCamera\(pub, myId, priv\);/, 'the match screen hands the fallback view the boss prep camera too');
   });
 
   test('deployFieldOf follows the boss-round pairing (alive players by seat, two by two)', () => {

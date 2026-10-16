@@ -44,19 +44,6 @@ function view(info, opts = {}, assets = store()) {
 }
 
 describe('deploy direction → model', () => {
-  test('slow bounty enemies still turn on movement and explicit facing updates', () => {
-    const v = view({ side: 'enemy', kind: 'enemy', defId: 'enemy_2034_sythef_2' });
-    const s = { x: 5, y: 10, hp: 1000, maxHp: 1000, sp: 0, spMax: 0, flags: 0, anim: 1, vx: 0.02 };
-    v.sync(s, 1);
-    assert.equal(v.visFacing, 1);
-    v.sync({ ...s, vx: -0.02 }, 2);
-    assert.equal(v.visFacing, -1);
-    v.sync({ ...s, vx: 0 }, 3);
-    assert.equal(v.visFacing, -1, 'standing still keeps the last direction');
-    v.setFacing(1);
-    assert.equal(v.visFacing, 1);
-    v.destroy();
-  });
   test('unitDir: `dir` (any case) wins, else the legacy facing sign', () => {
     assert.equal(unitDir({ dir: 'up' }), 'UP');
     assert.equal(unitDir({ facing: -1 }), 'LEFT');

@@ -2,14 +2,14 @@ import { roomExtensions } from './roomExtensions.js';
 
 // HP-only challenge increases, cosmetic Mods and the original DIY lineup keep
 // normal scoring. Consumers must not halve the final award again.
-export function matchTrophyPolicy({ gameMode = 'normal', extensions } = {}) {
+export function matchTrophyPolicy({ gameMode = 'normal', extensions = undefined } = {}) {
   const values = roomExtensions.normalize(extensions);
   const custom = gameMode === 'clone' || roomExtensions.catalog()
     .some(rule => rule.affectsTrophies !== false && values[rule.id] !== rule.default);
   return { version: 1, custom, multiplier: custom ? 0.5 : 1, reason: custom ? 'custom' : 'normal' };
 }
 
-export function resultTrophies(gd, { roundsPassed, hiddenCleared = false, cleared = false,
+export function resultTrophies(gd, { roundsPassed = 0, hiddenCleared = false, cleared = false,
   capacity = 4, policy = matchTrophyPolicy() } = {}) {
   const table = gd.config.trophies;
   if (!table || gd.isSolo) return 0;

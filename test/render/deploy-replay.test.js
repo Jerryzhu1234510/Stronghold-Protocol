@@ -195,7 +195,7 @@ test('render/app.js wiring: landings in setPrep, the replay schedule, its timers
   // enterPrepMode and destroy
   assert.match(src, /function replayDeploys\(uids, gap = DEPLOY_REPLAY_MS\) \{\s*if \(destroyed \|\| mode !== 'prep'/);
   assert.match(src, /if \(destroyed \|\| mode !== 'prep'\) return;\s*const \{ uid, v \} = queue\[i\+\+\];\s*if \(!globalThis\.document\?\.hidden && views\.get\('p:' \+ uid\) === v\) landPiece\(v, 'round'\);\s*if \(i < queue\.length\) replayTimer = setTimeout\(turn, step\);/);
-  const body = (name) => src.slice(src.indexOf(name), src.indexOf(name) + 1500);
+  const body = (name) => src.slice(src.indexOf(name), src.indexOf(name) + 900);
   assert.match(body('function enterBattle(meta)'), /cancelReplay\(\);/);
   assert.match(body('function enterPrepMode()'), /cancelReplay\(\);/);
   assert.match(body('    destroy() {\n      if (destroyed) return;'), /cancelReplay\(\);/);

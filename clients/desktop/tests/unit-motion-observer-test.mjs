@@ -8,7 +8,7 @@ const here=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(here,'
 const {instrument,transformResponse}=require('../unit-motion-observer.cjs'),{installUnitMotion}=require('../unit-motion.cjs');
 const {parse}=require(path.join(root,'node_modules/acorn'));
 let checks=0;const eq=(a,b,msg)=>{assert.equal(a,b,msg);checks++;};const ok=(a,msg)=>{assert.ok(a,msg);checks++;};
-const renderPath=path.join(root,'public/js/render/units.js'),source=await fs.readFile(renderPath,'utf8'),observed=instrument(source,'/js/render/units.js');ok(observed!==source);parse(observed,{ecmaVersion:'latest',sourceType:'module'});checks++;
+const renderPath=path.join(root,'public/js/render/units.js'),source=await fs.readFile(renderPath,'utf8'),observed=instrument(source,'/js/render/units.js');const shipped=source.includes('__SPDesktopUnitMotion');ok(shipped?observed===source:observed!==source);parse(observed,{ecmaVersion:'latest',sourceType:'module'});checks++;
 const rewritten=observed.replace(/from\s+(['"])([^'"]+)\1/g,(_all,_q,specifier)=>'from '+JSON.stringify(new URL(specifier,pathToFileURL(renderPath)).href));
 const {installFakePixi,fakeViewCtx}=await import(pathToFileURL(path.join(root,'test/render/fakepixi.js')));
 const {presetCamera}=await import(pathToFileURL(path.join(root,'public/js/render/projection.js')));
@@ -28,7 +28,7 @@ try{
   api.configure({motion:{target:'own',bounceHeight:.3,bounceHz:1,spinRps:1,flipX:true,flipY:true}});v.update(1/60,cam,.5);eq(v.body.scale.x,2,'actual source body X flip relative to negative baseline');eq(v.body.scale.y,-3,'actual source body Y flip');ok(v.body.y<0&&v.body.rotation>3,'flip jump and turn combine');eq(v.dir,'LEFT','actual flip leaves facing');
   const x=v.root.position.x,y=v.root.position.y;api.configure({motion:null});eq(v.body.y,0,'disable restores real body');eq(v.body.rotation,0,'disable restores real rotation');eq(v.body.scale.x,-2,'disable restores actual negative scale X');eq(v.body.scale.y,3,'disable restores actual scale Y');eq(v.root.position.x,x,'disable leaves root x');eq(v.root.position.y,y,'disable leaves root y');api.configure({motion:{target:'own',bounceHeight:0.2,bounceHz:1,spinRps:0.5,flipX:true}});v.update(1/60,cam,0.5);v.destroy();eq(api.status.views,0,'actual destroy releases registration');eq(v.body.scale.x,-2,'destroy restores actual negative scale');
  }
- const fallback=await fs.readFile(path.join(root,'public/js/ui/fallbackField.js'),'utf8'),changed=instrument(fallback,'/_build/test/js/ui/fallbackField.js');ok(fallback!==changed);const ast=parse(changed,{ecmaVersion:'latest',sourceType:'module'});checks++;
+ const fallback=await fs.readFile(path.join(root,'public/js/ui/fallbackField.js'),'utf8'),changed=instrument(fallback,'/_build/test/js/ui/fallbackField.js');ok(fallback.includes('__SPDesktopUnitMotion')?fallback===changed:fallback!==changed);const ast=parse(changed,{ecmaVersion:'latest',sourceType:'module'});checks++;
  const nodes=[];
  // Explicit traversal avoids depending on a browser renderer; execute the actual transformed component functions.
  function visit(n){if(!n||typeof n!=='object')return;if(n.type==='FunctionDeclaration'&&['Piece','BattleUnit'].includes(n.id?.name))nodes.push(n);for(const value of Object.values(n)){if(Array.isArray(value)){for(const c of value)visit(c);}else if(value&&typeof value==='object')visit(value);}}visit(ast);eq(nodes.length,2,'two exact DOM-art components');
@@ -40,7 +40,7 @@ try{
  api.dropDomView({contains:el=>elements.includes(el)});ok(elements.every(el=>el.animations.every(a=>a.cancelled)),'fallback destroy restores art animations');ok(elements.every(el=>el.style.scale==='-1 2'),'fallback destroy restores original art scale');
  eq(instrument(source+'\n','/js/render/units.js'),source+'\n','unknown source hash untouched');eq(instrument(source,'/js/render/other.js'),source,'unrelated source untouched');
  const request=new Request('https://weishuxieyiwangye.cn:8443/_build/test/js/render/units.js'),response=new Response(source,{headers:{'content-type':'text/javascript','etag':'old','content-length':'123','content-security-policy':"default-src 'none'"}}),result=await transformResponse(request,response);
- eq(await result.text(),observed,'response contains exact observer source');eq(result.headers.get('etag'),null,'old ETag removed');eq(result.headers.get('content-length'),null,'old length removed');eq(result.headers.get('content-type'),'text/javascript','MIME retained');eq(result.headers.get('content-security-policy'),"default-src 'none'",'CSP retained');
+ eq(await result.text(),observed,'response contains exact observer source');eq(result.headers.get('etag'),shipped?'old':null,'old ETag removed');eq(result.headers.get('content-length'),shipped?'123':null,'old length removed');eq(result.headers.get('content-type'),'text/javascript','MIME retained');eq(result.headers.get('content-security-policy'),"default-src 'none'",'CSP retained');
  const peer=new Request('https://weishuxieyi.icu/js/render/units.js');eq(await transformResponse(peer,response),response,'other server untouched');
  // The fixed gateway freezes imports into a build namespace. Regenerate that known variant from canonical AST,
  // then require exact preservation of every frozen import while using the variant's own insertion offsets.
@@ -50,7 +50,7 @@ try{
   let frozen=original;for(const edit of edits.sort((a,b)=>b.start-a.start))frozen=frozen.slice(0,edit.start)+edit.text+frozen.slice(edit.end);
   let live;try{live=await fs.readFile(path.join(root,'test-output',snapshot),'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
   if(live!==undefined)eq(frozen,live,'reconstructed source exactly matches downloaded production snapshot');
-  const output=instrument(frozen,'/_build/local026-test-1'+url);ok(output!==frozen,'known production hash instrumented');
+  const output=instrument(frozen,'/_build/local026-test-1'+url);ok(shipped?output===frozen:output!==frozen,'verified source hooks do not require runtime mutation');
   const frozenImports=parse(frozen,{ecmaVersion:'latest',sourceType:'module'}).body.filter(n=>n.source).map(n=>n.source.value);
   const preservedImports=parse(output,{ecmaVersion:'latest',sourceType:'module'}).body.filter(n=>n.source).map(n=>n.source.value);
   assert.deepEqual(preservedImports,frozenImports,'frozen imports retained exactly');checks++;

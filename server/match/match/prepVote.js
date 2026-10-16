@@ -1,5 +1,6 @@
 import { PHASE, ERR } from '../../../shared/constants.js';
 import { OK, fail } from './common.js';
+import { t } from '../../../shared/i18n.js';
 
 // Votes use a fixed electorate: reconnects retain their ballot, disconnects cannot lower the quorum.
 export class MatchPrepVote {
@@ -18,9 +19,9 @@ export class MatchPrepVote {
     if (this.phase !== PHASE.PREP || !this.prepExtension?.enabled || this.sched.now() >= this.deadline) return fail(ERR.WRONG_PHASE);
     if (!this.prepVoter(ps)) return fail(ERR.NOT_IN_ROOM);
     if (seconds !== 30 && seconds !== 60) return fail(ERR.BAD_MSG);
-    if (ps.ready) return fail(ERR.BAD_TARGET, '请先取消准备，再发起加时');
+    if (ps.ready) return fail(ERR.BAD_TARGET, t('请先取消准备，再发起加时'));
     const ext = this.prepExtension;
-    if (ext.used) return fail(ERR.BAD_TARGET, '本回合已发起过加时投票');
+    if (ext.used) return fail(ERR.BAD_TARGET, t('本回合已发起过加时投票'));
     const eligible = this.order.filter(p => this.prepVoter(p)).map(p => p.playerId);
     const id = `prep-${this.round}-${++this._prepVoteSeq}`;
     const deadline = Math.min(this.deadline, this.sched.now() + this.scaled(30000));
@@ -43,7 +44,7 @@ export class MatchPrepVote {
     }
     if (!this.prepVoter(ps) || !vote.eligible.includes(ps.playerId)) return fail(ERR.NOT_IN_ROOM);
     if (typeof agree !== 'boolean') return fail(ERR.BAD_MSG);
-    if (Object.hasOwn(vote.votes, ps.playerId)) return fail(ERR.BAD_TARGET, '已经投票，不能重复投票');
+    if (Object.hasOwn(vote.votes, ps.playerId)) return fail(ERR.BAD_TARGET, t('已经投票，不能重复投票'));
     vote.votes[ps.playerId] = agree;
     this.evaluatePrepVote();
     this.markPublic();
@@ -87,7 +88,7 @@ export class MatchPrepVote {
     if (!this.prepVoter(ps)) return fail(ERR.NOT_IN_ROOM);
     const ext = this.prepExtension;
     if (!ext) return fail(ERR.WRONG_PHASE);
-    if (ext.reminder && this.sched.now() < ext.reminder.until) return fail(ERR.RATE, '准备提醒每 5 秒可发送一次');
+    if (ext.reminder && this.sched.now() < ext.reminder.until) return fail(ERR.RATE, t('准备提醒每 5 秒可发送一次'));
     ext.reminder = { playerId: ps.playerId, until: this.sched.now() + this.scaled(5000) };
     this.cancel(this._prepReminderTimer);
     this._prepReminderTimer = this.later(this.scaled(5000), () => {

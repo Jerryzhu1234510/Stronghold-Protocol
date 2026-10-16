@@ -21,6 +21,7 @@ before(async () => {
   await mkdir(path.join(root, '.cache'), { recursive: true });
   fixture = await mkdtemp(path.join(root, '.cache/hot-test-'));
   for (const dir of ['server', 'shared', 'data']) await cp(path.join(root, dir), path.join(fixture, dir), { recursive: true });
+  await cp(path.join(root,'tools/assets'),path.join(fixture,'tools/assets'),{recursive:true});
   await mkdir(path.join(fixture, 'public/js'), { recursive: true });
   await writeFile(path.join(fixture, 'public/index.html'), '<html><head></head><body>NEW RELEASE<script type="module" src="/js/probe.js"></script></body></html>');
   for (const entry of ['game.html', 'versus.html', 'training.html']) await cp(path.join(fixture, 'public/index.html'), path.join(fixture, 'public', entry));
@@ -107,8 +108,10 @@ test('pinned game tables reuse HTTP cache validators without caching live APIs o
       assert.equal((await cached.arrayBuffer()).byteLength, 0);
       assert.equal(cached.headers.get('cache-control'), 'public, max-age=31536000, immutable');
     }
-    const dev = await fetch(origin + '/data/chess.json', { method: 'HEAD' });
-    assert.equal(dev.headers.get('cache-control'), 'no-cache');
+    const dev = await fetch(origin + '/data/chess.json', { method: 'HEAD', redirect: 'manual' });
+    assert.equal(dev.status, 302);
+    assert.equal(dev.headers.get('cache-control'), 'no-store');
+    assert.equal(dev.headers.get('location'), `/_build/${gateway.active.id}/data/chess.json`);
     const health = await fetch(pinned + '/healthz');
     assert.equal(health.headers.get('cache-control'), 'no-store');
     await health.arrayBuffer();
@@ -152,10 +155,10 @@ test('a running match survives activation, reconnects to its old worker, then fi
     assert.equal(latest.build, next.id);
     const oldPage = await fetch(origin + `/_build/${old}/`).then(r => r.text());
     const newPage = await fetch(origin + '/').then(r => r.text());
-    assert.match(oldPage, new RegExp(`__SP_GENERATION="${old}"`));
+    assert.match(oldPage, new RegExp(`/_build/${old}/__generation.js`));
     assert.match(newPage, /NEW RELEASE/);
     const module = await fetch(origin + `/_build/${next.id}/js/probe.js`).then(r => r.text());
-    assert.match(module, new RegExp(`/_build/${next.id}/shared/constants.js`));
+    assert.match(module, /from '\.\.\/\.\.\/shared\/constants.js'/, 'v0.3 modules retain verified bytes');
     const prior = gateway.active.id;
     await assert.rejects(gateway.activate(path.join(fixture, 'missing')));
     await assert.rejects(gateway.activate(fixture), /独立目录/);

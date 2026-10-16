@@ -2,7 +2,6 @@
 // Installed on FxSystem.prototype by ./system.js (a method container: never instantiated; `this` is the effect system).
 
 import { SHOT_HEIGHT } from './camera.js';
-import { visibleEffectPoint } from './visibility.js';
 
 // 炎佑 fire jet: real s a jet burns past its tick's `dur` (the next 1 game s tick re-aims and extends it before it fades:
 // one continuous stream), its fade-out, the most jets at once, the fire colours
@@ -16,7 +15,6 @@ export class FxBeams {
     this.beamList.push({ a, b, color, t: 0, dur, jitter, chain, seed: Math.random() * 1000 });
     if (this.beamList.length > 40) this.beamList.shift();
     const q = this._bodyPt(b, SHOT_HEIGHT.aim, this._g);
-    if (!visibleEffectPoint(q, this.ctx.screenSize?.())) return;
     this.particle('flare', q.x, q.y, { tint: color, life: 0.16, s0: (q.s / 128) * 0.7, s1: (q.s / 128) * 0.25, a0: 1, a1: 0, rot: Math.random() });
   }
 
@@ -31,10 +29,6 @@ export class FxBeams {
       // a chain bounce leaves the previous target where the shot met it (its chest), a beam leaves the shooter's hands
       this._bodyPt(bm.a, bm.chain ? SHOT_HEIGHT.aim : SHOT_HEIGHT.launch, p); const px = p.x, py = p.y, s = p.s;
       this._bodyPt(bm.b, SHOT_HEIGHT.aim, q);
-      if (!visibleEffectPoint(p, this.ctx.screenSize?.()) || !visibleEffectPoint(q, this.ctx.screenSize?.())) {
-        this.beamList[w++] = bm;
-        continue;
-      }
       const k = 1 - bm.t / bm.dur;
       const segs = 7;
       // soft glow, coloured body, white-hot core

@@ -38,12 +38,13 @@ for (const stage of Object.values(DATA.stages).filter(s => s.active !== false)) 
       for (const b of [direct, replica]) {
         b.step();
         const tokenId = elite ? 'char_613_acmedc' : 'char_605_cmedic';
-        const expected = [[10, 10], [10, 2], [3, 10]];
+        const expected = [[10, 10], [10, 2], [3, 18]];
         for (const [i, ps] of opts.players.entries()) {
           const medic = b.allyUnits.find(u => u.ownerId === ps.playerId && u.defId === tokenId);
           assert.ok(medic, `${ps.playerId}: match-wide Touch grant survives the JSON spec`);
           assert.deepEqual([medic.tileR, medic.tileC], expected[i]);
-          assert.equal(medic.dir, 'RIGHT');
+          const marker = (b.stage.raw?.mapChars || b.stage.mapChars).find(m => m.key === tokenId && m.pos[0] === medic.tileR && m.pos[1] === medic.tileC);
+          assert.equal(medic.dir, marker.dir || 'RIGHT', 'respect the official stage marker facing');
           assert.ok(b.onOwnBoard(b.getPlayer(ps.playerId), medic.tileR, medic.tileC));
         }
         assert.equal(b.errorCount, 0);

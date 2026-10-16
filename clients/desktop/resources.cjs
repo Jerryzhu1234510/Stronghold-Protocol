@@ -75,7 +75,8 @@ class ResourceLibrary{
     if(path==='/data/resource-cache.json'){
       try{const snap=await this.manifest(build);return new Response(request.method==='HEAD'?null:snap.raw,{headers:{'content-type':'application/json','content-length':String(snap.raw.length),'cache-control':'no-store'}})}catch{return fallback()}
     }
-    if(!/^\/(assets|fonts|media)\//.test(path))return fallback();
+    // fonts.css is a versioned code stylesheet; its font files are bundled.
+    if(!/^\/(assets|fonts|media)\//.test(path)||path.endsWith('.css'))return fallback();
     try{
       const snap=await this.manifest(build),key=path.startsWith('/media/')?(snap.aliases?.[path]||snap.aliasFolded.get(path.toLowerCase())):path;
       let expected=key&&(snap.entries[key]||snap.folded.get(key.toLowerCase()));

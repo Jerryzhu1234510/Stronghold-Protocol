@@ -42,8 +42,8 @@
 //   35 s; every OTHER friendly operator of the field holding 起飞 (flag `liftoff`: 蒂比's skills, 司霆惊蛰) gets 阻挡半径倍率
 //   +attack@block_radius_scale while it runs (refreshed every 0.3 s; 同名效果取最高 — nothing on a unit whose own 倍率 is at
 //   least as high) [ASSUMED: the whole field — the aura has no range selector and the text says 所有].
-// - S2 保护性拒止 (MANUAL, ACTIVE_RANGE on y-11; enemy-first, injured-ally fallback):
-//   10 发弹药, range y-11, ATK +atk. Each attack fires a 医疗单元: at an enemy she can select (air units too; the ones she
+// - S2 保护性拒止 (MANUAL, data ACTIVE_RANGE on its y-11 — the owner's rule for a heal skill: an injured ally inside the y-11;
+//   10 发弹药): range y-11, ATK +atk. Each attack fires a 医疗单元: at an enemy she can select (air units too; the ones she
 //   blocks first, then the usual order) — on impact every enemy within 1.5 of it takes attack@atk_scale × ATK true damage
 //   (普通伤害: an attack hit, not 溅射) and attack@sluggish s 停顿, then every ally within 1.5 (summons too: the heal range
 //   selector has no profession mask; no 孤立 one) is healed for attack@heal_scale × ATK; with no enemy to select, at the
@@ -76,6 +76,7 @@
 import { num, talentBb, skillRec, batMod, up } from '../shared/tier1.js';
 import { releaseSkillSummon } from '../../tokens.js';
 import { COLS } from '../../../constants.js';
+import { hypot } from '../../../detmath.js';
 
 const S1 = 'skchr_kalts2_1';
 const S2 = 'skchr_kalts2_2';
@@ -235,7 +236,7 @@ function startTransport(battle, unit, anchor) {
     }, { owner: unit });
   }
   const from = { x: unit.x, y: unit.y }, to = { x: anchor.x, y: anchor.y };
-  const T = Math.hypot(to.x - from.x, to.y - from.y) / TRANSPORT_SPEED;
+  const T = hypot(to.x - from.x, to.y - from.y) / TRANSPORT_SPEED;
   const f = { t0: battle.time, T, from, to, hit: new Set(), anchor, r: anchor.tileR, c: anchor.tileC, dir: anchor.dir };
   unit.mem.k2flight = f;
   battle.releaseBlocked(unit);
@@ -267,7 +268,8 @@ export default {
         [S1]: { kind: 'duration', mods: { atkPct: num(b1.atk), aspd: num(b1.attack_speed) } },
         [S2]: {
           kind: 'ammo',
-          trigger: { rule: 'ACTIVE_RANGE', grid: s2?.rangeGrid, enemiesOrAllies: true },
+          // The larger active range contains attack targets as well as patients (#406).
+          trigger: { rule: 'ACTIVE_RANGE', grid: s2?.rangeGrid, enemies: true },
           ammo: Math.max(1, Math.floor(num(b2['attack@trigger_time'], 10))),
           mods: { atkPct: num(b2.atk) },
           targeting: s2?.rangeGrid ? { rangeGrid: s2.rangeGrid } : undefined,

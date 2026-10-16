@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { MAX_SPECTATORS } from '../shared/constants.js';
+import { t as translate } from '../shared/i18n.js';
 
 // Ephemeral, release-local room tickets. Never persist account tokens, expose
 // private room codes to non-friends, or move a player without their final click.
@@ -55,31 +56,31 @@ export class FriendRooms {
   async handle(session, msg) {
     this.prune();
     const { lobby: l, ERR, fail, OK } = this;
-    if (l.draining && msg.t !== 'friends.state') return fail(ERR.WRONG_PHASE, '此版本正在退场，请完成旧局后从最新大厅进入');
+    if (l.draining && msg.t !== 'friends.state') return fail(ERR.WRONG_PHASE, translate('此版本正在退场，请完成旧局后从最新大厅进入'));
     let ids;
     try { ids = await this.friends(session); }
     catch (e) { return fail(ERR.WRONG_PHASE, e.message); }
     if (msg.t === 'friends.state') return this.pushState(session, ids);
     if (msg.t === 'friends.send') {
-      if (!ids.has(msg.accountId)) return fail(ERR.BAD_TARGET, '只能向已接受的好友发送');
+      if (!ids.has(msg.accountId)) return fail(ERR.BAD_TARGET, translate('只能向已接受的好友发送'));
       const target = l.registry.byAccountId(msg.accountId);
-      if (!target?.connected) return fail(ERR.BAD_TARGET, '好友不在当前版本大厅，可能离线或正在旧版本对局');
+      if (!target?.connected) return fail(ERR.BAD_TARGET, translate('好友不在当前版本大厅，可能离线或正在旧版本对局'));
       const inviting = msg.kind === 'invite';
       const room = l.roomOf(inviting ? session : target);
-      if (!room || room.mode !== 'coop' || room.matchmaking || (msg.kind !== 'spectate' && room.match)) return fail(ERR.WRONG_PHASE, '当前房间不能加入');
+      if (!room || room.mode !== 'coop' || room.matchmaking || (msg.kind !== 'spectate' && room.match)) return fail(ERR.WRONG_PHASE, translate('当前房间不能加入'));
       if (inviting && !room.seatOf(session.playerId)) return fail(ERR.SPECTATOR);
       const mode = msg.kind === 'spectate' ? 'spectate' : 'join';
       const own = l.roomOf(inviting ? target : session);
-      if (own === room) return fail(ERR.BAD_TARGET, '已在这个房间');
+      if (own === room) return fail(ERR.BAD_TARGET, translate('已在这个房间'));
       const host = l.registry.byId(room.hostId);
-      if (!host?.connected || !host.accountId) return fail(ERR.NOT_HOST, '房主需要在线并登录账号后才能批准申请');
+      if (!host?.connected || !host.accountId) return fail(ERR.NOT_HOST, translate('房主需要在线并登录账号后才能批准申请'));
       if (mode === 'join' && room.freeSeat() < 0) return fail(ERR.ROOM_FULL);
       if (mode === 'spectate' && room.spectators.length >= MAX_SPECTATORS) return fail(ERR.ROOM_FULL);
       const duplicate = [...this.tickets.values()].find(t => t.fromId === session.accountId && t.targetId === msg.accountId && t.kind === msg.kind && this.current(t));
       if (duplicate) return OK;
       if (l.now() - (this.sentAt.get(session.accountId) ?? -Infinity) < 3000
         || [...this.tickets.values()].filter(t => t.fromId === session.accountId || t.toId === (inviting ? target.accountId : host.accountId)).length >= 20
-        || this.tickets.size >= 2000) return fail(ERR.RATE, '请求过多，请稍后再试');
+        || this.tickets.size >= 2000) return fail(ERR.RATE, translate('请求过多，请稍后再试'));
       const t = { id: randomBytes(12).toString('hex'), code: room.code, roomCreatedAt: room.createdAt,
         targetId: msg.accountId, kind: msg.kind, mode, status: 'pending', hostId: host.accountId, friendId: msg.accountId,
         fromId: session.accountId, toId: inviting ? target.accountId : host.accountId,
@@ -88,31 +89,31 @@ export class FriendRooms {
       // An invitation refers to the inviter staying in the room, not its recipient.
       if (inviting) t.friendId = session.accountId;
       this.tickets.set(t.id, t); this.sentAt.set(session.accountId, l.now());
-      this.notify(t.toId, `${session.name}${inviting ? '邀请你加入房间' : mode === 'join' ? '申请加入好友房间' : '申请观战好友房间'}，请打开好友面板处理`);
+      this.notify(t.toId, translate('{name}{1}，请打开好友面板处理', { name: session.name, 1: inviting ? translate('邀请你加入房间') : mode === 'join' ? translate('申请加入好友房间') : translate('申请观战好友房间') }));
       return this.pushState(session, ids);
     }
     const t = this.tickets.get(msg.id);
-    if (!t || !this.current(t)) return fail(ERR.BAD_TARGET, '申请已过期、房间已变化或好友已离开');
+    if (!t || !this.current(t)) return fail(ERR.BAD_TARGET, translate('申请已过期、房间已变化或好友已离开'));
     const otherFriend = t.kind === 'invite' ? t.enterId : t.friendId;
     const relationAccount = t.fromId;
     const stillFriends = await l.accounts.friendIds(relationAccount);
-    if (!stillFriends.includes(otherFriend)) { this.tickets.delete(t.id); return fail(ERR.BAD_TARGET, '好友关系已解除'); }
-    if (!session.connected || this.tickets.get(t.id) !== t || t.expiresAt <= l.now() || !this.current(t)) return fail(ERR.BAD_TARGET, '房间请求已失效');
+    if (!stillFriends.includes(otherFriend)) { this.tickets.delete(t.id); return fail(ERR.BAD_TARGET, translate('好友关系已解除')); }
+    if (!session.connected || this.tickets.get(t.id) !== t || t.expiresAt <= l.now() || !this.current(t)) return fail(ERR.BAD_TARGET, translate('房间请求已失效'));
     if (msg.t === 'friends.decide') {
       if (t.toId !== session.accountId || t.status !== 'pending') return fail(ERR.BAD_TARGET);
-      if (!msg.accept) { this.tickets.delete(t.id); this.notify(t.fromId, '对方已拒绝房间请求'); return this.pushState(session, ids); }
+      if (!msg.accept) { this.tickets.delete(t.id); this.notify(t.fromId, translate('对方已拒绝房间请求')); return this.pushState(session, ids); }
       t.status = 'approved'; t.expiresAt = l.now() + 120000;
-      this.notify(t.enterId, '房间请求已通过，请在好友面板点击进入');
+      this.notify(t.enterId, translate('房间请求已通过，请在好友面板点击进入'));
       return this.pushState(session, ids);
     }
     if (msg.t === 'friends.enter') {
       if (t.enterId !== session.accountId || t.status !== 'approved') return fail(ERR.BAD_TARGET);
       const cur = l.roomOf(session);
-      if (cur?.match) return fail(ERR.ROOM_STARTED, '请先打完当前对局再进入好友房间');
+      if (cur?.match) return fail(ERR.ROOM_STARTED, translate('请先打完当前对局再进入好友房间'));
       // Recheck after the await, and use the normal capacity, spectator and join
       // handlers: two accepted tickets never overfill the last seat.
       const room = this.current(t);
-      if (!room) return fail(ERR.BAD_TARGET, '房间已变化');
+      if (!room) return fail(ERR.BAD_TARGET, translate('房间已变化'));
       const result = t.mode === 'spectate' ? l.spectate(session, { code: room.code }) : l.join(session, { code: room.code });
       if (!result?.error) this.tickets.delete(t.id);
       return result;

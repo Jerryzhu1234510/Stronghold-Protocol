@@ -16,10 +16,11 @@ test('scene JSON and BIN share the immutable resource cache while ordinary JSON 
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, 'scene.json'), '{"version":1}');
   await writeFile(path.join(dir, 'scene.bin'), Buffer.from([1, 2, 3, 4]));
+  await writeFile(path.join(dir, 'device.obj'), 'v 0 0 0\n');
   await writeFile(path.join(root, 'assets/runtime.json'), '{"private":true}');
   const manifest = await buildResourceManifest(root);
   const base = 'https://example.test/_build/compatible/';
-  for (const file of ['scene.json', 'scene.bin']) {
+  for (const file of ['scene.json', 'scene.bin', 'device.obj']) {
     const url = `/assets/local/scene/act2autochess_m01/${file}`;
     assert.ok(manifest.entries[url]);
     assert.match(manifest.entries[url].hash, /^[a-f0-9]{64}$/);

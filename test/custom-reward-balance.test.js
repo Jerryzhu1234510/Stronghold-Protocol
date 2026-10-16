@@ -25,18 +25,18 @@ test('high difficulty enters reward drafts at R3/R9/R11, with the first two fixe
     }
   }
 });
-test('only the last high-difficulty reward draws the three categories with equal weights', () => {
+test('the last high-difficulty reward uses the official 0.3.0 category weights', () => {
   for (const mode of highModes) {
     const gd = new GameData(data, mode), rng = createRng(724), counts = { bounty: 0, shop: 0, tactic: 0 };
     assert.deepEqual(data.choices.schedule[mode].rounds[11].families,
-      ['bounty', 'shop', 'tactic'].map(family => ({ family, weight: 1 })));
+      ['bounty', 'shop', 'tactic'].map(family => ({ family, weight: family === 'bounty' ? 14 : 4 })));
     for (let i = 0; i < 1500; i++) {
       const draft = generateDraft(gd, rng, 11, { stageId: 'act1autochess_m01' });
       counts[draft.family]++;
       assert.ok(draft.cards.length);
       assert.ok(draft.cards.every(c => c.enemyKey !== 'enemy_1512_mcmstr'));
     }
-    for (const n of Object.values(counts)) assert.ok(n > 400 && n < 600, JSON.stringify({ mode, counts }));
+    assert.ok(counts.bounty > 850 && counts.bounty < 1100 && counts.shop > 200 && counts.shop < 350 && counts.tactic > 200 && counts.tactic < 350, JSON.stringify({ mode, counts }));
   }
 });
 test('training, standard and hazardous difficulties retain their distinct rules', () => {
@@ -52,10 +52,8 @@ test('training, standard and hazardous difficulties retain their distinct rules'
 });
 test('custom overlay keeps the corrected schedule and round-11 card pools after rebuilding', () => {
   for (const mode of highModes) {
-    const changes = data['custom-overlay'];
-    assert.deepEqual(changes.config.find(c => c.path.join('.') === 'modes.' + mode + '.spRounds').value, [3, 9, 11]);
-    assert.deepEqual(changes.choices.find(c => c.path.join('.') === 'schedule.' + mode + '.rounds').value,
-      data.choices.schedule[mode].rounds);
+    assert.deepEqual(data.config.modes[mode].spRounds, [3, 9, 11]);
+    assert.equal(data['custom-overlay'], undefined, 'the legacy reward overlay must not replace official 0.3.0 rules');
   }
   for (const key of ['shopDraft', 'tacticDraft']) assert.ok(data.choices[key].rounds.includes(11));
 });

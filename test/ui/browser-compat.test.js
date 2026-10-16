@@ -21,14 +21,13 @@ test('older browser: missing allSettled, timeout and UUID use compatible impleme
 });
 
 test('boot diagnostics show syntax failures even without import map support', () => {
-  const html = readFileSync(new URL('../../public/index.html', import.meta.url), 'utf8');
-  const source = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]).find(script => script.includes('window.__spBootFail ='));
+  const source = readFileSync(new URL('../../public/js/boot.js', import.meta.url), 'utf8');
   const listeners = {};
   const err = { textContent: '', getAttribute() { return this.final; }, setAttribute() { this.final = true; } };
   const button = { hidden: true };
   const boot = { classList: { contains() { return false; } } };
   const window = { addEventListener(name, fn) { listeners[name] = fn; } };
-  vm.runInNewContext(source, { window, navigator: { userAgent: 'QQ test' }, document: { getElementById(id) { return { 'boot-err': err, 'boot-retry': button, boot }[id]; } } });
+  vm.runInNewContext(source, { window, navigator: { userAgent: 'QQ test' }, location: { hostname: 'localhost' }, setTimeout() {}, document: { addEventListener() {}, getElementById(id) { return { 'boot-err': err, 'boot-retry': button, boot }[id]; } } });
   listeners.error({ message: 'Unexpected token ?' });
   assert.match(err.textContent, /Unexpected token/);
   assert.equal(button.hidden, false);

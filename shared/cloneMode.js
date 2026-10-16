@@ -1,6 +1,7 @@
+import { t, N_ } from './i18n.js';
 export const validGameMode = value => value === 'normal' || value === 'clone' || value === 'versus';
-export const gameModeName = value => value === 'versus' ? '对抗模式（测试）' : value === 'clone' ? '克隆模式' : '正常模式';
-export const CLONE_DESCRIPTION = '当前模式《倾向盟约》刷新百分百必出两个所选盟约干员；满员时Boss总血量为基础血量的24/30/36/42/48倍，分别对应4/5/6/7/8人房。';
+export const gameModeName = value => value === 'versus' ? t('对抗模式（测试）') : value === 'clone' ? t('克隆模式') : t('正常模式');
+export const CLONE_DESCRIPTION = N_('当前模式《倾向盟约》刷新百分百必出两个所选盟约干员；满员时Boss总血量为基础血量的24/30/36/42/48倍，分别对应4/5/6/7/8人房。');
 
 /** Only submitted votes count; abstentions use the default only when nobody voted. */
 export function cloneBandWinner(votes, eligible, allowed, rng, fallback) {

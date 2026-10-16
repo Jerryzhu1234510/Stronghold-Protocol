@@ -9,10 +9,10 @@ import { PHASE } from '../shared/constants.js';
 import { DATA, makeMatch } from './match/harness.js';
 
 const built = new URL('../public/js/browser/sim.js', import.meta.url);
-test('compiled browser entries parse as ES2020 without import maps or top-level await', { skip: !existsSync(built) }, () => {
-  for (const name of ['main', 'versus', 'compat', 'sim']) {
+test('compiled compatibility entries parse at their ES2022 build target', { skip: !existsSync(built) }, () => {
+  for (const name of ['training', 'compat', 'sim']) {
     const source = readFileSync(new URL(`../public/js/browser/${name}.js`, import.meta.url), 'utf8');
-    parse(source, { ecmaVersion: 2020, sourceType: name === 'sim' ? 'module' : 'script' });
+    parse(source, { ecmaVersion: 2022, sourceType: name === 'sim' ? 'module' : 'script' });
   }
 });
 

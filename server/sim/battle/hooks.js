@@ -4,7 +4,7 @@
 // timeout).
 // Installed on Battle.prototype by server/sim/Battle.js (a method container: never instantiated; `this` is the battle).
 
-import { TICK, MAX_INTERNAL_ERRORS, MAX_HOOK_DEPTH, MAX_HOOK_WORK } from '../constants.js';
+import { TICK, MAX_INTERNAL_ERRORS, MAX_HOOK_DEPTH } from '../constants.js';
 
 let hookSeq = 0;
 
@@ -19,7 +19,7 @@ export class BattleHooks {
     const h = { name, fn, priority: Number(opts.priority) || 0, owner: opts.owner ?? null, seq: ++hookSeq, removed: false, once: !!opts.once };
     const list = this._hooks[name] ?? (this._hooks[name] = []);
     let i = list.length;
-    while (i > 0 && list[i - 1].priority < h.priority) i--;
+    while (i > 0 && list[i - 1].priority < h.priority) i--; // loop-cap: hook list length
     list.splice(i, 0, h);
     return h;
   }
@@ -54,43 +54,21 @@ export class BattleHooks {
 
   hasHook(name) { return !!this._hooks[name]; }
 
-  // A depth cap alone allows exponentially many sibling branches. Abort the entire outer callback's
-  // chain on a limit, then reset for the next independent callback; the rest of the battle keeps running.
-  _enterHookChain(label, owner = null) {
-    if (this._emitDepth === 0) { this._hookWork = 0; this._hookAborted = false; }
-    if (this._hookAborted) return false;
-    if (this._emitDepth >= MAX_HOOK_DEPTH) {
-      this._hookAborted = true;
-      this._handlerError(`hookDepth:${label}`, owner, new Error(`hook nesting deeper than ${MAX_HOOK_DEPTH}; chain stopped — ${this._chain(label)}`));
-      return false;
-    }
-    return true;
-  }
-
-  _takeHookWork(label, owner = null) {
-    if (this._hookAborted) return false;
-    if (this._hookWork >= MAX_HOOK_WORK) {
-      this._hookAborted = true;
-      this._handlerError(`hookBudget:${label}`, owner, new Error(`hook chain exceeds ${MAX_HOOK_WORK} callbacks; chain stopped — ${this._chain(label)}`));
-      return false;
-    }
-    this._hookWork++;
-    return true;
-  }
-
   emit(name, ctx) {
     const list = this._hooks[name];
     if (!list) return ctx;
     // Recursion guard: handlers that re-trigger their own event (damaged → dealDamage → damaged …) would otherwise
     // recurse until a stack overflow, whose depth (and thus the outcome) depends on the machine — not deterministic.
-    if (!this._enterHookChain(name)) return ctx;
+    if (this._emitDepth >= MAX_HOOK_DEPTH) {
+      this._handlerError(`hookDepth:${name}`, null, new Error(`hook nesting deeper than ${MAX_HOOK_DEPTH}; handlers skipped — ${this._chain(name)}`));
+      return ctx;
+    }
     const arr = list.length === 1 ? [list[0]] : list.slice();
     const d = this._emitDepth++;
     this._frameCtx[d] = ctx;
     try {
       for (const h of arr) {
         if (h.removed) continue;
-        if (!this._takeHookWork(name, h.owner)) break;
         this._frameName[d] = name;
         this._frameOwner[d] = h.owner;
         try { h.fn(ctx, this); } catch (e) { this._handlerError(`hook:${name}`, h.owner, e); }
@@ -156,7 +134,7 @@ export class BattleHooks {
       if (s.cancelled) continue;
       if (s.interval > 0) {
         let n = 0;
-        while (s.due <= now && !s.cancelled && n++ < 8) {
+        while (s.due <= now && !s.cancelled && n++ < 8) { // loop-cap: battle.every at most 8 per tick
           s.count++;
           this._safe(() => s.fn(this, s), 'every', s.owner);
           s.due += s.interval;
@@ -175,7 +153,10 @@ export class BattleHooks {
 
   /** Run a content callback (skill/buff/projectile/timer/install) isolated from errors; shares the hook depth guard. */
   _safe(fn, label, owner = null) {
-    if (!this._enterHookChain(label, owner) || !this._takeHookWork(label, owner)) return undefined;
+    if (this._emitDepth >= MAX_HOOK_DEPTH) {
+      this._handlerError(`hookDepth:${label}`, owner, new Error(`callback nesting deeper than ${MAX_HOOK_DEPTH}; skipped — ${this._chain(label)}`));
+      return undefined;
+    }
     const d = this._emitDepth++;
     this._frameName[d] = label;
     this._frameOwner[d] = owner;

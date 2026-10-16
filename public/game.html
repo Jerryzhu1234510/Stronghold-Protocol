@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <script src="/js/compat030/index-html-1.js"></script>
+  <script src="/js/compat030/index-html-2.js"></script>
+  <link rel="stylesheet" href="/css/server-announcement.css?v=20261008-large" />
+  <!-- A landscape game: no page zoom (iOS additionally needs the gesture handling of js/ui/device.js), full-bleed behind
+       notches (viewport-fit=cover; css/devices.css keeps the HUD inside the safe area). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0c0f0e" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="format-detection" content="telephone=no" />
+  <!-- "Add to Home Screen" (iOS / Android) opens full screen without browser bars -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="卫戍协议" />
+  <meta name="description" content="卫戍协议：盟约 · 网页联机复刻（非官方同人作品）" />
+  <title>卫戍协议：盟约 · STRONGHOLD PROTOCOL</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icons/favicon.ico" />
+  <link rel="icon" sizes="16x16" href="/icons/favicon-16.png" />
+  <link rel="icon" sizes="32x32" href="/icons/favicon-32.png" />
+  <link rel="icon" sizes="48x48" href="/icons/favicon-48.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+
+  <!-- Web fonts: never render-blocking (LAN/offline play must still start); system fallbacks in theme.css. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" media="print" data-web-fonts
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Oxanium:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap" />
+  <script src="/js/webFonts.js" defer></script>
+  <!-- Self-hosted Bender / Novecento (provided by the assets pipeline). -->
+  <link rel="stylesheet" data-sp-resource-href="/fonts/fonts.css" />
+
+  <link rel="stylesheet" href="/css/theme.css" />
+  <link rel="stylesheet" href="/css/room-extensions.css" />
+  <link rel="stylesheet" href="/css/duck-warning.css" />
+  <link rel="stylesheet" href="/css/integration-stage.css?v=20261007-compact2" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/screens/title.css" />
+  <link rel="stylesheet" href="/css/screens/account.css" />
+  <link rel="stylesheet" href="/css/screens/account-panels.css" />
+  <link rel="stylesheet" href="/css/account-integration.css" />
+  <link rel="stylesheet" href="/css/screens/lobby.css?v=20261007-lobby-compact2" />
+  <link rel="stylesheet" href="/css/screens/matchmaking.css?v=20261007-large3" />
+  <link rel="stylesheet" href="/css/screens/room.css?v=20261007-large3" />
+  <link rel="stylesheet" href="/css/room-chat.css?v=20261005-chat-preview2" />
+  <link rel="stylesheet" href="/css/screens/game.css?v=20261007-large3" />
+  <link rel="stylesheet" href="/css/screens/game-shop.css?v=20261007-shop-compact3" />
+  <link rel="stylesheet" href="/css/screens/game-panels.css?v=20261007-large3" />
+  <link rel="stylesheet" href="/css/screens/briefing.css" />
+  <link rel="stylesheet" href="/css/screens/draft.css?v=20261007-repeat2" />
+  <link rel="stylesheet" href="/css/screens/result.css" />
+  <link rel="stylesheet" href="/css/screens/guide.css" />
+  <link rel="stylesheet" href="/css/screens/loadout.css" />
+  <link rel="stylesheet" href="/css/screens/stats.css" />
+  <link rel="stylesheet" href="/css/emotes.css" />
+  <link rel="stylesheet" href="/css/release-notes.css?v=20261007-latency-trio1" />
+  <link rel="stylesheet" href="/css/release-notes-highlight-20261009.css" />
+  <link rel="stylesheet" href="/css/devices.css" />
+  <link rel="stylesheet" href="/css/room-directory.css?v=20261009-public-rooms" />
+  <link rel="stylesheet" href="/css/phone-compact.css?v=20261010-compact1" />
+  <link rel="stylesheet" href="/css/population-details.css" />
+  <link rel="stylesheet" href="/css/resource-preload.css" />
+  <link rel="stylesheet" href="/css/lobby-toolbar.css" />
+
+  <script type="importmap">
+    { "imports": { "preact": "/vendor/preact.module.js", "preact/hooks": "/vendor/hooks.module.js", "htm": "/vendor/htm.module.js",
+      "/js/ui/roomChat.js": "/js/ui/roomChat.js?v=20261005-chat-preview2",
+      "/js/ui/chatState.js": "/js/ui/chatState.js?v=20261005-chat-preview2" } }
+  </script>
+  <!-- startup-preloads:start -->
+  <link rel="modulepreload" href="/js/main.js" />
+  <link rel="modulepreload" href="/js/ui/compat.js" />
+  <link rel="modulepreload" href="/vendor/preact.module.js" />
+  <link rel="modulepreload" href="/vendor/hooks.module.js" />
+  <link rel="modulepreload" href="/js/ui/components.js" />
+  <link rel="modulepreload" href="/vendor/htm.module.js" />
+  <link rel="modulepreload" href="/shared/constants.js" />
+  <link rel="modulepreload" href="/shared/i18n.js" />
+  <link rel="modulepreload" href="/shared/i18nPacks.js" />
+  <link rel="modulepreload" href="/js/store.js" />
+  <link rel="modulepreload" href="/js/ui/chatState.js?v=20261005-chat-preview2" />
+  <link rel="modulepreload" href="/shared/chat.js" />
+  <link rel="modulepreload" href="/js/data.js" />
+  <link rel="modulepreload" href="/shared/i18nData.js" />
+  <link rel="modulepreload" href="/js/ui/assetUrls.js" />
+  <link rel="modulepreload" href="/js/ui/connBanner.js" />
+  <link rel="modulepreload" href="/js/net.js" />
+  <link rel="modulepreload" href="/shared/protocol.js" />
+  <link rel="modulepreload" href="/shared/standIn.js" />
+  <link rel="modulepreload" href="/shared/loadoutRecord.js" />
+  <link rel="modulepreload" href="/shared/diy.js" />
+  <link rel="modulepreload" href="/js/lagMonitor.js" />
+  <link rel="modulepreload" href="/js/ui/device.js" />
+  <link rel="modulepreload" href="/js/ui/toasts.js" />
+  <link rel="modulepreload" href="/js/ui/gameComponents.js" />
+  <link rel="modulepreload" href="/js/ui/richText.js" />
+  <link rel="modulepreload" href="/js/screens/title.js" />
+  <link rel="modulepreload" href="/js/ui/guide.js" />
+  <link rel="modulepreload" href="/js/screens/matchmaking.js" />
+  <link rel="modulepreload" href="/js/screens/loadout.js" />
+  <link rel="modulepreload" href="/js/ui/detailPanel.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/shared.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/phases.js" />
+  <link rel="modulepreload" href="/js/ui/matchStatus.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/draft.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/camera.js" />
+  <link rel="modulepreload" href="/js/render/prepfield.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/format.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/watch.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/bonds.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/diy.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/shop.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/placement.js" />
+  <link rel="modulepreload" href="/shared/highGround.js" />
+  <link rel="modulepreload" href="/js/ui/facing.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/standIn.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/loadout.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/terrain.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/enemies.js" />
+  <link rel="modulepreload" href="/js/render/pen.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/shortcuts.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/settings.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/result.js" />
+  <link rel="modulepreload" href="/js/ui/gameLogic/panel.js" />
+  <link rel="modulepreload" href="/js/ui/abilityLines.js" />
+  <link rel="modulepreload" href="/js/ui/loadoutModel.js" />
+  <link rel="modulepreload" href="/js/audio.js" />
+  <link rel="modulepreload" href="/js/media.js" />
+  <link rel="modulepreload" href="/shared/media.js" />
+  <link rel="modulepreload" href="/js/assets.js" />
+  <link rel="modulepreload" href="/shared/voice.js" />
+  <link rel="modulepreload" href="/js/ui/loadoutSync.js" />
+  <link rel="modulepreload" href="/js/ui/ownershipModel.js" />
+  <link rel="modulepreload" href="/js/ui/diyModel.js" />
+  <link rel="modulepreload" href="/shared/legacyDiy.js" />
+  <link rel="modulepreload" href="/shared/supports.js" />
+  <link rel="modulepreload" href="/js/screens/ownership.js" />
+  <link rel="modulepreload" href="/js/screens/diy.js" />
+  <link rel="modulepreload" href="/js/ui/clipboard.js" />
+  <link rel="modulepreload" href="/js/ui/releaseNotes.js" />
+  <link rel="modulepreload" href="/js/ui/population.js" />
+  <link rel="modulepreload" href="/js/ui/roomCapacity.js" />
+  <link rel="modulepreload" href="/shared/integrationStage.js" />
+  <link rel="modulepreload" href="/js/ui/profileEntry.js" />
+  <link rel="modulepreload" href="/js/ui/lang.js" />
+  <link rel="modulepreload" href="/shared/packs.js" />
+  <link rel="modulepreload" href="/js/ui/settings.js" />
+  <link rel="modulepreload" href="/js/resources/client.js" />
+  <link rel="modulepreload" href="/js/screens/lobby.js" />
+  <link rel="modulepreload" href="/js/screens/room.js" />
+  <link rel="modulepreload" href="/js/screens/game.js" />
+  <link rel="modulepreload" href="/js/ui/fieldHost.js" />
+  <link rel="modulepreload" href="/js/ui/fallbackField.js" />
+  <link rel="modulepreload" href="/js/ui/hud.js" />
+  <link rel="modulepreload" href="/js/ui/prepVote.js" />
+  <link rel="modulepreload" href="/js/ui/gameActions.js" />
+  <link rel="modulepreload" href="/js/ui/bondStrip.js" />
+  <link rel="modulepreload" href="/js/ui/teamPanel.js" />
+  <link rel="modulepreload" href="/js/ui/emotes.js" />
+  <link rel="modulepreload" href="/js/ui/shopBar.js" />
+  <link rel="modulepreload" href="/js/ui/rewardOverlay.js" />
+  <link rel="modulepreload" href="/js/ui/choiceOverlay.js" />
+  <link rel="modulepreload" href="/js/ui/enemyDrawer.js" />
+  <link rel="modulepreload" href="/js/ui/matchInfo.js" />
+  <link rel="modulepreload" href="/js/ui/ticker.js" />
+  <link rel="modulepreload" href="/js/ui/effectsList.js" />
+  <link rel="modulepreload" href="/js/ui/combatHud.js" />
+  <link rel="modulepreload" href="/js/ui/matchChrome.js" />
+  <link rel="modulepreload" href="/js/ui/facingWheel.js" />
+  <link rel="modulepreload" href="/js/ui/underframe.js" />
+  <link rel="modulepreload" href="/js/screens/game/standInTags.js" />
+  <link rel="modulepreload" href="/js/ui/equipReplace.js" />
+  <link rel="modulepreload" href="/js/render/drag.js" />
+  <link rel="modulepreload" href="/js/screens/briefing.js" />
+  <link rel="modulepreload" href="/js/screens/bandDraft.js" />
+  <link rel="modulepreload" href="/shared/draftRules.js" />
+  <link rel="modulepreload" href="/js/screens/result.js" />
+  <link rel="modulepreload" href="/js/battle/runner.js" />
+  <link rel="modulepreload" href="/js/battle/observe.js" />
+  <link rel="modulepreload" href="/js/ui/watchBonds.js" />
+  <link rel="modulepreload" href="/js/screens/game/marks.js" />
+  <link rel="modulepreload" href="/js/screens/game/early.js" />
+  <link rel="modulepreload" href="/js/screens/game/overlays.js" />
+  <link rel="modulepreload" href="/js/ui/roomChat.js?v=20261005-chat-preview2" />
+  <link rel="modulepreload" href="/js/ui/serverAnnouncement.js" />
+  <link rel="modulepreload" href="/shared/announcement.js" />
+  <link rel="modulepreload" href="/js/ui/buildGuard.js" />
+  <link rel="modulepreload" href="/js/resources/preload.js" />
+  <!-- startup-preloads:end -->
+
+  <!-- Battlefield renderer libs (classic scripts, injected by js/render/app.js when a match view mounts): warm the cache
+       at low priority so entering the match doesn't wait on ~800 KB of script. -->
+  <link rel="prefetch" href="/vendor/pixi.min.js" as="script" />
+  <link rel="prefetch" href="/vendor/pixi-spine.js" as="script" />
+<link rel="stylesheet" href="./css/match-history.css" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="boot" class="boot" aria-hidden="true">
+    <div class="boot__inner">
+      <div class="boot__hex"></div>
+      <div class="boot__text">STRONGHOLD PROTOCOL</div>
+      <div id="boot-err" class="boot__err"></div>
+      <button id="boot-retry" type="button" hidden style="margin-top:16px;padding:8px 20px;color:#bcf5e0;background:#132923;border:1px solid #4b8e78;font:inherit;cursor:pointer">重新加载</button>
+    </div>
+  </div>
+
+  <div class="rotate-hint" role="alert">
+    <div class="rotate-hint__phone"></div>
+    <div class="rotate-hint__title">请将设备横屏</div>
+    <div>卫戍协议：盟约 需要横屏显示以获得完整体验</div>
+    <div class="rotate-hint__micro">ROTATE DEVICE</div>
+    <button id="rotate-fullscreen" class="rotate-hint__button" type="button">全屏并横屏</button>
+    <p id="rotate-status" class="rotate-hint__status" role="status">点击尝试全屏横屏；也可以开启手机自动旋转后，将手机横放。</p>
+  </div>
+
+  <noscript><p style="color:#c3cbc7;text-align:center;padding:40px">需要启用 JavaScript 才能运行本游戏。</p></noscript>
+
+  <script src="/js/boot.js"></script>
+  <script type="module" src="/js/main.js" id="sp-main"></script>
+  <script nomodule src="/js/bootLegacy.js"></script>
+
+</body>
+</html>
+
+

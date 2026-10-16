@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { AUDIO_EXTS } from '../../shared/media.js';
 
-const TYPES = new Set(['.png', '.webp', '.jpg', '.jpeg', '.gif', '.avif', '.svg', '.mp3', '.ogg', '.wav', '.m4a', '.woff', '.woff2', '.ttf', '.otf', '.skel', '.atlas']);
+const TYPES = new Set(['.png', '.webp', '.jpg', '.jpeg', '.gif', '.avif', '.svg', '.mp3', '.ogg', '.wav', '.m4a', '.woff', '.woff2', '.ttf', '.otf', '.skel', '.atlas', '.obj', '.mtl', '.glb', '.gltf', '.ktx2', '.fnt', '.mp4', '.webm']);
 export async function buildResourceManifest(publicDir) {
   const root = path.resolve(publicDir), files = [];
   async function walk(dir) {
@@ -16,7 +16,7 @@ export async function buildResourceManifest(publicDir) {
       if (entry.isDirectory()) await walk(abs);
       else if (entry.isFile()) {
         const ext = path.extname(entry.name).toLowerCase();
-        const scene = path.relative(root, abs).replace(/\\/g, '/').startsWith('assets/local/scene/');
+        const scene = path.relative(root, abs).replace(/\\/g, '/').startsWith('assets/local/');
         if (TYPES.has(ext) || (scene && ['.json', '.bin'].includes(ext))) files.push(abs);
       }
     }

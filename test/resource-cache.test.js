@@ -11,6 +11,7 @@ import { buildResourceManifest } from '../server/http/resourceManifest.js';
 import { resourceRoutingCatalog } from '../server/http/resourceRoutes.js';
 import { createStaticHandler } from '../server/http/static.js';
 import http from 'node:http';
+import { t } from '../shared/i18n.js';
 
 const code = (await readFile(new URL('../public/js/resources/worker.js', import.meta.url), 'utf8')).replace(/^import[^\n]+\n/gm, '');
 const hash = body => createHash('sha256').update(body).digest('hex');
@@ -75,7 +76,7 @@ function runtime({ id = 'a', caches = storage(), sharedLocks = locks(), bodies =
   if (localOnly) workerUrl.searchParams.set('localOnly','1');
   if (noPreload) workerUrl.searchParams.set('noPreload','1');
   const self = { location: workerUrl, skipWaiting() {}, clients: { async claim() {} }, addEventListener(name, fn) { handlers[name] = fn; } };
-  vm.runInNewContext(code, { ...policy, MAX_BYTES: maxBytes ?? policy.MAX_BYTES, createResourceTransport, resourceCacheLimit: value => maxBytes ?? policy.resourceCacheLimit(value), self, navigator: { locks: sharedLocks }, caches, crypto: webcrypto, fetch: network, URL, Request, Response, Headers, AbortSignal, AbortController, TextEncoder, setTimeout, clearTimeout, Uint8Array, Date, Promise, Map, Error, Number, String });
+  vm.runInNewContext(code, { t, ...policy, MAX_BYTES: maxBytes ?? policy.MAX_BYTES, createResourceTransport, resourceCacheLimit: value => maxBytes ?? policy.resourceCacheLimit(value), self, navigator: { locks: sharedLocks }, caches, crypto: webcrypto, fetch: network, URL, Request, Response, Headers, AbortSignal, AbortController, TextEncoder, setTimeout, clearTimeout, Uint8Array, Date, Promise, Map, Error, Number, String });
   async function emit(name, extra = {}) {
     const waits = []; let response;
     handlers[name]({ ...extra, waitUntil(p) { waits.push(p); }, respondWith(p) { response = p; } });

@@ -85,8 +85,6 @@ export class FxSystem {
     for (const L of this.locks) this._freeLock(L);
     this.locks.length = 0;
     this._slashAt = null;
-    this._blastTimes?.clear();
-    this._healAt?.clear();
     for (const t of this.nums) this._releaseNum(t);
     this.nums.length = 0;
     for (const r of this.rings) { r.sp.visible = false; this.ringFree.push(r); }

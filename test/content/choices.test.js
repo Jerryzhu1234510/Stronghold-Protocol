@@ -23,11 +23,8 @@ function dataWith(modeId, round, family, { tactic = null, bounty = null, cards =
   const ch = DATA.choices;
   const sch = ch.schedule[modeId];
   const r = { ...sch.rounds[String(round)], families: [{ family, weight: 1 }], ...extra };
-  // Earlier balanced draws must not grant the effect this isolated fixture is about to test.
-  const earlier = Object.fromEntries(Object.entries(sch.rounds).map(([n,node]) => [n,
-    Number(n) < round ? { ...node, families:[{family:'supply',weight:1}] } : node]));
   if (cards) r.cards = cards;
-  const out = { ...DATA, choices: { ...ch, schedule: { ...ch.schedule, [modeId]: { ...sch, rounds: { ...earlier, [String(round)]: r } } }, cards: { ...ch.cards } } };
+  const out = { ...DATA, choices: { ...ch, schedule: { ...ch.schedule, [modeId]: { ...sch, rounds: { ...sch.rounds, [String(round)]: r } } }, cards: { ...ch.cards } } };
   if (tactic) out.choices.cards.tactic = ch.cards.tactic.filter((c) => tactic.includes(c.effectId));
   // the listed bounty cards are offered by this draft even when the real one would not (战术特训 comes from 法术教鞭
   // only — choices.json `draft`, user playtest #6 item 4; each card belongs to one kind of official draft —
@@ -409,6 +406,9 @@ test('机密商店 E2E (co-op): two identical cards are two cards — both can b
   // six 变形同构体: every slot draws the one item `coin` names
   const one = Object.values(DATA.items).find((i) => i.name === '变形同构体' && !i.isGolden).id;
   const data = dataWith('mode_multi_hard', 3, 'shop');
+  // This case isolates card-index ownership with sufficient stock; shared-stock.test.js covers exhaustion.
+  data.config = { ...data.config, economy: { ...data.config.economy,
+    itemPoolCopiesOverrides: { ...data.config.economy.itemPoolCopiesOverrides, [one]: 8 } } };
   data.choices = { ...data.choices, shopDraft: { ...data.choices.shopDraft, rounds: [3], slots: Array.from({ length: 6 }, () => ({ coin: 1 })), coin: one } };
   const h = makeMatch({ mode: 'coop', difficulty: 'HARD', humans: 2, bots: 2, seed: 43, data, registry: REG, fake: true });
   const m = h.m;

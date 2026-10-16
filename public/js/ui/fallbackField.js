@@ -180,7 +180,7 @@ export function createFallbackView(host, opts = {}) {
         onPointerDown=${(e) => onDown(e, p)} onContextMenu=${(e) => { e.preventDefault(); emit('pieceClick', { uid: p.uid, button: 2, clientX: e.clientX, clientY: e.clientY }); }}
         onPointerEnter=${() => emit('pieceHover', { uid: p.uid })} onPointerLeave=${() => emit('pieceHover', { uid: null })}
         title=${pieceName(p)}>
-      <div class="ff-piece__art">${src ? html`<img src=${src} alt="" draggable=${false} />` : html`<span>${[...pieceName(p)][0]}</span>`}</div>
+      <div class="ff-piece__art" ref=${(() => {try{return globalThis.__SPDesktopUnitMotion?.ref?.({kind:p.kind==='chess'?'op':p.kind,side:'ally',id:'p:'+p.uid},L.tile,{prep:true,area});}catch{return undefined;}})()}>${src ? html`<img src=${src} alt="" draggable=${false} />` : html`<span>${[...pieceName(p)][0]}</span>`}</div>
       ${tier && p.kind !== 'token' ? html`<${TierChip} tier=${tier} golden=${golden} size="sm" class="ff-piece__tier" />` : null}
       ${p.kind === 'chess' && Array.isArray(p.items) && p.items.length ? html`<div class="ff-piece__items">${p.items.slice(0, 2).map((it) => html`<i key=${it.uid}></i>`)}</div>` : null}
       ${p.kind === 'token' && p.count > 1 ? html`<b class="ff-piece__count">×${p.count}</b>` : null}
@@ -283,7 +283,7 @@ export function createFallbackView(host, opts = {}) {
         style=${`transform:translate(${px - size / 2}px,${py - size / 2}px);width:${size}px;height:${size}px`}
         onPointerDown=${(e) => { if (e.button === 0) emit('pieceClick', { unitId: id, uid: info.uid ?? null, unit: info, button: 0, clientX: e.clientX, clientY: e.clientY }); }}
         onContextMenu=${(e) => { e.preventDefault(); emit('pieceClick', { unitId: id, uid: info.uid ?? null, unit: info, button: 2, clientX: e.clientX, clientY: e.clientY }); }}>
-      <div class="ff-unit__art">${src ? html`<img src=${src} alt="" draggable=${false} />` : html`<span>${[...(info.name || '?')][0]}</span>`}</div>
+      <div class="ff-unit__art" ref=${(() => {try{return globalThis.__SPDesktopUnitMotion?.ref?.(info,L.tile,{prep:!!st.field?.prep,fieldId:st.field?.fieldId,dead});}catch{return undefined;}})()}>${src ? html`<img src=${src} alt="" draggable=${false} />` : html`<span>${[...(info.name || '?')][0]}</span>`}</div>
       <div class="ff-unit__bars"><i class="hp" style=${`width:${hpPct}%`}></i>${!enemy && spMax > 0 ? html`<i class="sp" style=${`width:${spPct}%`}></i>` : null}</div>
     </div>`;
   }
@@ -518,6 +518,15 @@ export function createFallbackView(host, opts = {}) {
       return () => listeners.get(type)?.delete(fn);
     },
     off(type, fn) { listeners.get(type)?.delete(fn); },
+    /** Resolve the live DOM target, never a remembered hover or selected piece. */
+    pieceAtClientPoint(clientX, clientY) {
+      if (st.destroyed || st.mode !== 'prep' || st.camera === 'pen' || st.drag
+        || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+      const el = document.elementFromPoint(clientX, clientY)?.closest('.ff-piece[data-uid]');
+      if (!el || !root.contains(el)) return null;
+      const uid = Number(el.dataset.uid);
+      return Number.isInteger(uid) ? uid : null;
+    },
     pieceScreenRect(uid) {
       const el = root.querySelector(`[data-uid="${Number(uid)}"]`);
       return el ? el.getBoundingClientRect() : null;
@@ -549,7 +558,7 @@ export function createFallbackView(host, opts = {}) {
       st.size = { w: host.clientWidth, h: host.clientHeight };
       schedule();
     },
-    destroy() {
+    destroy() {try{globalThis.__SPDesktopUnitMotion?.dropDomView?.(root);}catch{}
       if (st.destroyed) return;
       st.destroyed = true;
       endDrag();

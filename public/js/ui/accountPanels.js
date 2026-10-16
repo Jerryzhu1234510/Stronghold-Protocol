@@ -134,15 +134,15 @@ function FriendRow({ p, kind, busy, onAccept, onRemove, onRequest, presence, can
     <span class="fr-row__img">
       ${p.avatarUrl ? html`<img src=${p.avatarUrl} alt="" referrerpolicy="no-referrer" />` : html`<span class="fr-row__initial">${initial}</span>`}
     </span>
-    <span class="fr-row__name">${p.name}${kind === 'friend' ? html`<small class="fr-room-state">${presence?.online ? presence.room ? `${presence.room.inMatch ? '对局中' : '房间等待中'} · ${presence.room.code}` : '在线大厅' : '离线 / 旧版本对局'}</small>` : null}</span>
+    <span class="fr-row__name">${p.name}${kind === 'friend' ? html`<small class="fr-room-state">${presence?.online ? presence.room ? `${presence.room.inMatch ? t('对局中') : t('房间等待中')} · ${presence.room.code}` : t('在线大厅') : t('离线 / 旧版本对局')}</small>` : null}</span>
     <span class="fr-row__acts">
       ${kind === 'incoming' ? html`<${Button} size="sm" variant="primary" disabled=${busy} onClick=${() => onAccept(p)}>${t('接受')}<//>` : null}
       ${kind === 'outgoing' ? html`<span class="fr-row__wait">${t('等待对方接受')}</span>` : null}
       ${kind === 'found' ? html`<${Button} size="sm" disabled=${busy} onClick=${() => onRequest(p)}>${t('加好友')}<//>` : null}
       ${kind === 'friend' && presence?.online ? html`
-        ${canInvite ? html`<${Button} size="sm" disabled=${busy} onClick=${() => onRoom(p, 'invite')}>邀请进房<//>` : null}
-        ${presence.room?.canJoin ? html`<${Button} size="sm" disabled=${busy} onClick=${() => onRoom(p, 'join')}>申请加入<//>` : null}
-        ${presence.room?.canSpectate ? html`<${Button} size="sm" disabled=${busy} onClick=${() => onRoom(p, 'spectate')}>申请观战<//>` : null}
+        ${canInvite ? html`<${Button} size="sm" disabled=${busy} onClick=${() => onRoom(p, 'invite')}>${t('邀请进房')}<//>` : null}
+        ${presence.room?.canJoin ? html`<${Button} size="sm" disabled=${busy} onClick=${() => onRoom(p, 'join')}>${t('申请加入')}<//>` : null}
+        ${presence.room?.canSpectate ? html`<${Button} size="sm" disabled=${busy} onClick=${() => onRoom(p, 'spectate')}>${t('申请观战')}<//>` : null}
       ` : null}
       ${kind === 'friend' ? html`<${Button} size="sm" variant="ghost" disabled=${busy} onClick=${() => onRemove(p)}>${t('移除')}<//>` : null}
       ${kind === 'incoming' ? html`<${Button} size="sm" variant="ghost" disabled=${busy} onClick=${() => onRemove(p)}>${t('拒绝')}<//>` : null}
@@ -166,10 +166,10 @@ function FriendsPanel({ onClose }) {
     setBusy(true); setErr(null);
     try {
       await net.request(type, body);
-      if (type === 'friends.send') toast('已发送，请在好友面板查看处理结果', 'success');
+      if (type === 'friends.send') toast(t('已发送，请在好友面板查看处理结果'), 'success');
       if (type === 'friends.enter') onClose();
       else await socialLoad();
-    } catch (e) { setErr(e.detail || e.message || '房间请求失败'); }
+    } catch (e) { setErr(e.detail || e.message || t('房间请求失败')); }
     finally { setBusy(false); }
   };
   const [view, setView] = useState(null);
@@ -244,13 +244,13 @@ function FriendsPanel({ onClose }) {
     <div class="fr-hint">${t('好友是按「代号#编号」加的 —— 用户名只有自己看得到。')}</div>
 
     ${err ? html`<div class="acc-card__err" role="alert">${err}</div>` : null}
-    <div class="fr-sec"><div class="fr-sec__title">房间邀请与申请 · 2分钟有效</div>
-      <p class="fr-hint">仅同一版本的好友显示房间。申请由房主处理；通过后仍需本人点击进入。满员、开局或房主变更后需重新申请。</p>
+    <div class="fr-sec"><div class="fr-sec__title">${t('房间邀请与申请 · 2分钟有效')}</div>
+      <p class="fr-hint">${t('仅同一版本的好友显示房间。申请由房主处理；通过后仍需本人点击进入。满员、开局或房主变更后需重新申请。')}</p>
       ${social.tickets.length ? social.tickets.map(x => html`<div key=${x.id} class="fr-room-ticket">
-        <span>${x.name} · ${x.kind === 'invite' ? '邀请加入' : x.mode === 'spectate' ? '申请观战' : '申请加入'} · ${x.code}<small class="fr-room-state">${x.status === 'approved' ? '已通过' : x.incoming ? '等待你处理' : '已发送，等待处理'}</small></span>
-        ${x.incoming && x.status === 'pending' ? html`<${Button} size="sm" disabled=${busy} onClick=${() => roomAction('friends.decide', { id: x.id, accept: true })}>同意<//><${Button} size="sm" disabled=${busy} onClick=${() => roomAction('friends.decide', { id: x.id, accept: false })}>拒绝<//>` : null}
-        ${x.enter ? html`<${Button} size="sm" variant="primary" disabled=${busy} onClick=${() => roomAction('friends.enter', { id: x.id })}>${x.mode === 'spectate' ? '进入观战' : '进入房间'}<//>` : null}
-      </div>`) : html`<div class="fr-hint">暂无房间消息</div>`}
+        <span>${x.name} · ${x.kind === 'invite' ? t('邀请加入') : x.mode === 'spectate' ? t('申请观战') : t('申请加入')} · ${x.code}<small class="fr-room-state">${x.status === 'approved' ? t('已通过') : x.incoming ? t('等待你处理') : t('已发送，等待处理')}</small></span>
+        ${x.incoming && x.status === 'pending' ? html`<${Button} size="sm" disabled=${busy} onClick=${() => roomAction('friends.decide', { id: x.id, accept: true })}>${t('同意')}<//><${Button} size="sm" disabled=${busy} onClick=${() => roomAction('friends.decide', { id: x.id, accept: false })}>${t('拒绝')}<//>` : null}
+        ${x.enter ? html`<${Button} size="sm" variant="primary" disabled=${busy} onClick=${() => roomAction('friends.enter', { id: x.id })}>${x.mode === 'spectate' ? t('进入观战') : t('进入房间')}<//>` : null}
+      </div>`) : html`<div class="fr-hint">${t('暂无房间消息')}</div>`}
     </div>
     ${found === null ? null : html`<div class="fr-sec">
       <div class="fr-sec__title">${found.length ? t('搜索结果') : t('没找到（或者已经加过了）')}</div>

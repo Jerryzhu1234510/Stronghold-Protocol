@@ -14,6 +14,9 @@ function setup(opts = {}) {
 }
 function nextPrep(h) {
   const round = h.m.round;
+  // Only p_0 is under observation; keep the other human active across long sequences.
+  for (const ps of h.m.players.values()) if (ps.playerId !== 'p_0' && !ps.isBot && ps.alive)
+    h.m.handle(ps.playerId, { t: 'g.ready', ready: true });
   h.m.guard(() => h.m.prepDeadline());
   assert.ok(h.drive(() => h.m.phase === 'PREP' && h.m.round === round + 1, { ready: false }));
 }

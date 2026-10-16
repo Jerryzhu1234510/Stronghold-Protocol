@@ -6,10 +6,11 @@
  * kinds fall back to a keyword guess, then to a generic sparkle (fxSpec).
  */
 export const FX_KINDS = Object.freeze({
-  supportEffect: { a: 'wave', c: 0xd6a9ff },
-  music: { a: 'wave', c: 0xbdc9ff },
-  persona: { a: 'pillar', c: 0x83baff },
+  supportEffect: { a: 'burst', c: 0x65dcc1 },
+  music: { a: 'buff', c: 0x92b6ff }, persona: { a: 'buff', c: 0x8d91ff },
   // blasts
+  // [ASSUMED] Clementia's S3 uses the shared blast placeholder until her official effect is ported.
+  blast: { a: 'blast', c: 0xffb35c },
   aoe: { a: 'blast', c: 0xffb35c }, explode: { a: 'blast', c: 0xff7a33 }, explosion: { a: 'blast', c: 0xff7a33 },
   // `pt`: always at the event's (x, y) (its `id` is the shooter); `heavy`: debris + scorch
   bombard: { a: 'blast', c: 0xffa04a, r: 1.5, pt: true, heavy: true }, bombardShell: { a: 'shell', c: 0xff5a3a, r: 1.5, pt: true },
@@ -18,11 +19,13 @@ export const FX_KINDS = Object.freeze({
   frostNova: { a: 'blast', c: 0x9fe6ff, smoke: 0x1c2630 }, sunBurst: { a: 'blast', c: 0xffe28a }, meltdown: { a: 'blast', c: 0xff5a2a, r: 1.5, heavy: true },
   iceSpike: { a: 'blast', c: 0xbfeeff, smoke: 0x1c2630 }, rockfall: { a: 'blast', c: 0xc8a878, smoke: 0x4a3f33 }, rockslide: { a: 'blast', c: 0xc8a878, smoke: 0x4a3f33 },
   finale: { a: 'blast', c: 0xffd45a, r: 1.5 }, swordStorm: { a: 'blast', c: 0xdfe8ff }, swordRain: { a: 'blast', c: 0xdfe8ff }, liberate: { a: 'blast', c: 0xffffff },
+  // 赤刃明霄陈 S3 赤霄·天喟 的龙剑气: a travelling blade, drawn from the sim's per-interval `chen3Wave` events (its own
+  // position + the previous point + direction); `pt` because it is not at the caster (it roams and passes by her tile)
+  chen3Wave: { a: 'qi', c: 0xdfe8ff, pt: true },
   quadShot: { a: 'volley', c: 0xfff2d0 }, featherArrow: { a: 'counter', c: 0xfff2d0 },
   burst: { a: 'element', c: 0xd0a0ff },
   // areas
   zone: { a: 'zone', c: 0xffb35c, dur: 3 }, healField: { a: 'zone', c: 0x62f08a, dur: 4 }, firewall: { a: 'wall', c: 0xff6a2a, dur: 4 },
-  clemntVortex: { a: 'zone', c: 0x60d9ed, dur: 2, r: 1.5, tex: 'vortex', pt: true },
   firewallBlock: { a: 'counter', c: 0xff6a2a }, tide: { a: 'zone', c: 0x5fe0ff, dur: 3, r: 2 }, storm: { a: 'zone', c: 0xd8c8a0, dur: 3 },
   tornado: { a: 'zone', c: 0xd8e8ff, dur: 3 }, snow: { a: 'zone', c: 0xe8f6ff, dur: 3 }, telegraph: { a: 'telegraph', c: 0xff3b30, dur: 1.2 },
   coldWind: { a: 'chill', c: 0x9fd4ff },
@@ -109,15 +112,6 @@ const SILENT_PHASES = new Set(['bombed', 'warning']);
 /** Visual spec of an fx kind (see FX_KINDS); `extra.kind` / `extra.element` may pick a better colour. */
 export function fxSpec(kind, extra = {}) {
   const k = typeof kind === 'string' ? kind : '';
-  if (k === 'supportEffect') {
-    const motifs = {
-      gravity: { a: 'wave', c: 0xd6a9ff }, stone: { a: 'reticle', c: 0xe7cd84 }, oni: { a: 'wave', c: 0x89edcd },
-      shadow: { a: 'vanish', c: 0xbda4df }, music: { a: 'wave', c: 0xbdc9ff }, blade: { a: 'counter', c: 0xff7779 },
-      persona: { a: 'pillar', c: 0x83baff }, circuit: { a: 'reticle', c: 0xf5b677 }, rose: { a: 'blink', c: 0xe9adbe },
-      theater: { a: 'zone', c: 0xbba7e8 }, neural: { a: 'wave', c: 0xf8b6fa }, anchor: { a: 'reticle', c: 0xb2f0e6 },
-    };
-    return { dur: 0.7, r: extra.radius || 1, ...motifs[extra.motif] };
-  }
   if (k === 'phase' && SILENT_PHASES.has(extra && extra.kind)) return { a: 'none', c: 0xffffff };
   let spec = FX_KINDS[k];
   if (!spec) {

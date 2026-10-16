@@ -3,6 +3,7 @@ import { grantVersusCoins, VERSUS_LAYER_CAP } from '../../shared/versusEconomy.j
 import { VERSUS_EGIR_PER_LAYER } from '../../shared/versusBonds.js';
 import { HANDLERS } from '../sim/content/garrisons/meta.js';
 import { WINDOW_META, runNativeMeta, metaEligible } from './metaWindow.js';
+import { t } from '../../shared/i18n.js';
 
 export const SUPPORTED_META = new Set(Object.keys(HANDLERS));
 export function traitsOf(piece) {
@@ -61,28 +62,28 @@ export function triggerMeta(p, piece, event, context) {
 export function traitNotes(id) {
   return traitsOf({ id }).map(g => {
     const prep = /PREP/.test(g.eventType), battle = g.eventType === 'IN_BATTLE';
-    let desc = g.desc, conversion = battle ? '战斗特质' : '对抗模式';
+    let desc = g.desc, conversion = battle ? t('战斗特质') : t('对抗模式');
     if (!battle && g.effectKey.includes('GOLD')) {
-      desc = prep ? '己方击倒投放敌人时额外获得1金币，全队共享4秒冷却；原有整备区生效条件保留。'
-        : `${g.eventType === 'SERVER_CHESS_SOLD' ? '售出' : '获得'}后，接下来${g.bb.count || 1}次有效击杀各额外获得1金币，全队共享4秒冷却；奖励只发一次。`;
+      desc = prep ? t('己方击倒投放敌人时额外获得1金币，全队共享4秒冷却；原有整备区生效条件保留。')
+        : t('{0}后，接下来{1}次有效击杀各额外获得1金币，全队共享4秒冷却；奖励只发一次。', { 0: g.eventType === 'SERVER_CHESS_SOLD' ? t('售出') : t('获得'), 1: g.bb.count || 1 });
     }
     else if (prep && WINDOW_META.has(g.effectKey)) {
       desc = g.desc.replace(/<进入休整期时>|<休整期结束时>/g, '<每30秒结算>')
         .replace(/当前休整期|本回合|每回合/g, '当前30秒窗口').replace(/奇数回合/g, '奇数统计窗口')
         .replace(/“进入休整期时”|“休整期结束时”/g, '“30秒结算”');
-      conversion = '每30秒统计结算；保留原条件和单次上限；所有盟约上限200层';
+      conversion = t('每30秒统计结算；保留原条件和单次上限；所有盟约上限200层');
     }
     else if (g.effectKey === 'SERVER_GAIN_FREE_REFRESH_COUNT') {
-      const trigger = prep ? '己方击倒投放敌人时' : g.eventType === 'SERVER_CHESS_SOLD' ? '售出时' : '获得时';
-      desc = `${trigger}获得${prep ? 1 : g.bb.count || 1}次免费刷新，最多储存2次，全队共享20秒冷却。`;
+      const trigger = prep ? t('己方击倒投放敌人时') : g.eventType === 'SERVER_CHESS_SOLD' ? t('售出时') : t('获得时');
+      desc = t('{trigger}获得{1}次免费刷新，最多储存2次，全队共享20秒冷却。', { trigger, 1: prep ? 1 : g.bb.count || 1 });
     } else if (prep && g.effectKey.startsWith('SERVER_ADD_BOND')) {
       desc = g.desc.replace(/<[^>]+>/g, '').replace(/本回合|下回合|每回合/g, '').trim();
-      desc = `己方每击倒一名投放敌人：${desc}`;
-      if (g.effectKey === 'SERVER_ADD_BOND_METHOD') conversion = '击杀触发，每次至多增加2层；所有盟约上限200层';
-      else conversion = '击杀触发；所有盟约上限200层';
+      desc = t('己方每击倒一名投放敌人：{desc}', { desc });
+      if (g.effectKey === 'SERVER_ADD_BOND_METHOD') conversion = t('击杀触发，每次至多增加2层；所有盟约上限200层');
+      else conversion = t('击杀触发；所有盟约上限200层');
     } else if (g.eventType === 'SERVER_REFRESH_SHOP') {
       desc = g.desc.replace(/本回合/g, '当前30秒窗口');
-      conversion = '主动刷新触发；每名干员的首次刷新计数每30秒重置；所有盟约上限200层';
+      conversion = t('主动刷新触发；每名干员的首次刷新计数每30秒重置；所有盟约上限200层');
     }
     return { desc, ready: battle || SUPPORTED_META.has(g.effectKey), conversion };
   });

@@ -6,7 +6,7 @@ export const RECRUIT_INTERVAL_MS = 10_000;
 export const RECRUIT_MAX_LEN = 120;
 export const validVisibility = (v) => v === 'public' || v === 'private';
 export const validMapVersion = (v) => v === 'classic' || v === 'new' || v === 'official';
-export const mapName = (v) => v === 'official' ? t('官方场景（0.2.5）') : v === 'classic' ? '0.1.4 经典棋盘' : '新版简约棋盘';
+export const mapName = (v) => v === 'official' ? t('官方场景（0.2.5）') : v === 'classic' ? t('0.1.4 经典棋盘') : t('新版简约棋盘');
 // The reference's classic board uses the extracted materials and three.js scene;
 // the current simplified board keeps the procedural Pixi tiles.
 export const boardAppearance = (v) => v === 'official' ? { board: '3d', boardArt: true, officialScenes: true }

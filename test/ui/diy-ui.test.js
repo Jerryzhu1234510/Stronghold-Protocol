@@ -4,7 +4,6 @@
 // UI of a 自选 piece — the shop / reward card and the detail card show the operator (name, art, class, derived bonds,
 // the pick's skill and module) with a 「自选」 badge, the own pieces get a tag, placement reads the operator's position, and
 // the bond popup lists the 自选 member (own and a teammate's).
-import { snapshotComponent } from '../helpers/componentSnapshot.js';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -28,8 +27,7 @@ const { createStore } = await import('../../public/js/store.js');
 const G = await import('../../public/js/ui/gameLogic.js');
 const { ChessCard } = await import('../../public/js/ui/shopBar.js');
 const { ChessDetail, resolveDetail } = await import('../../public/js/ui/detailPanel.js');
-const { BondPopup: BondPopupComponent } = await import('../../public/js/ui/bondStrip.js');
-const BondPopup = snapshotComponent(BondPopupComponent);
+const { BondPopup } = await import('../../public/js/ui/bondStrip.js');
 const { ownerBoard } = await import('../../public/js/ui/watchBonds.js');
 const { diyPieces } = await import('../../public/js/screens/game/standInTags.js');
 const { DiyPanelView, DiyPickerView } = await import('../../public/js/screens/diy.js');
@@ -199,6 +197,50 @@ test('diy sync: welcome brings the kit list and sends room.diy; edits are deboun
 // ---- the tab --------------------------------------------------------------------------------------------------------------
 
 describe('自选编队 tab (screens/diy.js)', () => {
+  for (const slotId of [T5A, T6A]) {
+    for (const saved of [null, SIEGE_PICK]) {
+      test(`the picker: ${slotId}, ${saved ? 'saved' : 'empty'} slot retains edits when reselecting its operator`, () => {
+        const picks = saved ? { [slotId]: saved } : {};
+        const done = [];
+        let draft = saved ? { ...saved } : null;
+        let filter = 'all';
+        let query = '';
+        const view = () => expand(DiyPickerView({ m: null, slot: { slotId }, picks, kitted: KIT,
+          onDone: (p) => done.push(p), onClose() {}, filter, query, draft,
+          onFilter: (f) => { filter = f; }, onQuery: (q) => { query = q; }, onDraft: (d) => { draft = d; } }));
+        const click = (key, value) => {
+          const node = [...walk(view())].find((v) => v.props?.[key] === value && typeof v.props.onClick === 'function');
+          assert.ok(node, `${key}=${value} is clickable`);
+          node.props.onClick();
+        };
+        click('data-char', SIEGE);
+        click('data-skill', 0);
+        click('data-module', 'none');
+        const edited = { charId: SIEGE, skillIndex: 0, uniEquipId: null };
+        assert.deepEqual(draft, edited);
+        click('data-char', SIEGE);
+        assert.deepEqual(draft, edited, 'reselecting keeps both the skill and explicit no-module choice');
+        // Filtering/searching the operator out and back in must not change the draft either.
+        filter = 'owned';
+        query = 'no matching operator';
+        assert.ok(![...walk(view())].some((v) => hasClass(v, 'diy-opt')));
+        query = '推进';
+        click('data-char', SIEGE);
+        assert.deepEqual(draft, edited);
+        click('data-testid', 'diy-confirm');
+        assert.deepEqual(done, [edited]);
+        assert.deepEqual(picks, saved ? { [slotId]: saved } : {}, 'the saved picks stay unchanged until the parent saves');
+        // Switching operators still initializes the new pick, and returning restores the saved/default pick.
+        filter = 'all';
+        query = '';
+        click('data-char', SHARP);
+        assert.deepEqual(draft, M.defaultPick(SHARP, slotId, D));
+        click('data-char', SIEGE);
+        assert.deepEqual(draft, saved || M.defaultPick(SIEGE, slotId, D));
+      });
+    }
+  }
+
   test('four slots by tier: an empty slot to fill, a filled one shows the operator, its tag, skill and module', () => {
     const tree = expand(DiyPanelView({ m: data.get('assets'), picks: { [T5A]: SIEGE_PICK, [T6A]: { charId: SHARP } }, legal: { [T5A]: SIEGE_PICK, [T6A]: { charId: SHARP } }, kitted: KIT, onSet() {}, picking: null, onPicking() {} }));
     const slots = [...walk(tree)].filter((v) => hasClass(v, 'diy-slot'));

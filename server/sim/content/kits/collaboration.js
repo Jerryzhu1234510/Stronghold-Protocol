@@ -2,6 +2,7 @@
 // Manual placements/movement are automated for this autobattler; see docs/SUPPORTS.md.
 // Effects are procedural markers; no independent original particle/video payload is downloaded.
 import { COLS } from '../../constants.js';
+import { hypot } from '../../detmath.js';
 import { sortEnemyTargets, absoluteRangeKeys } from '../../targeting.js';
 import { rotateOffset } from '../../dir.js';
 import { summonToken, tacticalPoint } from '../tokens.js';
@@ -144,7 +145,7 @@ function makoto(bb, chess, def) {
           fx(b, u, 'persona');
         } else {
           resetBody();
-          const squad = allies(b, u).filter(a => a.def.raw?.teamId === 'sees' && Math.hypot(a.x - u.x, a.y - u.y) < 2);
+          const squad = allies(b, u).filter(a => a.def.raw?.teamId === 'sees' && hypot(a.x - u.x, a.y - u.y) < 2);
           for (const a of squad) for (const e of foes(b, a)) b.dealDamage(a, e, { amount: a.s.atk * t1.atk_scale, type: 'true', isSkill: true, tags: ['makotoAllOut'] });
         }
       }, { owner: u });

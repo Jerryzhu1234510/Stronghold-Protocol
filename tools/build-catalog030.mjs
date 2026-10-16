@@ -1,0 +1,14 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {gzipSync} from 'node:zlib';
+import {buildResourceManifest} from '../server/http/resourceManifest.js';
+import {writeResourceRoutes} from './build-resource-routes.mjs';
+const root=path.resolve(import.meta.dirname,'..');
+const manifest=await buildResourceManifest(path.join(root,'public'));
+const body=JSON.stringify(manifest);
+await fs.writeFile(path.join(root,'public/data/resource-cache.json'),body);
+await fs.writeFile(path.join(root,'public/data/resource-cache.json.gz'),gzipSync(body,{level:6}));
+await fs.writeFile(path.join(root,'clients/desktop/resource-baseline.json'),body);
+await fs.writeFile(path.join(root,'clients/desktop/Mod目标素材清单-0.3.0.json'),body);
+const routes=await writeResourceRoutes(manifest,path.join(root,'public/data/resource-routes'));
+console.log(JSON.stringify({count:manifest.count,bytes:manifest.totalBytes,routes}));

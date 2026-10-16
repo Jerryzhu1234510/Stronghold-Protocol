@@ -7,7 +7,9 @@ import { MOVE_SCALE, COLS, STEALTH_RESTORE } from '../../constants.js';
 import {
   HUSK_REBIRTH, BOOM_RADIUS, POLLUTION_INTERVAL, STEALTH_RESTORE_BY_KEY, DUCK_STEALTH_RESTORE, nthOf, stOf, safe, num, T, elem, hurt,
   areaAllies, areaAlliesInTiles, zone, spawnChildren, stepToward, setHits, hitCount, setForm, absorbArts, auraBuff,
+  unbalancedNow, castSlot,
 } from './helpers.js';
+import { hypot } from '../../detmath.js';
 
 // ---------------------------------------------------------------------------------------------------------------
 // archetypes
@@ -35,13 +37,17 @@ const unblockable = () => ({ spawn(b, e) { b.addBuff(e, { key: 'ab:unblockable',
 const runWhenHit = (v) => ({ taken(c, b, e, a) { if (a.on || !(v > 0)) return; a.on = true; b.addBuff(e, { key: 'ab:duckRun', persist: true, mods: { moveMul: 1 + v } }); } });
 
 /**
- * 频次 (the 14 器物 keys, kitTimes): keep the original data's required hit count, including death-spawn derivatives.
- * Local balance rule: HP multipliers change ordinary enemies, not the number of hits needed for these fragments.
+ * 频次 (the 14 器物 keys, kitTimes): maxHp = hits = the data's max HP × the spawn's HP multiplier. The round effects reach
+ * these units like any enemy (攻坚装备 / II / III leave out only 炎佑), but not 补给线 / 补给线II, whose `enemy_exclude` lists
+ * exactly these 14 keys (activity_table aceffect_enemy_2 / 2_2, data/effects.json): that share (`mods.supplyHpMul`, co-op
+ * 终极 R5–R15) comes out again — a 频次 enemy's death spawn inherits the parent's mods, so it travels with them. Whole hits:
+ * setHits rounds [ASSUMED: no source says how a fractional count rounds]. Until 0.2.1 the count was the data's whatever
+ * the difficulty (PR #272).
  */
 const times = (artsOnly = false) => ({
   spawn(b, e) {
-    // Hit-count derivatives retain their data count; round/room HP boosts must not multiply required hits.
-    setHits(e, e.def.maxHp);
+    const s = Number(e.mods && e.mods.supplyHpMul);
+    setHits(e, e.base.maxHp / (Number.isFinite(s) && s > 0 ? s : 1));
     hitCount(b, e, true, artsOnly);
   },
 });
@@ -101,7 +107,7 @@ function pathKeysAhead(e) {
   if (!R || !Array.isArray(R.pts)) return keys;
   let x = e.x, y = e.y;
   for (let i = R.ptIdx ?? 0; i < R.pts.length; i++) {
-    const p = R.pts[i], n = Math.max(1, Math.ceil(Math.hypot(p.x - x, p.y - y) * 4));
+    const p = R.pts[i], n = Math.max(1, Math.ceil(hypot(p.x - x, p.y - y) * 4));
     for (let k = 1; k <= n; k++) keys.add(Math.round(y + ((p.y - y) * k) / n) * COLS + Math.round(x + ((p.x - x) * k) / n));
     x = p.x; y = p.y;
   }
@@ -126,20 +132,25 @@ const resist = (immune = []) => ({
 const immuneTo = (...keys) => ({ spawn(b, e, a, ab) { ab.immune = new Set([...(ab.immune || []), ...keys]); } });
 
 /** Every Nth attack: status on the targets ("攻击2次后，下一次攻击会晕眩目标"). */
-const nthAttackStatus = (n, key, dur, sil = true) => ({
+const nthAttackStatus = (n, key, dur, sil = true, s = null) => ({
   sil,
   spawn(b, e, a) { a.n = 0; },
+  // the Nth attack is the skill's (display only: its slot for the client, castSlot)
+  before(c, b, e, a) { if (s && (a.n + 1) % n === 0) castSlot(b, e, s); },
   attack(c, b, e, a) {
     a.n++;
     if (a.n % n) return;
-    for (const t of c.targets) if (t.alive && dur > 0) b.applyStatus(t, key, { duration: dur, source: e });
+    for (const t of c.targets) {
+      if (!t.alive || !(dur > 0) || (c.targetDeployments && c.targetDeployments.get(t) !== t.deploySeq)) continue;
+      b.applyStatus(t, key, { duration: dur, source: e });
+    }
   },
 });
 
 /** Every Nth attack deals ×scale (+ optional element). */
-const nthAttackPower = (n, scale, el = null, ratio = 0) => ({
+const nthAttackPower = (n, scale, el = null, ratio = 0, s = null) => ({
   spawn(b, e, a) { a.n = 0; a.power = false; },
-  before(c, b, e, a) { a.power = (a.n + 1) % n === 0; },
+  before(c, b, e, a) { a.power = (a.n + 1) % n === 0; if (a.power && s) castSlot(b, e, s); },
   hitOut(c, b, e, a) { if (a.power && c.dmg.isAttack) c.dmg.amount *= scale; },
   dealt(c, b, e, a) { if (a.power && el && ratio > 0) elem(b, e, c.target, el, e.s.atk * ratio); },
   attack(c, b, e, a) { a.n++; },
@@ -176,29 +187,38 @@ const deathSpawn = (key, cnt, extra = {}) => ({
 
 /**
  * Death explosion on the allies within r it can select (areaAllies — PRTS 高能源石虫 / 冰爆源石虫 / 卷心籽 死亡爆炸 "…无视迷彩，
- * 不可对空", no 无视无法选择: a 隐匿 ally is spared; the dead enemy blocks nobody).
+ * 不可对空", no 无视无法选择: a 隐匿 ally is spared; the dead enemy blocks nobody). `noAir` (default — all three say so):
+ * a flying ally (the 炎佑 dragon) is skipped; until 0.2.1 it took the blast (community report: 炎祐吃到了不该吃到的地面伤害).
  */
-const deathBoom = ({ scale, type = 'phys', r = BOOM_RADIUS, status = null, sil = true, cond = null }) => ({
+const deathBoom = ({ scale, type = 'phys', r = BOOM_RADIUS, status = null, sil = true, cond = null, noAir = true }) => ({
   sil,
   death(c, b, e, a) {
     if (c.reason !== 'killed' || (cond && !cond(e, a))) return;
     const atk = e.s.atk;
     b.fx('explode', { x: e.x, y: e.y, r, kind: 'deathBoom', id: e.id });
     for (const u of areaAllies(b, e, e.x, e.y, r)) {
+      if (noAir && u.isFlying) continue;
       if (scale > 0) hurt(b, e, u, atk * scale, type);
       if (status && u.alive) b.applyStatus(u, status.key, { duration: status.dur, source: e, value: status.value });
     }
   },
 });
 
-/** 折射: RES +v (and optional max HP +hpPct) while not silenced. */
+/**
+ * 折射: RES +res while not silenced. 镜膜's optional max HP bonus is permanently lost on the first silence
+ * (PRTS 假想敌：镜膜, 天赋: "受沉默影响后失效，无法恢复"); its fan stays in the stopped B_* form afterwards.
+ */
 const refraction = (res, hpPct = 0) => ({
   silAware: true,                                                    // SILENCE-flagged: silence switches it off in tick()
   tick(b, e, a) {
     const on = !e.s.flags.silence;
+    if (hpPct && !on && !a.hpLost) {
+      a.hpLost = true;
+      setForm(b, e, 'stopped');
+    }
     if (on === a.on) return;
     a.on = on;
-    if (on) b.addBuff(e, { key: 'ab:refraction', mods: hpPct ? { resFlat: res, hpPct } : { resFlat: res }, persist: true, visible: true });
+    if (on) b.addBuff(e, { key: 'ab:refraction', mods: hpPct && !a.hpLost ? { resFlat: res, hpPct } : { resFlat: res }, persist: true, visible: true });
     else b.removeBuff(e, 'ab:refraction');
   },
 });
@@ -351,6 +371,7 @@ function reborn({ dur = 0, hpRatio = 1, invincible = 0, invincibleUntargetable =
       a.state = 'reborn';
       a.t0 = b.time;
       a.noAtk = e.profile.noAttack;
+      e.unbalanceUntil = -Infinity;   // a 重生 is a forced state change: it ends a 失衡 (PRTS 失衡位移机制 「例如复活」)
       rebirthCleanse(b, e);
       e.hp = Math.min(1, e.s.maxHp);
       if (onKo) safe(b, e, () => onKo(b, e, a));
@@ -403,7 +424,7 @@ function unbalanced(onMove) {
       a.px = e.x; a.py = e.y; a.hid = e.hidden;
       if (px == null || hid || e.hidden) return;
       const own = e.s.moveSpeed * MOVE_SCALE * dt * 1.5 + 1e-3;
-      const extra = Math.hypot(e.x - px, e.y - py) - own;
+      const extra = hypot(e.x - px, e.y - py) - own;
       a.lx = px; a.ly = py;                                          // where the move started (direction for onMove)
       if (extra > 0.05) onMove(b, e, a, extra);
     },
@@ -472,6 +493,7 @@ function husk({ hits, delay, stealthy = true, unblock = false, onHusk = null, ke
       if (a.state === 'husk' || !(hits > 0) || !(delay > 0)) return false;   // the husk's knock-out is the real death
       a.state = 'husk';
       a.rebornUntil = b.time + HUSK_REBIRTH;
+      e.unbalanceUntil = -Infinity;   // a 重生 is a forced state change: it ends a 失衡 (PRTS 失衡位移机制 「例如复活」)
       a.noAtk = e.profile.noAttack;
       a.max = a.max ?? e.base.maxHp;
       rebirthCleanse(b, e);
@@ -591,30 +613,20 @@ function dmgZone(b, src, x, y, r, life, iv, amount, type = 'arts', kind = 'zone'
 
 /** A cooldown skill ability (`id` labels it for tests / other abilities). */
 const skill = (s, fire, { cond = null, sil = false, cd = null, icd = null, id = null } = {}) => (s || cd != null) && fire ? ({
-  id: id ?? null, sil, cd: cd ?? s.cd, icd: icd ?? s.icd, cond, fire,
+  id: id ?? null, sil, cd: cd ?? s.cd, icd: icd ?? s.icd, cond, fire, sk: s || null,   // sk: its slot for the 'cast' event
 }) : null;
 
 /** Blink past the blocker along the path (弑君者 / 卢西恩). Returns the start position. */
 export function blinkForward(b, e, dist) {
+  if (unbalancedNow(b, e)) return null;                              // 失衡: 「无法…使用技能」 — no blink meanwhile
   const from = { x: e.x, y: e.y };
   const R = e.route;
-  // A previous blink/displacement clears cached waypoints. Rebuild them before the next
-  // ground blink: moving straight toward the leg target could cross a fence and land on valid ground.
-  if (R && e.motion !== 'FLY' && (!R.pts || R.ptIdx >= R.pts.length || (R.version != null && R.version !== b.grid.version))) {
-    const leg = R.legs?.[R.legIdx];
-    if (!leg || leg.t !== 'move') return null;
-    const path = b.grid.waypoints(Math.round(e.y), Math.round(e.x), leg.r, leg.c);
-    if (!path) return null;
-    R.pts = path.map(([y, x]) => ({ x, y }));
-    R.ptIdx = 0;
-    R.version = b.grid.version;
-  }
   let left = dist;
   if (R && R.pts && R.ptIdx < R.pts.length) {
     let i = R.ptIdx;
-    while (left > 1e-9 && i < R.pts.length) {
+    while (left > 1e-9 && i < R.pts.length) { // loop-cap: path points
       const p = R.pts[i];
-      const d = Math.hypot(p.x - e.x, p.y - e.y);
+      const d = hypot(p.x - e.x, p.y - e.y);
       if (d <= left) { e.x = p.x; e.y = p.y; left -= d; i++; } else { stepToward(e, p.x, p.y, left); left = 0; }
     }
   } else if (R && R.legs && R.legs[R.legIdx] && R.legs[R.legIdx].r != null) {
@@ -644,7 +656,7 @@ const kitPrisoner = (freeAll = false) => (ab) => [prisoner(ab, { freeAll })];
 
 const kitDeathSpawn = (extra = []) => (ab) => [deathSpawn(ab.tS['DeadSpawn.enemy_key'], T(ab, 'DeadSpawn.cnt') ?? 0), ...extra];
 
-const kitStun3 = (ab) => [nthAttackStatus(nthOf(ab.sk.stuncombat), 'stun', (ab.sk.stuncombat && ab.sk.stuncombat.bb.stun) || 0, true)];
+const kitStun3 = (ab) => [nthAttackStatus(nthOf(ab.sk.stuncombat), 'stun', (ab.sk.stuncombat && ab.sk.stuncombat.bb.stun) || 0, true, ab.sk.stuncombat)];
 
 const kitSelfFear = (ab) => [selfFear(ab)];
 

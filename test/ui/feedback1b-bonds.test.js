@@ -6,7 +6,6 @@
 // used to leave an inactive bond out of m.private.bonds) and the bond popup "在场 0/2 未激活". The cards, chips and popup
 // say 本局禁用 for a bond the mode never activates (gameLogic modeOffBonds over config.modes[modeId].inactiveBondIds);
 // since 0.1.3 the view also lists it (`off: true`) so the strip can draw the grey disc — still never in ps.bonds.
-import { snapshotComponent } from '../helpers/componentSnapshot.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -29,8 +28,7 @@ globalThis.fetch = async (url) => {
 const { modeOffBonds } = await import('../../public/js/ui/gameLogic.js');
 const { BondChips } = await import('../../public/js/ui/detailPanel.js');
 const { ChessCard } = await import('../../public/js/ui/shopBar.js');
-const { BondPopup: BondPopupComponent, BondStrip } = await import('../../public/js/ui/bondStrip.js');
-const BondPopup = snapshotComponent(BondPopupComponent);
+const { BondPopup, BondStrip } = await import('../../public/js/ui/bondStrip.js');
 const { data, getMode } = await import('../../public/js/data.js');
 const { DATA, makeMatch, give, legalTileFor } = await import('../match/harness.js');
 const { tileKey } = await import('../../server/match/board.js');
@@ -117,7 +115,7 @@ test('bond popup: 本局禁用 instead of 未激活, a note, and no misleading m
 
 test('the game screen hands the mode-disabled set to the shop bar, the detail card and the bond popup', () => {
   const src = read('public/js/screens/game.js');
-  assert.match(src, /const offBonds = modeOffBonds\(getMode\(pub\?\.modeId\), pub\)/);
+  assert.match(src, /const offBonds = modeOffBonds\(getMode\(pub\?\.modeId\)\)/);
   assert.match(src, /<\$\{ShopBar\}[\s\S]*?offBonds=\$\{offBonds\}/);
   assert.match(src, /<\$\{DetailPanel\}[\s\S]*?offBonds=\$\{offBonds\}/);
   assert.match(src, /<\$\{BondPopup\}[\s\S]*?off=\$\{offBonds\.has\(bondPop\.bondId\)\}/);

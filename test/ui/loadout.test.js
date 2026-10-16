@@ -43,7 +43,8 @@ test('parseStored: tolerant of junk, keeps structurally valid entries; toStored 
 test('exportPayload / serializeExport: versioned envelope, entries copied; parseImport round trip', () => {
   const entries = { [INSIDE]: { skill: 0 }, [SWIRE]: { module: SWIRE_ALT } };
   const p = exportPayload(entries, { now: Date.UTC(2026, 9, 3, 4, 5, 6) });
-  assert.deepEqual(Object.keys(p).sort(), ['count', 'entries', 'exportedAt', 'kind', 'v'], 'exactly the envelope, no unused field');
+  assert.deepEqual(Object.keys(p).sort(), ['count', 'entries', 'exportedAt', 'kind', 'ops', 'v'], 'exactly the envelope (0.2.2: + the 潜能 / 练度 ops), no unused field');
+  assert.deepEqual(p.ops, {}, 'no settings: an empty map (an import then resets the settings to the defaults)');
   assert.equal(p.kind, LOADOUT_EXPORT_KIND);
   assert.equal(p.v, LOADOUT_VERSION);
   assert.equal(p.count, 2);
@@ -165,7 +166,7 @@ test('sanitizeEntries: drops unknown chess / illegal parts one by one, and the r
     all[c.chessId] = { skill: o.skills.find((i) => i !== o.defaultSkill), module: o.modules[o.modules.length - 1] };
   }
   const s = sanitizeEntries(all, get);
-  assert.equal(Object.keys(s).length, 112);
+  assert.equal(Object.keys(s).length, 113);
   assert.ok(checkLoadout(s, get).ok);
 });
 
@@ -181,7 +182,7 @@ test('selectedSkill / selectedModule for the in-match UI (shop cards, detail pan
 
 test('roster and filters: 112 visible chess in shop order; tier / class / bond / search / changed-only', () => {
   const roster = rosterOf(Object.values(CHESS));
-  assert.equal(roster.length, 112);
+  assert.equal(roster.length, 113);
   assert.ok(roster.every((c) => !c.isGolden && c.visible));
   for (let i = 1; i < roster.length; i++) assert.ok(roster[i - 1].tier <= roster[i].tier);
   const t3 = filterRoster(roster, { tier: 3 }, {}, get, getBond);
@@ -262,7 +263,7 @@ test('sync: welcome sends the sanitised loadout; edits are debounced; identical 
   const s = installLoadoutSync({ net, timers: T, target, getChessReady: async () => CHESS, lookupChess: get });
   net.emit('welcome', {});
   await T.advance(100);
-  assert.deepEqual(net.sent, [{ t: 'room.loadout', entries: { [INSIDE]: { skill: 0 } } }], 'stale entry dropped');
+  assert.deepEqual(net.sent, [{ t: 'room.loadout', entries: { [INSIDE]: { skill: 0 } }, ops: {} }], 'stale entry dropped (no 潜能 / 练度 set: ops {})');
   assert.equal(target.get().sync, 'synced');
   target.set({ entries: { [INSIDE]: { skill: 0 }, [SWIRE]: { module: SWIRE_ALT } } });
   target.set({ entries: { [INSIDE]: { skill: 0 }, [SWIRE]: { module: MODULE_NONE } } });
@@ -480,7 +481,7 @@ test('sync: an empty loadout is sent without loading chess.json (no 1.6 MB downl
   const s = installLoadoutSync({ net, timers: T, target, getChessReady: async () => { loads++; return CHESS; }, lookupChess: get, notify: () => {} });
   net.emit('welcome', {});
   await T.advance(100);
-  assert.deepEqual(net.sent, [{ t: 'room.loadout', entries: {} }]);
+  assert.deepEqual(net.sent, [{ t: 'room.loadout', entries: {}, ops: {} }]);
   assert.equal(loads, 0);
   await net.reply();
   target.set({ entries: { [INSIDE]: { skill: 0 } } });

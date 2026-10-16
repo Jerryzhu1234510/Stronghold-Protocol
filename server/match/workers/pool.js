@@ -109,7 +109,7 @@ export async function createMatchWorkerPool({ count, dataDir, log, matchModule, 
       this.asyncMatch = true; this.disposed = false; this.pending = 0;
       this.weight = opts.gameMode === 'versus' ? 4 : Math.max(1, opts.seats.length);
       pool.matches.set(this.id, this); this.slot.matches.add(this.id);
-      const fields = ['roomCode', 'mode', 'difficulty', 'modeId', 'capacity', 'mapVersion', 'gameMode', 'extensions', 'seats', 'spectators', 'seed', 'matchNo'];
+      const fields = ['roomCode', 'mode', 'difficulty', 'modeId', 'capacity', 'mapVersion', 'gameMode', 'extensions', 'seats', 'spectators', 'seed', 'matchNo', 'cs', 'vs', 'requireCs', 'hostId', 'aiPicksLast'];
       const init = Object.fromEntries(fields.filter(k => opts[k] !== undefined).map(k => [k, opts[k]]));
       try { post(this.slot, { op: 'create', id: this.id, opts: init }); }
       catch (e) { remove(this); throw e; }
@@ -133,7 +133,10 @@ export async function createMatchWorkerPool({ count, dataDir, log, matchModule, 
     }
     start() { this.call('start', []); }
     handle(id, msg) { return this.call('handle', [id, msg], true); }
-    setLoadout(id, loadout) { return this.call('setLoadout', [id, loadout], true); }
+    setLoadout(id, loadout, ops) { return this.call('setLoadout', [id, loadout, ops], true); }
+    requestSetupReroll(id, revision) { return this.call('requestSetupReroll', [id, revision], true); }
+    cancelSetupReroll(id, voteId) { return this.call('cancelSetupReroll', [id, voteId], true); }
+    setHost(id) { this.call('setHost', [id]); }
     onDisconnect(id) { this.call('onDisconnect', [id]); }
     onReconnect(id) { this.call('onReconnect', [id]); }
     onLeave(id) { this.call('onLeave', [id]); }

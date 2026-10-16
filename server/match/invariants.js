@@ -60,8 +60,14 @@ export function collectViolations(m, { limit = 25 } = {}) {
     if (!Number.isInteger(ps.pendingFunds) || ps.pendingFunds < 0) fail(`${id}: pendingFunds ${ps.pendingFunds}`);
     if (!Number.isFinite(ps.lp)) fail(`${id}: lp ${ps.lp}`);
     if (ps.alive && m.phase !== PHASE.SETTLE && ps.lp <= 0 && m.teamLp == null && m.round > 0 && ps.bandId) fail(`${id}: alive with lp ${ps.lp}`);
-    if (ps.hand.length !== gd.benchSize) fail(`${id}: hand has ${ps.hand.length} slots`);
-    if (ps.temp.length !== gd.tempSize) fail(`${id}: temp has ${ps.temp.length} slots`);
+    const pc = ps.personalChoice;
+    if (pc) {
+      if (!ps.alive || ps.ready || m.phase !== PHASE.PREP || pc.round !== m.round) fail(`${id}: a personal choice outside its own prep (${m.phase} R${m.round}, offered in R${pc.round})`);
+      if (!Array.isArray(pc.cards) || !pc.cards.length || pc.cards.length > 3 || new Set(pc.cards.map(c => c && c.effectId)).size !== pc.cards.length) fail(`${id}: personal choice of ${pc.cards && pc.cards.length} cards`);
+    }
+    if (ps.hand.length !== (m.isClone ? 18 : gd.benchSize)) fail(`${id}: hand has ${ps.hand.length} slots`);
+    if (ps.temp.length < gd.tempSize) fail(`${id}: temp has fewer than ${gd.tempSize} visible slots`);
+    if (ps.temp.length > gd.tempSize && ps.temp.some((x) => x == null)) fail(`${id}: overflow queue has an unfilled slot`);
     // 临时整备区 = overflow only (PRTS 卫戍协议/帮助 §手牌区 "常规手牌区出现空位时自动移入", GitHub #82)
     if (ps.temp.some(Boolean) && ps.hand.some((x) => x == null)) fail(`${id}: a temp piece waits while a hand slot is free`);
     if (!(ps.shop.level >= 1 && ps.shop.level <= gd.maxShopLevel)) fail(`${id}: shop level ${ps.shop.level}`);
@@ -201,11 +207,28 @@ export function collectViolations(m, { limit = 25 } = {}) {
   }
   for (const stock of stocks) {
     for (const [base, e] of stock.pool.entries) {
-      if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`${stock.label} ${base}: left ${e.left} cap ${e.cap}`);
+      if (!(Number.isInteger(e.left) && e.left <= e.cap)) fail(`${stock.label} ${base}: invalid stock`);
       const h = stock.held.get(base) || 0;
       if (e.left + h !== e.cap) fail(`${stock.label} ${base}: left ${e.left} + held ${h} != cap ${e.cap}`);
     }
     for (const [base, n] of stock.held) if (!stock.pool.has(base) && n !== 0) fail(`${stock.label}: non-pool chess ${base} holds ${n} copies`);
+  }
+
+  // Displayed shop cards and item rewards may overdraw; itemPool.debt is that overage (#624). Fixed gift families
+  // may overdraw without a debt entry. debt > over is always a missed repay or a debt recorded for a piece not kept.
+  // The chess pool above also permits explicit overdraw (Mimic, displayed operator cards).
+  if (m.itemPool && gd.raw.items) {
+    for (const [id, rec] of Object.entries(gd.raw.items)) {
+      if (!rec || rec.isGolden) continue;
+      const cap = m.itemPool.cap(id);
+      if (!Number.isInteger(cap)) continue;
+      const h = m.itemPool.held(id);
+      const over = Math.max(0, h - cap);
+      const debt = m.itemPool.debtOf(id);
+      if (debt > over) fail(`item ${id}: debt ${debt} > overage ${over} (held ${h}, cap ${cap})`);
+      if (!gd.isUnlimitedGiftItem(id) && over > debt) fail(`item ${id}: held ${h} > cap ${cap} without debt ${debt}`);
+    }
+
   }
 
   // combat fields

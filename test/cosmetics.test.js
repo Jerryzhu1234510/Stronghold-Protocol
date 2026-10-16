@@ -1,54 +1,41 @@
+// 0.3.0 uses official cosmetic layers and voice banks, superseding cosmeticChoices and audio.langs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { selectedSkin, sanitizeCosmetics } from '../shared/cosmetics.js';
-import { avatarUrl, portraitUrl, spineEntry, createAssets } from '../public/js/assets.js';
+import { createCosmeticLayers, loadVisual } from '../public/js/cosmetics.js';
+import { createAssets, avatarUrl, portraitUrl, spineEntry } from '../public/js/assets.js';
 import { chessAvatarUrl, chessPortraitUrl } from '../public/js/ui/assetUrls.js';
 import { sanitizeSettings } from '../public/js/ui/gameLogic/settings.js';
-import { AudioManager } from '../public/js/audio.js';
-
-const id = 'char_010_chen', skinId = id + '@nian#2';
-const skin = { avatar: '/assets/skin/avatar.png', portrait: '/assets/skin/portrait.png', spine: { front: { skel: '/assets/skin/front.skel', atlas: '/assets/skin/front.atlas', anims: {} } } };
-const base = { avatar: '/assets/base.png', portrait: '/assets/base-portrait.png', spine: { front: { skel: '/assets/base.skel', atlas: '/assets/base.atlas', anims: {} } }, skins: { [skinId]: skin } };
-test('selected outfit is shared by shop, loadout and front/back battle render without modifying combat data', () => {
-  const manifest = { chars: { [id]: base }, cosmeticChoices: { [id]: skinId } }, chess = { charId: id, assets: { avatar: id + '_2', portrait: id + '_2' }, isGolden: true };
-  assert.equal(selectedSkin(manifest, id + '_2'), skin);
-  assert.equal(avatarUrl(manifest, id), skin.avatar);
-  assert.equal(portraitUrl(manifest, id + '_2'), skin.portrait);
-  assert.equal(chessAvatarUrl(manifest, chess), skin.avatar);
-  assert.equal(chessPortraitUrl(manifest, chess), skin.portrait);
-  assert.equal(spineEntry(manifest, id, { back: true }), skin.spine.front);
+import { voiceLine } from '../public/js/audio.js';
+await loadVisual();
+const id = 'char_010_chen';
+const base = { chars: { [id]: { avatar: '/assets/base.png', portrait: '/assets/base-portrait.png',
+  spine: { front: { skel: '/assets/base.skel', atlas: '/assets/base.atlas', png: '/assets/base.png', anims: {} } } } } };
+test('shop, detail and field use the same composed official art without changing chess data', () => {
+  const m = structuredClone(base), chess = { charId: id, assets: { avatar: id, portrait: id } };
+  m.chars[id] = { avatar: '/assets/skin.png', portrait: '/assets/portrait.png',
+    spine: { front: { skel: '/assets/skin.skel', atlas: '/assets/skin.atlas', png: '/assets/skin.png', anims: {} } } };
+  assert.equal(avatarUrl(m, id), chessAvatarUrl(m, chess));
+  assert.equal(portraitUrl(m, id), chessPortraitUrl(m, chess));
+  assert.equal(spineEntry(m, id).skel, '/assets/skin.skel');
+  assert.equal(base.chars[id].avatar, '/assets/base.png');
   assert.equal(chess.charId, id);
-  manifest.cosmeticChoices[id] = 'unknown';
-  assert.equal(avatarUrl(manifest, id), base.avatar);
 });
-test('preferences set before manifest arrival are applied after seeding, and reset restores base model', () => {
-  const assets = createAssets(), events = [];
-  assets.onChange(what => events.push(what));
-  assets.setCosmetics({ [id]: skinId });
-  assets.seed({ chars: { [id]: base } });
-  assert.equal(assets.spineEntry(id), skin.spine.front);
-  assets.setCosmetics({});
-  assert.equal(assets.spineEntry(id), base.spine.front);
-  assert.ok(events.includes('cosmetics'));
-  assert.deepEqual(sanitizeCosmetics({ bad: skinId, [id]: 'http://example.test' }), {});
+test('official cosmetic layer reset restores the base manifest', () => {
+  const layers = createCosmeticLayers(), assets = createAssets({ manifest: base, cosmetics: layers });
+  layers.setPersonal([]); layers.setRoom(null);
+  assert.equal(layers.active, false); assert.equal(layers.apply(base), base);
+  assert.equal(assets.spineEntry(id).skel, '/assets/base.skel');
 });
-test('voice-language preference survives sanitization; old settings remain Chinese', () => {
-  for (const voiceLang of ['cn', 'jp', 'en', 'off']) assert.equal(sanitizeSettings({ voiceLang }).voiceLang, voiceLang);
-  assert.equal(sanitizeSettings({ voiceLang: '<script>' }).voiceLang, 'cn');
+test('official voice preferences retain four languages, using volume as the mute control', () => {
+  for (const voiceLang of ['cn', 'jp', 'en', 'kr']) assert.equal(sanitizeSettings({ voiceLang }).voiceLang, voiceLang);
+  assert.equal(sanitizeSettings({ voiceLang: 'off' }).voiceLang, 'cn');
   assert.equal(sanitizeSettings(null).voiceLang, 'cn');
+  assert.equal(sanitizeSettings({ voice: 0 }).voice, 0);
 });
-
-test('the selected voice bank is used, missing languages fall back to Chinese, and off stays silent', () => {
-  const manifest = { audio: { voice: { root: '/assets/audio/voice', ext: '.mp3', langs: {
-    cn: { [id]: { skill: { 1: 'cn_025' } } }, jp: { [id]: { skill: { 1: 'cn_025' } } },
-  }, banks: { cn: { [id]: { resultThree: '/assets/audio/voice/cn/result.mp3' } }, jp: { [id]: { start: '/assets/audio/voice/jp/start.mp3' } } } } } };
-  const audio = new AudioManager({ getManifest: () => manifest });
-  audio.ctx = {}; audio._play = () => true;
-  audio.setVoiceLang('jp');
-  assert.equal(audio.voice(id, 'skill', { slot: 1 }), `/assets/audio/voice/jp/${id}/cn_025.mp3`);
-  assert.equal(audio.voice(id, 'start'), '/assets/audio/voice/jp/start.mp3');
-  assert.equal(audio.voice(id, 'resultThree'), '/assets/audio/voice/cn/result.mp3', 'a missing clip also falls back, even when the language has other clips');
-  audio.setVoiceLang('en');
-  assert.equal(audio.voice(id, 'skill', { slot: 1 }), `/assets/audio/voice/cn/${id}/cn_025.mp3`);
-  audio.setVoiceLang('off'); assert.equal(audio.voice(id, 'skill'), null);
+test('official voice banks fall back one clip at a time', () => {
+  const audio = { voice: { [id]: { start: '/assets/start.mp3', skill1: '/assets/cn.mp3' } },
+    voiceJp: { [id]: { skill1: '/assets/jp.mp3' } } };
+  assert.equal(voiceLine(audio, id, 'skill1', 'jp').url, '/assets/jp.mp3');
+  assert.equal(voiceLine(audio, id, 'start', 'jp').url, '/assets/start.mp3');
+  assert.equal(voiceLine(audio, id, 'skill1', 'en').url, '/assets/cn.mp3');
 });

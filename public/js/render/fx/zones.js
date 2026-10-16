@@ -2,7 +2,6 @@
 // Installed on FxSystem.prototype by ./system.js (a method container: never instantiated; `this` is the effect system).
 
 import { NO_OPTS, clamp, easeOut } from './limits.js';
-import { visibleEffectPoint } from './visibility.js';
 
 /** A zone lasting longer than this (real s) is a persistent area (炼金单元, fields): drawn dimmer than a skill's short burst. */
 export const ZONE_PERSIST = 3;
@@ -34,21 +33,12 @@ export class FxZones {
    * and a scorch mark; o.small (shell impacts): no coloured ring, fewer sparks; o.tiles: flash those tiles too.
    */
   explosion(x, y, z, r, col, o = NO_OPTS) {
-    // Multi-target damage can emit an impact for every victim at the same point.
-    // Reuse that short visual burst instead of stacking dozens of additive white cores.
-    const recent = this._blastTimes ??= new Map();
-    const key = `${Math.round(x * 2)},${Math.round(y * 2)}`;
-    const now = this.time || 0;
-    if (now - (recent.get(key) ?? -Infinity) < 0.1) return;
-    recent.set(key, now);
-    if (recent.size > 256) recent.delete(recent.keys().next().value);
     const cam = this.ctx.cam();
     const g = cam.project(x, y, z + 0.3, this._g);
     const gx = g.x, gy = g.y, s = g.s;
     const R = Math.max(0.4, r), heavy = !!o.heavy, small = !!o.small, rich = this.rich;
-    const coreRadius = Math.min(R, 1.4);
-    this.particle('glow', gx, gy, { tint: col, life: heavy ? 0.5 : small ? 0.3 : 0.4, s0: (s / 128) * (0.7 + coreRadius * 0.7), s1: (s / 128) * (1.2 + coreRadius * 1.2), a0: 0.35, a1: 0 });
-    this.particle('flare', gx, gy, { tint: 0xfff4e0, life: heavy ? 0.28 : 0.18, s0: (s / 128) * (0.9 + coreRadius * 0.7), s1: (s / 128) * (0.3 + coreRadius * 0.2), a0: 0.4, a1: 0, rot: Math.random() * 3 });
+    this.particle('glow', gx, gy, { tint: col, life: heavy ? 0.5 : small ? 0.3 : 0.4, s0: (s / 128) * (0.7 + R * 0.7), s1: (s / 128) * (1.2 + R * 1.2), a0: 1, a1: 0 });
+    this.particle('flare', gx, gy, { tint: 0xfff4e0, life: heavy ? 0.28 : 0.18, s0: (s / 128) * (0.9 + R * 0.7), s1: (s / 128) * (0.3 + R * 0.2), a0: 1, a1: 0, rot: Math.random() * 3 });
     this.ring(x, y, z, 0.1, R * 1.1, 0xfff0d8, heavy ? 0.42 : 0.3, 'shock');
     if (!small) this.ring(x, y, z, 0.15, R, col, heavy ? 0.6 : 0.45);
     this.burst(gx, gy, s, Math.round((small ? 4 : 6) + R * (heavy ? 6 : 3)), col, { speed: 1.8 + R, life: heavy ? 0.6 : 0.45, up: 0.5 });
@@ -110,7 +100,6 @@ export class FxZones {
       if (zn) {
         zn.x = x; zn.y = y; zn.z = z; zn.r = r; zn.tint = tint; zn.dur = zn.t + dur;
         this._onGround(zn.disc, y, z); this._onGround(zn.edge, y, z);
-        if (zn.swirl) this._onGround(zn.swirl, y, z);
         return;
       }
     }
@@ -120,13 +109,11 @@ export class FxZones {
     const edge = new P.Sprite(this.tex.ring);
     edge.anchor.set(0.5); edge.blendMode = P.BLEND_MODES.ADD; edge.tint = tint;
     this._onGround(disc, y, z); this._onGround(edge, y, z);
-    const swirl = tex === 'vortex' ? new P.Graphics() : null;
-    if (swirl) this._onGround(swirl, y, z);
-    this.zones.push({ disc, edge, swirl, x, y, z, r, t: 0, dur, warn, key, tint });
+    this.zones.push({ disc, edge, x, y, z, r, t: 0, dur, warn, key, tint });
     if (this.zones.length > 24) this._freeZone(this.zones.shift());
   }
 
-  _freeZone(zn) { zn.disc.destroy(); zn.edge.destroy(); zn.swirl?.destroy(); }
+  _freeZone(zn) { zn.disc.destroy(); zn.edge.destroy(); }
 
   _updateZones(dt) {
     const cam = this.ctx.cam();
@@ -144,10 +131,6 @@ export class FxZones {
       const rad = zn.r * (0.35 + 0.65 * easeOut(grow));
       cam.project(zn.x, zn.y, zn.z + 0.02, p);
       cam.project(zn.x, zn.y + rad, zn.z + 0.02, q);
-      const visible = visibleEffectPoint(p, this.ctx.screenSize?.()) && visibleEffectPoint(q, this.ctx.screenSize?.());
-      zn.disc.renderable = zn.edge.renderable = visible;
-      if (zn.swirl) zn.swirl.renderable = visible;
-      if (!visible) continue;
       const rx = p.s * rad, ry = Math.max(1, p.y - q.y);
       const fade = k > 0.8 ? (1 - k) / 0.2 : 1;
       const pulse = zn.warn ? 0.55 + 0.45 * Math.abs(Math.sin(zn.t * 7)) : 0.8 + 0.2 * Math.sin(zn.t * 3);
@@ -155,19 +138,6 @@ export class FxZones {
       zn.disc.tint = zn.edge.tint = zn.tint ?? zn.disc.tint;
       zn.disc.position.set(p.x, p.y); zn.disc.scale.set((rx * 2) / 128, (ry * 2) / 128); zn.disc.alpha = discA * fade * pulse;
       zn.edge.position.set(p.x, p.y); zn.edge.scale.set((rx * 2.1) / 128, (ry * 2.1) / 128); zn.edge.alpha = edgeA * fade * pulse;
-      if (zn.swirl) {
-        const g = zn.swirl;
-        g.clear(); g.position.set(p.x, p.y); g.alpha = fade;
-        for (let arm = 0; arm < 3; arm++) {
-          g.lineStyle(Math.max(1.2, rx * 0.026), zn.tint, 0.8);
-          for (let i = 0; i <= 28; i++) {
-            const t = i / 28, radius = 0.1 + t * 0.8;
-            const angle = arm * Math.PI * 2 / 3 + t * Math.PI * 2 - zn.t * 5;
-            const x = Math.cos(angle) * rx * radius, y = Math.sin(angle) * ry * radius;
-            if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
-          }
-        }
-      }
     }
   }
 
@@ -206,16 +176,36 @@ export class FxZones {
 
   /** Full-screen colour pulse (field-wide telegraphs, cold wind). */
   flashScreen(tint, alpha = 0.4, dur = 0.6) {
-    this.tintT = this.tintDur = Math.max(0.05, Number(dur) || 0.6);
-    this.tintA = Math.min(0.25, Math.max(0, Number(alpha) || 0));
+    this.tintT = dur; this.tintDur = dur; this.tintA = alpha;
     this.tintSprite.tint = tint;
   }
 
-  /** A short flurry of snow over the field (cold wind). */
-  snowfall(tint) {
+  /**
+   * Snow over the field (cold wind). `gust` — 盟约寒风, 谢拉格's field-wide wind: a blizzard sweeping the screen from the
+   * bottom up, the official direction (the owner's confirmation of 2026-10-08; PR #386 by @leiming2333 after the
+   * community report 「谢拉格的效果特性不明显，暴风雪应该从下向上刮」): snowflakes rise off the bottom edge on a crosswind
+   * with gust streaks racing along, so it reads as wind driving up the field, not quiet snowfall (flake / streak counts,
+   * speeds and lives are a visual choice [ASSUMED]; screen y grows downward, so a negative vy rises). Without `gust` (an
+   * operator's own cold: 灵知 S3, 麦哲伦 S1's pulses) a short light flurry drifting down, as before.
+   */
+  snowfall(tint, gust = false) {
     const size = this.ctx.screenSize();
-    for (let i = 0; i < (this.quality === 'low' ? 10 : 26); i++) {
-      this.particle('dot', Math.random() * size.width, Math.random() * size.height * 0.7, { tint, vx: 30 + Math.random() * 40, vy: 60 + Math.random() * 60, life: 1 + Math.random() * 0.6, s0: 0.25 + Math.random() * 0.3, s1: 0.1, a0: 0.8, a1: 0, fadeIn: 0.2 });
+    const W = size.width, H = size.height, low = this.quality === 'low';
+    if (!gust) {
+      for (let i = 0; i < (low ? 10 : 26); i++) {
+        this.particle('dot', Math.random() * W, Math.random() * H * 0.7, { tint, vx: 30 + Math.random() * 40, vy: 60 + Math.random() * 60, life: 1 + Math.random() * 0.6, s0: 0.25 + Math.random() * 0.3, s1: 0.1, a0: 0.8, a1: 0, fadeIn: 0.2 });
+      }
+      return;
+    }
+    // snowflakes: lifted off the bottom edge (a share starts below it), blown up-right and tumbled by the gust
+    for (let i = 0; i < (low ? 22 : 48); i++) {
+      const vy = -H * (0.55 + Math.random() * 0.5), vx = W * (0.04 + Math.random() * 0.1);
+      this.particle('dot', Math.random() * W, H * (0.55 + Math.random() * 0.55), { tint, vx, vy, life: 1.4 + Math.random() * 0.9, s0: 0.22 + Math.random() * 0.34, s1: 0.08, a0: 0.9, a1: 0, fadeIn: 0.12, spin: (Math.random() - 0.5) * 6 });
+    }
+    // gust streaks: thin wind lines racing up through the field along their velocity
+    for (let i = 0; i < (low ? 4 : 10); i++) {
+      const vy = -H * (0.9 + Math.random() * 0.6), vx = W * (0.1 + Math.random() * 0.12);
+      this.particle('streak', Math.random() * W, H * (0.6 + Math.random() * 0.5), { tint, vx, vy, life: 0.7 + Math.random() * 0.4, s0: 0.04 + Math.random() * 0.03, s1: 0.02, sx: 6 + Math.random() * 6, a0: 0.55, a1: 0, fadeIn: 0.08, rot: Math.atan2(vy, vx) });
     }
   }
 

@@ -5,6 +5,7 @@ import http from 'node:http';
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { startGateway } from './gateway.mjs';
+import { t } from '../../shared/i18n.js';
 
 const configPath = path.resolve(process.argv[2] || 'gateway.json');
 const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
@@ -51,7 +52,7 @@ const sameToken = value => typeof value === 'string' && value.length === token.l
 const json = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 let busy = false;
 const control = http.createServer(async (req, res) => {
-  if (!sameToken(req.headers.authorization?.replace(/^Bearer /, ''))) return json(res, 403, { error: '禁止访问' });
+  if (!sameToken(req.headers.authorization?.replace(/^Bearer /, ''))) return json(res, 403, { error: t('禁止访问') });
   try {
     if (req.method === 'GET' && req.url === '/status') {
       const versions = await Promise.all([...gateway.releases.values()].map(async r => ({ id: r.id, root: r.root,
@@ -59,8 +60,8 @@ const control = http.createServer(async (req, res) => {
         health: r.healthy ? await fetch(`http://127.0.0.1:${r.port}/healthz`, { signal: AbortSignal.timeout(3000) }).then(r => r.json()).catch(() => null) : null })));
       return json(res, 200, { build: gateway.active.id, versions });
     }
-    if (req.method !== 'POST' || !['/update', '/retire', '/stop'].includes(req.url)) return json(res, 404, { error: '未知指令' });
-    if (busy) return json(res, 409, { error: '另一项操作正在进行' });
+    if (req.method !== 'POST' || !['/update', '/retire', '/stop'].includes(req.url)) return json(res, 404, { error: t('未知指令') });
+    if (busy) return json(res, 409, { error: t('另一项操作正在进行') });
     busy = true;
     try {
       let body = ''; for await (const chunk of req) { body += chunk; if (body.length > 8192) throw new Error('指令过长'); }
@@ -68,7 +69,7 @@ const control = http.createServer(async (req, res) => {
       if (req.url === '/update') {
         const release = await gateway.activate(await verifyRelease(data.root));
         try { await atomicJson(pointer, { root: release.root, id: release.id, activatedAt: new Date().toISOString() }); }
-        catch { return json(res, 500, { error: '新版本已经启用，但重启指针保存失败；请修复 current.json', activated: true, id: release.id }); }
+        catch { return json(res, 500, { error: t('新版本已经启用，但重启指针保存失败；请修复 current.json'), activated: true, id: release.id }); }
         return json(res, 200, { ok: true, id: release.id });
       }
       if (req.url === '/retire') { await gateway.retire(data.id); return json(res, 200, { ok: true }); }

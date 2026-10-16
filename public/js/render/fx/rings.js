@@ -2,7 +2,6 @@
 // Installed on FxSystem.prototype by ./system.js (a method container: never instantiated; `this` is the effect system).
 
 import { SKILL_GOLD, easeOut } from './limits.js';
-import { visibleEffectPoint } from './visibility.js';
 
 export class FxRings {
   // ---- rings / auras -----------------------------------------------------------------------------------------
@@ -43,9 +42,6 @@ export class FxRings {
       const rad = r.r0 + (r.r1 - r.r0) * k;
       cam.project(r.x, r.y, r.z + 0.01, p);
       cam.project(r.x, r.y + rad, r.z + 0.01, q);
-      const visible = visibleEffectPoint(p, this.ctx.screenSize?.()) && visibleEffectPoint(q, this.ctx.screenSize?.());
-      r.sp.renderable = visible;
-      if (!visible) { this.rings[w++] = r; continue; }
       const rx = p.s * rad, ry = Math.max(1, p.y - q.y);
       r.sp.position.set(p.x, p.y);
       r.sp.scale.set((rx * 2) / 128, (ry * 2) / 128);
@@ -66,7 +62,6 @@ export class FxRings {
     if (!on) { this._aura(view, false); return; }
     const z = (view.z || 0) + (view.hover || 0);
     const g = this._proj(view.x, view.y, z, this._g);
-    if (!visibleEffectPoint(g, this.ctx.screenSize?.())) { this._aura(view, true); return; }
     const gx = g.x, gy = g.y, s = g.s;
     const c = this._chest(view, this._q);
     this.particle('pillar', gx, gy, { tint: SKILL_GOLD, life: 0.7, s0: (s / 64) * 1.05, s1: (s / 64) * 1.3, a0: 0.95, a1: 0, sx: 0.8, ay: 1 });
@@ -79,7 +74,11 @@ export class FxRings {
     this._aura(view, true);
   }
 
-  /** Active-skill aura: a soft gold glow and a slowly turning hex on the ground under the unit (fading in / out). */
+  /**
+   * Active-skill aura: a soft gold glow and a slowly turning hex on the ground under the unit (fading in / out). An ammo
+   * skill (UnitInfo.ammoSkill) has none: its magazine is the yellow cells under the HP bar, which shrink with every round
+   * — a standing glow would read as a buff that never changes. The activation burst (skill()) is the same for all.
+   */
   _aura(view, on) {
     if (on && view.info?.ammoSkill) return;
     const P = this.P;
@@ -121,8 +120,6 @@ export class FxRings {
       this._onGround(a.sp, v.y, v.z || 0);
       cam.project(v.x, v.y, z, p);
       cam.project(v.x, v.y + 0.55, z, q);
-      a.sp.renderable = visibleEffectPoint(p, this.ctx.screenSize?.()) && visibleEffectPoint(q, this.ctx.screenSize?.());
-      if (!a.sp.renderable) continue;
       a.sp.position.set(p.x, p.y);
       a.sp.scale.set((p.s * 0.95) / 128, (Math.max(1, p.y - q.y) * 1.72) / 128);
       a.hex.rotation = a.t * 0.9;

@@ -14,10 +14,10 @@ test('Clementia S3 ignores allied erosion bursts but still marks enemy bursts', 
   u.skill.gainSp(999, 'test'); assert.ok(u.skill.activate('test'));
   h.b.dealDamage(null, ally, { type: 'element', element: 'erosion', amount: 2000 });
   assert.equal(h.hooksOf('elementBurst').filter(c => c.target === ally).length, 1, 'a real allied burst occurred');
-  assert.equal(u.mem.clemnt.marks.size, 0, 'friendly injury must not schedule a shot');
+  assert.equal(u.mem.clemntBombs.marks.size, 0, 'friendly injury must not schedule a shot');
   const enemy = h.spawn('target', { pos: [10, 6] });
   h.b.dealDamage(u, enemy, { type: 'element', element: 'erosion', amount: 2000 });
-  assert.ok(u.mem.clemnt.marks.has(enemy), 'enemy erosion still schedules the bombardment');
+  assert.ok(u.mem.clemntBombs.marks.has(enemy), 'enemy erosion still schedules the bombardment');
   checkInvariants(h.b); assert.deepEqual(h.b.errors, []);
 });
 
@@ -50,7 +50,10 @@ test('bounty catapult normal triple attack splashes adjacent and diagonal allies
   h.step();
   const e = h.spawn('enemy_10162_mnctpt', { pos: [10, 8], mods: { speedMul: 0 } });
   assert.ok(h.runUntil(() => h.unit(1).hp < h.unit(1).s.maxHp, 10), 'the primary attack reaches its target');
-  for (const uid of [1, 2, 3]) assert.equal(h.unit(uid).s.maxHp - h.unit(uid).hp, e.s.atk * 3, `unit ${uid}: all three stones`);
+  const one = e.s.atk;
+  for (const uid of [1, 2, 3]) assert.equal(h.unit(uid).s.maxHp - h.unit(uid).hp, one, `unit ${uid}: the first stone lands alone`);
+  h.run(0.7);
+  for (const uid of [1, 2, 3]) assert.equal(h.unit(uid).s.maxHp - h.unit(uid).hp, one * 3, `unit ${uid}: all three stones`);
   assert.equal(h.unit(4).hp, h.unit(4).s.maxHp, 'beyond the splash');
   checkInvariants(h.b); assert.deepEqual(h.b.errors, []);
 });

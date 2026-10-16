@@ -12,12 +12,14 @@ import { FieldRunner, timelineAt, uniteBillBounds } from '../fields.js';
 import { uniteLeft } from '../../sim/spec.js';
 import { FLOW_TICKER_PRIORITY, DELAYS } from './common.js';
 import { msg } from '../../../shared/i18n.js';
+import { onStartUnite } from '../botEmotes.js';
 
 export class MatchUnite {
   startUnite(plan) {
     if (this.clientCombat) { this._startUniteClient(plan); return; }
     this.phase = PHASE.UNITE;
     this.unitePlan = plan;
+    onStartUnite(this, plan);
     this.resetUniteVote();
     const limit = uniteTimeLimit(this, this.wave ? this.wave.timeLimit : 60);
     const battle = this.newBattle(this._uniteOpts(plan, limit));
@@ -131,7 +133,7 @@ export class MatchUnite {
     if (f && f.cc) {
       if (f.mode === 'server' && f.timeline) {
         const sample = timelineAt(f.timeline, this._fieldElapsed(f));
-        live = sample && sample[3] && typeof sample[3] === 'object' ? sample[3] : null;
+        live = sample && sample[4] && typeof sample[4] === 'object' ? sample[4] : null;
       } else live = f.progress && f.progress.left && typeof f.progress.left === 'object' ? f.progress.left : null;
     } else if (f && f.battle) {
       try { live = uniteLeft(f.battle); } catch { live = null; }

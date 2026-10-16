@@ -5,8 +5,7 @@
 //
 //   ADD_BOND            grants `give_garrison_id` to other operators before the first deployment (targets parsed from
 //                       the text: 身前一格 / 身前一格【X】/ 自身和身前一格 / 同一行最右边 / 所有【X】). A unit owns a garrison id
-//                       at most once for native/stat traits (耀骑士临光 already carries its self-grants). Skill-use grants
-//                       stack independently per grantor (owner 2026-10-09). A granted trait keeps
+//                       at most once (耀骑士临光 already carries the 144/159 it grants to itself). A granted trait keeps
 //                       its data cap like a native one: 华法琳's garrison_95 stops at 7 / 14 layers per battle (PRTS 下半
 //                       3月27日更新#2: 「从 初始12/精锐24 降低至 初始7/精锐14」; GitHub #175, PR #192 by @kukiC).
 //   layer events        act1autochess_gar_event_useskill (skillStart) · _selfkillenemy (kill, every check_cnt) ·
@@ -58,28 +57,24 @@ function garrisonIdsOf(u) {
 // ---------------------------------------------------------------------------------------------------------------------
 // install
 
-export function install(battle, units = battle.allyUnits) {
+export function install(battle) {
   const all = [];
   const owned = new Map(); // unit → Set(garrisonId)
   const add = (unit, g, grantedBy = null) => {
     let set = owned.get(unit);
     if (!set) { set = new Set(); owned.set(unit, set); }
-    // Owner feedback 2026-10-09: each caster grants its own skill-use trait and cap.
-    // Native/self-granted stat traits still deduplicate (e.g. Radiant Nearl).
-    const instance = grantedBy && g.effectKey === 'act1autochess_gar_event_useskill'
-      ? `${g.garrisonId}:${grantedBy.unit.id}` : g.garrisonId;
-    if (set.has(instance)) return null;
-    set.add(instance);
+    if (set.has(g.garrisonId)) return null;
+    set.add(g.garrisonId);
     const bb = g.bb || {};
     const cap = S.num(bb.max_add_count_per_battle, 0) > 0 ? S.num(bb.max_add_count_per_battle) : Infinity;
     const it = {
       unit, g, gid: g.garrisonId, key: g.effectKey, bb, bbStr: g.bbStr || {}, grantedBy,
-      cap, capKey: `gar:${instance}:${unit.id}`, cnt: 0, k: -1,
+      cap, capKey: `gar:${g.garrisonId}:${unit.id}`, cnt: 0, k: -1,
     };
     all.push(it);
     return it;
   };
-  for (const u of units) {
+  for (const u of battle.allyUnits) {
     if (!S.isOp(u)) continue;
     for (const gid of garrisonIdsOf(u)) {
       const g = S.garrisonRecord(gid);
@@ -246,8 +241,7 @@ function ammoScope(it, u) {
 }
 
 const INSTALLERS = {
-  // Custom Clementia trait: all friendly units share a counter while the holder is on field.
-  // Unlike selfkillenemy, allied operators/tokens may supply the kills. 联防 never grants layers.
+  // Retained 8443 shop Clementia: each friendly kill advances her own active bonds; unite is excluded.
   custom_gar_allied_kills(battle, list) {
     if (battle.kind === 'unite') return;
     battle.on('kill', ({ killer, victim }) => {
@@ -259,7 +253,6 @@ const INSTALLERS = {
       }
     });
   },
-
   act1autochess_gar_event_useskill(battle, list) {
     const m = byUnit(list);
     battle.on('skillStart', ({ unit }) => {
@@ -333,6 +326,13 @@ const INSTALLERS = {
     const m = byUnit(list);
     battle.on('deploy', ({ unit }) => {
       const arr = m.get(unit);
+      if (arr) for (const it of arr) fireGain(battle, it);
+    });
+    // Player-confirmed: 远牙's granted trait also gains on each body / substitute switch (DESIGN §28.5).
+    // Restrict this extra trigger to that trait; use its existing amounts, active-bond checks and battle cap.
+    const farTooth = byUnit(list.filter((it) => it.gid === 'garrison_108_a' || it.gid === 'garrison_108_b'));
+    if (farTooth.size) battle.on('dollSwap', ({ unit }) => {
+      const arr = farTooth.get(unit);
       if (arr) for (const it of arr) fireGain(battle, it);
     });
   },
@@ -419,7 +419,10 @@ function applyReader(battle, it) {
       else battle.removeBuff(u, key);
       break;
     case 'act1autochess_gar_eff_respawnTimeByBond':
-      if (k > 0) S.passiveBuff(battle, u, key, { redeployMul: Math.max(0.05, 1 + S.num(it.bb.respawn_time, 0) * k) });
+      // 耀骑士临光's 144: −1.5 % / −3 % per 3 卡西米尔 layers with no minimum in the blackboard (divide_num, respawn_time
+      // only) — clamped at 0 like every other redeploy multiplier, so a knock-out timer can reach 0 s (GitHub #370;
+      // until 0.2.1 a 0.05 floor kept it at 5 % of the base time from 192 layers, 96 for the elite)
+      if (k > 0) S.passiveBuff(battle, u, key, { redeployMul: Math.max(0, 1 + S.num(it.bb.respawn_time, 0) * k) });
       else battle.removeBuff(u, key);
       break;
     case 'act2autochess_gar_eff_attrByBond_add_onstart': {

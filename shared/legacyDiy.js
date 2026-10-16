@@ -2,7 +2,7 @@
 import { diySlotIds, diySlot, validateDiyPicks } from './diy.js';
 import { supportChessId } from './supports.js';
 
-export function migrateLegacyDiy({ legacy, entries = {}, existing = {}, data, kitted } = {}) {
+export function migrateLegacyDiy({ legacy = undefined, entries = {}, existing = {}, data = undefined, kitted = undefined } = {}) {
   if (!Array.isArray(legacy) || legacy.length !== 4 || Object.keys(existing || {}).length) return existing || {};
   const slots = diySlotIds(data);
   const picks = {};
@@ -13,11 +13,11 @@ export function migrateLegacyDiy({ legacy, entries = {}, existing = {}, data, ki
     const pick = { charId, skillIndex: Number.isInteger(lo.skill) ? lo.skill : 2,
       ...(typeof lo.module === 'string' ? { uniEquipId: lo.module } : {}) };
     let checked = validateDiyPicks({ ...picks, [slot.baseId]: pick }, { data, kitted });
-    if (!checked.ok && pick.uniEquipId) {
+    if ('error' in checked && pick.uniEquipId) {
       delete pick.uniEquipId;
       checked = validateDiyPicks({ ...picks, [slot.baseId]: pick }, { data, kitted });
     }
-    if (checked.ok) Object.assign(picks, checked.picks);
+    if ('picks' in checked) Object.assign(picks, checked.picks);
   });
   return picks;
 }

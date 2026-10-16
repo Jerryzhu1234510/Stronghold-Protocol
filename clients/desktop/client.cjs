@@ -18,9 +18,9 @@ async function startClient({origin='https://weishuxieyiwangye.cn:8443',pack=path
   await prepareProgramCache(ses,app.getPath('userData'),clientVersion);
   const registry=JSON.parse(fs.readFileSync(path.join(__dirname,'servers.json'),'utf8'));
   if(registry.version!==1||!Array.isArray(registry.servers)||registry.servers.length>30)throw Error('服务器列表配置无效');
-  const servers=(serversOverride||registry.servers).map(s=>{const u=new URL(s.url);if((u.protocol!=='https:'&&!(serversOverride&&u.origin==='http://127.0.0.1:27627'))||u.username||u.password||!s.name||s.name.length>40)throw Error('服务器网址配置无效');return {id:s.id,name:s.name,url:u.href,badge:s.badge||'社区服务器',description:s.description||''}});
+  const servers=(serversOverride||registry.servers).map(s=>{const u=new URL(s.url);if((u.protocol!=='https:'&&!(serversOverride&&u.protocol==='http:'&&u.hostname==='127.0.0.1'&&u.origin===origin))||u.username||u.password||!s.name||s.name.length>40)throw Error('服务器网址配置无效');return {id:s.id,name:s.name,url:u.href,badge:s.badge||'社区服务器',description:s.description||''}});
   const allowed=new Set([origin,...servers.map(s=>new URL(s.url).origin)]);
-  const trainingOrigin='http://127.0.0.1:27627';
+  const trainingOrigin=origin.startsWith('http://127.0.0.1:')?origin:'http://127.0.0.1:27627';
   const observerRequest=request=>new URL(request.url).origin===trainingOrigin?new Request('https://weishuxieyiwangye.cn:8443'+new URL(request.url).pathname,{method:request.method,headers:request.headers}):request;
   const remote=async request=>{
     let source=request.initiatorOrigin;try{if(!source&&request.referrer)source=new URL(request.referrer).origin}catch{}

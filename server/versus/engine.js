@@ -5,7 +5,7 @@ import { installItem } from '../sim/content/items/battle.js';
 import { unitInfo } from '../sim/snapshot.js';
 import { GameData } from '../match/gamedata.js';
 import { computeBonds } from '../match/bondsMeta.js';
-import { drawDisabledBonds, SharedPool } from '../match/pool.js';
+import { drawDisabledBonds, SharedPool, SharedItemPool } from '../match/pool.js';
 import { PlayerAcquire } from '../match/player/acquire.js';
 import { mergeTile } from '../match/board.js';
 import { detachOperator, relocatePair } from './roster.js';
@@ -18,6 +18,7 @@ import { validMapVersion } from '../../shared/roomDirectory.js';
 import { installRaid } from '../sim/content/bonds/addon/battle.js';
 import { versusUpgradeState, VERSUS_UPGRADE_COOLDOWN, VERSUS_INCOME_INTERVAL, VERSUS_ATTACK_REWARD, VERSUS_LAYER_CAP, versusIncomeInterval, grantVersusCoins } from '../../shared/versusEconomy.js';
 import { resetMetaWindow, recordMeta, settleMetaWindows, consumeTraitItem } from './metaWindow.js';
+import { t } from '../../shared/i18n.js';
 
 export const GROUP_COLORS = ['#59c9f5', '#f1c75b', '#b89aff', '#70d5a3'];
 const assert = (ok, message) => { if (!ok) throw new Error(message); };
@@ -54,12 +55,16 @@ export class VersusRoom {
     for (const id of this.bans.drawn) this.gd.modeInactiveBonds.add(id);
     this.bannedChess = new Set(this.bans.banned);
     this.rewardPool = new SharedPool(this.gd, { banned: [...this.bannedChess] });
+    this.itemPool = new SharedItemPool(this.gd, () => this.players.map(p => ({
+      hand: p.items.map(it => ({ ...it, kind: 'item' })), temp: [],
+      board: new Map(p.operators.map(o => [o.uid, { ...o, kind: 'chess', items: o.items.map(id => ({ id })) }])),
+    })));
   }
   random() { let x = this.randomState; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; this.randomState = x >>> 0; return this.randomState / 4294967296; }
   pick(list) { return list[Math.floor(this.random() * list.length)]; }
   join(name, bot = false) {
-    assert(this.status === 'lobby', '对局已经开始'); assert(this.players.length < this.playerCount, '房间已满');
-    const p = { id: `p${this.nextPlayer++}`, name: String(name || '博士').trim().slice(0, 16), bot,
+    assert(this.status === 'lobby', t('对局已经开始')); assert(this.players.length < this.playerCount, t('房间已满'));
+    const p = { id: `p${this.nextPlayer++}`, name: String(name || t('博士')).trim().slice(0, 16), bot,
       room: this, coins: 20, level: 1, upgradeNext: 0, strategy: null, infoReady: bot, operators: [], monsters: {}, items: [], offers: [],
       layers: {}, bonds: {}, shop: {}, freeRefresh: 0, refreshCount: 0, economyNext: 0, freeRefreshNext: 0,
       hp: 20, eliminated: false, duel: null, kills: 0, killValue: 0, launchNext: 0, duelTime: 0, connected: true,
@@ -70,7 +75,7 @@ export class VersusRoom {
   }
   refresh(p, paid = true) {
     const free = p.freeRefresh > 0;
-    if (paid) { assert(p.freeRefresh > 0 || p.coins >= 1, '金币不足'); if (p.freeRefresh) p.freeRefresh--; else { p.coins--; p.stats.spent++; } }
+    if (paid) { assert(p.freeRefresh > 0 || p.coins >= 1, t('金币不足')); if (p.freeRefresh) p.freeRefresh--; else { p.coins--; p.stats.spent++; } }
     const level = p.level;
     const ops = OPERATORS.filter(o => !this.bannedChess.has(o.id) && o.tier <= Math.min(6, level + 1));
     p.shop = {
@@ -81,9 +86,9 @@ export class VersusRoom {
     if (paid) { p.refreshCount++; this.onManualRefresh(p, free); }
   }
   start(id, fill = false) {
-    assert(id === this.host, '只有房主能开始'); assert(this.status === 'lobby', '对局已经开始');
+    assert(id === this.host, t('只有房主能开始')); assert(this.status === 'lobby', t('对局已经开始'));
     if (fill) while (this.players.length < this.playerCount) this.join(`AI · ${this.players.length + 1}`, true);
-    assert(this.players.length === this.playerCount, `需要 ${this.playerCount} 名玩家，可以补齐 AI`);
+    assert(this.players.length === this.playerCount, t('需要 {playerCount} 名玩家，可以补齐 AI', { playerCount: this.playerCount }));
     this.status = 'info'; this.deadline = this.time + this.infoSeconds;
     if (this.infoSeconds <= 0) this.finishInfo();
   }
@@ -109,7 +114,7 @@ export class VersusRoom {
         for (const o of p.operators) if (o.row != null) this.addOperator(p, o);
         this.syncBonds(p);
       }
-      if (pair.some(p => p.eliminated)) this.finishDuel(d, pair.find(p => !p.eliminated) || pair[0], '退出');
+      if (pair.some(p => p.eliminated)) this.finishDuel(d, pair.find(p => !p.eliminated) || pair[0], t('退出'));
     }
   }
   makeBattle(p, d) {
@@ -180,7 +185,7 @@ export class VersusRoom {
     const input = { uid: o.uid, chessId: o.id, ...loadout, row: o.row, col: ownCol(p, o.col), dir: p.side === 'R' ? ({ LEFT: 'RIGHT', RIGHT: 'LEFT' }[direction] || direction) : direction, items: o.items || [], abs: true };
     ps.input.units = ps.input.units.filter(previous => previous.uid !== o.uid);
     ps.input.units.push(input);
-    const u = b._createAllyFromInput(ps, input); assert(u, '干员创建失败');
+    const u = b._createAllyFromInput(ps, input); assert(u, t('干员创建失败'));
     u.base.cost = 0; u.markDirty();
     b._setupUnit(u); installGarrisons(b, [u]);
     u.versusItemGrants = new Map();
@@ -204,15 +209,15 @@ export class VersusRoom {
     b.getPlayer(p.id).bonds = structuredClone(p.bonds); applyPassives(b, p);
   }
   action(p, msg) {
-    assert(p && !p.eliminated && this.status !== 'complete', '只能观战');
+    assert(p && !p.eliminated && this.status !== 'complete', t('只能观战'));
     if (msg.action === 'infoReady') {
-      assert(this.status === 'info', '不在确认阶段'); p.infoReady = true;
+      assert(this.status === 'info', t('不在确认阶段')); p.infoReady = true;
       if (this.players.every(p => p.infoReady)) this.finishInfo();
       return;
     }
-    assert(this.status !== 'info', '请先确认本局信息');
+    assert(this.status !== 'info', t('请先确认本局信息'));
     const d = this.duels.find(d => d.id === p.duel);
-    assert(!d?.done, '本场已结束，等待晋级');
+    assert(!d?.done, t('本场已结束，等待晋级'));
     if (msg.action === 'refresh') { this.refresh(p); return; }
     if (msg.action === 'upgrade') {
       const { price, reason } = versusUpgradeState(p, this.time); assert(!reason, reason);
@@ -222,15 +227,15 @@ export class VersusRoom {
     }
     if (msg.action === 'buy') {
       const kind = msg.kind, i = msg.index;
-      assert(['operator', 'monster', 'equipment'].includes(kind) && Number.isInteger(i), '商店位置无效');
-      const id = p.shop[kind][i], card = byId.get(id); assert(card, '商品已售出');
-      assert(kind !== 'operator' || !this.bannedChess.has(id), '本局禁用干员');
+      assert(['operator', 'monster', 'equipment'].includes(kind) && Number.isInteger(i), t('商店位置无效'));
+      const id = p.shop[kind][i], card = byId.get(id); assert(card, t('商品已售出'));
+      assert(kind !== 'operator' || !this.bannedChess.has(id), t('本局禁用干员'));
       let price = card.price;
       if (kind === 'operator') for (const g of traitsOf({ id })) if (g.eventType === 'SERVER_PRICE') price = g.bb.price;
-      assert(p.coins >= price, '金币不足');
-      assert(kind !== 'operator' || p.operators.length < 16, '干员待部署区已满');
-      assert(kind !== 'equipment' || p.items.length < 12, '装备待部署区已满');
-      assert(kind !== 'monster' || Object.values(p.monsters).reduce((a, n) => a + n, 0) + card.quantity <= 40, '怪物待部署区已满');
+      assert(p.coins >= price, t('金币不足'));
+      assert(kind !== 'operator' || p.operators.length < 16, t('干员待部署区已满'));
+      assert(kind !== 'equipment' || p.items.length < 12, t('装备待部署区已满'));
+      assert(kind !== 'monster' || Object.values(p.monsters).reduce((a, n) => a + n, 0) + card.quantity <= 40, t('怪物待部署区已满'));
       p.coins -= price; p.stats.spent += price; p.shop[kind][i] = null;
       recordMeta(p, 'spent', price); recordMeta(p, 'buys');
       if (kind === 'operator') {
@@ -241,62 +246,62 @@ export class VersusRoom {
     }
     if (msg.action === 'reward') {
       const offer = p.offers[0], slot = offer?.slots[msg.index];
-      assert(Number.isInteger(msg.index) && slot && !slot.sold && !this.bannedChess.has(slot.id), '奖励无效');
-      assert(p.operators.length < 16, '干员待部署区已满');
+      assert(Number.isInteger(msg.index) && slot && !slot.sold && !this.bannedChess.has(slot.id), t('奖励无效'));
+      assert(p.operators.length < 16, t('干员待部署区已满'));
       p.offers.shift();
       this.acquireOperator(p, slot.id, 0); this.syncBonds(p); return;
     }
-    assert(this.status === 'combat' || this.status === 'preparation', '先开始对局');
+    assert(this.status === 'combat' || this.status === 'preparation', t('先开始对局'));
     if (msg.action === 'withdraw') {
       const o = p.operators.find(o => o.uid === msg.uid), b = this.battleOf(p);
       const u = b?.allyUnits.find(u => u.uid === o?.uid && !u.removed);
-      assert(o && o.row != null && u?.alive, '倒地时不能撤退');
+      assert(o && o.row != null && u?.alive, t('倒地时不能撤退'));
       detachOperator(b, o.uid); o.row = o.col = null; o.egirSeconds = 0; this.syncBonds(p); return;
     }
     if (msg.action === 'deploy' || msg.action === 'move') {
-      const o = p.operators.find(o => o.uid === msg.uid); assert(o, msg.action === 'deploy' ? '干员不在待部署区' : '未知干员');
-      assert(msg.action !== 'deploy' || o.row == null, '干员不在待部署区');
-      assert(msg.action !== 'move' || o.row != null, '干员未部署');
-      assert(msg.dir == null || directions.includes(msg.dir), '朝向无效');
+      const o = p.operators.find(o => o.uid === msg.uid); assert(o, msg.action === 'deploy' ? t('干员不在待部署区') : t('未知干员'));
+      assert(msg.action !== 'deploy' || o.row == null, t('干员不在待部署区'));
+      assert(msg.action !== 'move' || o.row != null, t('干员未部署'));
+      assert(msg.dir == null || directions.includes(msg.dir), t('朝向无效'));
       const r = msg.row, c = msg.col, localC = ownCol(p, c);
-      assert(Number.isInteger(r) && Number.isInteger(c) && r >= 2 && r <= 5 && localC >= 3 && localC <= 9, '只能部署在己方半场');
+      assert(Number.isInteger(r) && Number.isInteger(c) && r >= 2 && r <= 5 && localC >= 3 && localC <= 9, t('只能部署在己方半场'));
       const b = this.battleOf(p);
       const u = b.allyUnits.find(u => u.uid === o.uid && !u.removed);
       const occupant = b.allyUnits.find(u => u.alive && u.deployed && !u.removed && u.tileR === r && u.tileC === c && u.uid !== o.uid);
       const replaced = occupant && p.operators.find(o => o.uid === occupant.uid);
-      assert(!b.downOn(r, c) && (!b.isReservedTile(r, c) || replaced || (u?.tileR === r && u?.tileC === c)), '地块被占用');
-      assert(versusCanStand(b.grid, this.stage, r, c, data.chess[o.id]), '地块类型不匹配');
+      assert(!b.downOn(r, c) && (!b.isReservedTile(r, c) || replaced || (u?.tileR === r && u?.tileC === c)), t('地块被占用'));
+      assert(versusCanStand(b.grid, this.stage, r, c, data.chess[o.id]), t('地块类型不匹配'));
       if (msg.action === 'move') {
-        assert(u?.alive && u.deployed, '倒地时不能移动');
-        if (replaced) assert(versusCanStand(b.grid, this.stage, u.tileR, u.tileC, data.chess[replaced.id]), '交换地块类型不匹配');
-        assert(relocatePair(b, u, r, c, occupant), '无法移动');
+        assert(u?.alive && u.deployed, t('倒地时不能移动'));
+        if (replaced) assert(versusCanStand(b.grid, this.stage, u.tileR, u.tileC, data.chess[replaced.id]), t('交换地块类型不匹配'));
+        assert(relocatePair(b, u, r, c, occupant), t('无法移动'));
         if (replaced) { replaced.row = occupant.tileR; replaced.col = ownCol(p, occupant.tileC); }
         o.row = r; o.col = localC;
         if (msg.dir) this.action(p, { action: 'rotate', uid: o.uid, dir: msg.dir });
         this.syncBonds(p); return;
       }
-      assert(replaced || p.operators.filter(o => o.row != null).length < 8, '最多部署 8 名干员');
+      assert(replaced || p.operators.filter(o => o.row != null).length < 8, t('最多部署 8 名干员'));
       if (replaced) { detachOperator(b, replaced.uid); replaced.row = replaced.col = null; replaced.egirSeconds = 0; }
       o.row = r; o.col = localC; o.dir = msg.dir || 'RIGHT';
       try { this.addOperator(p, o); } catch (e) { o.row = o.col = null; throw e; }
       return;
     }
     if (msg.action === 'launch') {
-      assert(this.status === 'combat' && this.time >= (d.readyAt || 0), '整备阶段不能投怪'); const card = byId.get(msg.id);
-      assert(card?.kind === 'monster' && p.monsters[msg.id] > 0, '没有这张怪物卡');
-      assert(d.elapsed + 1e-9 >= p.launchNext, '投怪冷却中');
+      assert(this.status === 'combat' && this.time >= (d.readyAt || 0), t('整备阶段不能投怪')); const card = byId.get(msg.id);
+      assert(card?.kind === 'monster' && p.monsters[msg.id] > 0, t('没有这张怪物卡'));
+      assert(d.elapsed + 1e-9 >= p.launchNext, t('投怪冷却中'));
       const r = msg.row, c = msg.col;
-      assert(Number.isInteger(r) && Number.isInteger(c) && r >= 2 && r <= 5 && this.launchColumns(p).includes(c), '只能投放在标记的前沿');
+      assert(Number.isInteger(r) && Number.isInteger(c) && r >= 2 && r <= 5 && this.launchColumns(p).includes(c), t('只能投放在标记的前沿'));
       const other = d.pair.find(other => other !== p), target = this.battleOf(other);
-      assert(target.grid.groundPassable(r, c), '投放地块不可通行');
+      assert(target.grid.groundPassable(r, c), t('投放地块不可通行'));
       const count = Math.min(card.quantity, p.monsters[msg.id]);
-      assert(target.aliveEnemies().filter(e => e.versusPurchased).length + count <= 20, '最多同时投放 20 个怪物，请等待整包投放空间');
+      assert(target.aliveEnemies().filter(e => e.versusPurchased).length + count <= 20, t('最多同时投放 20 个怪物，请等待整包投放空间'));
       const power = powerAt(d.elapsed);
       for (let i = 0; i < count; i++) {
         const enemy = target.spawnEnemy(msg.id, { pos: [r, c + (i - (count - 1) / 2) * 0.18], ownerPlayerId: other.id, sourcePlayerId: p.id,
           route: { start: [r, c], end: [2, other.side === 'L' ? 2 : 18], checkpoints: [], motion: card.stats.motion },
           mods: { hpMul: power.hp, atkMul: power.atk }, tag: 'versus', countInTotal: true });
-        assert(enemy, '投放失败');
+        assert(enemy, t('投放失败'));
         enemy.versusPurchased = true; enemy.versusPrice = card.price / card.quantity; enemy.versusPower = power.level;
         enemy.versusGoal = [2, other.side === 'L' ? 2 : 18];
       }
@@ -306,10 +311,10 @@ export class VersusRoom {
     }
     if (msg.action === 'equip') {
       const it = p.items.find(it => it.uid === msg.itemUid), o = p.operators.find(o => o.uid === msg.uid);
-      assert(it && o && !o.items.includes(it.id), '无法装备');
+      assert(it && o && !o.items.includes(it.id), t('无法装备'));
       if (consumeTraitItem(p, o, it)) return;
       const replace = msg.replaceIndex;
-      assert(o.items.length < 2 || (Number.isInteger(replace) && replace >= 0 && replace < o.items.length), '请选择要替换的装备');
+      assert(o.items.length < 2 || (Number.isInteger(replace) && replace >= 0 && replace < o.items.length), t('请选择要替换的装备'));
       const b = this.battleOf(p), u = b?.allyUnits.find(u => u.uid === o.uid && !u.removed);
       if (o.items.length >= 2) {
         const old = o.items.splice(replace, 1)[0];
@@ -320,31 +325,31 @@ export class VersusRoom {
     }
     if (msg.action === 'sell') {
       if (msg.kind === 'monster') {
-        assert(byId.get(msg.id)?.kind === 'monster' && p.monsters[msg.id] > 0, '未知怪物');
+        assert(byId.get(msg.id)?.kind === 'monster' && p.monsters[msg.id] > 0, t('未知怪物'));
         const card = byId.get(msg.id), count = Math.min(card.quantity, p.monsters[msg.id]);
         p.monsters[msg.id] -= count; if (!p.monsters[msg.id]) delete p.monsters[msg.id];
         grantVersusCoins(p, Math.floor(card.price * count / card.quantity)); return;
       }
       if (msg.kind === 'equipment') {
-        const i = p.items.findIndex(it => it.uid === msg.uid); assert(i >= 0, '未知装备');
+        const i = p.items.findIndex(it => it.uid === msg.uid); assert(i >= 0, t('未知装备'));
         p.items.splice(i, 1); grantVersusCoins(p, 1); return;
       }
-      const o = p.operators.find(o => o.uid === msg.uid); assert(o, '未知干员');
+      const o = p.operators.find(o => o.uid === msg.uid); assert(o, t('未知干员'));
       const b = this.battleOf(p), u = b?.allyUnits.find(u => u.uid === o.uid && !u.removed);
-      assert(!u || u.alive, '倒地干员不能出售');
+      assert(!u || u.alive, t('倒地干员不能出售'));
       if (u) detachOperator(b, o.uid, 'sold');
       grantVersusCoins(p, 1); p.items.push(...o.items.map(id => ({ id, uid: this.nextUid++ })));
       p.operators.splice(p.operators.indexOf(o), 1); recordMeta(p, 'sells'); triggerMeta(p, o, 'SERVER_CHESS_SOLD', 'sold'); this.syncBonds(p); return;
     }
     if (msg.action === 'rotate') {
       const o = p.operators.find(o => o.uid === msg.uid);
-      assert(o && o.row != null && ['UP', 'RIGHT', 'DOWN', 'LEFT'].includes(msg.dir), '朝向无效');
+      assert(o && o.row != null && ['UP', 'RIGHT', 'DOWN', 'LEFT'].includes(msg.dir), t('朝向无效'));
       const b = this.battleOf(p), u = b.allyUnits.find(u => u.uid === o.uid && !u.removed);
-      assert(u?.alive, '倒地时不能转向'); o.dir = msg.dir;
+      assert(u?.alive, t('倒地时不能转向')); o.dir = msg.dir;
       u.dir = p.side === 'R' ? ({ LEFT: 'RIGHT', RIGHT: 'LEFT' }[o.dir] || o.dir) : o.dir;
       b._refreshRange(u); b._ev(['deploy', u.id, u.dir]); return;
     }
-    if (msg.action === 'forfeit') { this.finishDuel(d, d.pair.find(other => other !== p), '认输'); return; }
+    if (msg.action === 'forfeit') { this.finishDuel(d, d.pair.find(other => other !== p), t('认输')); return; }
     throw new Error('未知操作');
   }
   finishDuel(d, winner, reason) {
@@ -379,7 +384,7 @@ export class VersusRoom {
     kept.id = elite;
     p.stats.merges++;
     PlayerAcquire.prototype.pushRewardOffer.call({ gd: this.gd, shop: { level: p.level }, offers: p.offers,
-      m: { pool: this.rewardPool, rngShop: () => this.random() }, diyRollEntries: () => [], dirty: () => {} }, 'merge');
+      cardPool: this.rewardPool, m: { pool: this.rewardPool, rngShop: () => this.random() }, diyStockEntries: () => [], dirty: () => {} }, 'merge');
     if (kept.row != null) this.addOperator(p, kept);
     return kept;
   }
@@ -455,8 +460,8 @@ export class VersusRoom {
     return Math.floor((to + 1e-9) / VERSUS_INCOME_INTERVAL) - Math.floor((from + 1e-9) / VERSUS_INCOME_INTERVAL);
   }
   resolveDuel(d, dead) {
-    if (dead.length) this.finishDuel(d, dead.length === 1 ? d.pair.find(p => p !== dead[0]) : this.tiebreak(d), '蓝门失守');
-    else if (d.elapsed >= this.duelSeconds) this.finishDuel(d, this.tiebreak(d), '时间耗尽');
+    if (dead.length) this.finishDuel(d, dead.length === 1 ? d.pair.find(p => p !== dead[0]) : this.tiebreak(d), t('蓝门失守'));
+    else if (d.elapsed >= this.duelSeconds) this.finishDuel(d, this.tiebreak(d), t('时间耗尽'));
   }
   botAction(p, _d) {
     if (p.offers.length && p.operators.length < 16) { this.action(p, { action: 'reward', index: 0 }); return; }
@@ -492,7 +497,7 @@ export class VersusRoom {
       disabledBonds: [...this.bans.drawn, ...this.bans.staticOff], drawnDisabledBonds: this.bans.drawn, staticInactiveBonds: this.bans.staticOff, bannedChess: this.bans.banned,
       time: Math.round(this.time), countdown: Math.max(0, Math.ceil((this.deadline || 0) - this.time)), champion: this.champion,
       players: this.players.map(p => ({ id: p.id, name: p.name, bot: p.bot, eliminated: p.eliminated, hp: p.hp,
-        infoReady: p.infoReady, initial: [...p.name][0] || '博', color: this.duels.find(d => d.id === p.duel)?.color,
+        infoReady: p.infoReady, initial: [...p.name][0] || t('博'), color: this.duels.find(d => d.id === p.duel)?.color,
         duel: p.duel, side: p.side, kills: p.kills, connected: p.connected, placement: p.placement })),
       duels: this.duels.map(d => ({ id: d.id, color: d.color, players: d.pair.map(p => p.id), done: d.done, winner: d.winner,
         elapsed: Math.round(d.elapsed), power: powerAt(d.elapsed), remaining: Math.max(0, Math.ceil(this.duelSeconds - d.elapsed)) })), history: this.history,

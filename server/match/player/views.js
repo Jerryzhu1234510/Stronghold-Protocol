@@ -6,7 +6,7 @@
 import { PHASE } from '../../../shared/constants.js';
 import { boardOrder, pieceDir } from '../board.js';
 import { bondList, offBondCounts } from '../bondsMeta.js';
-import { bountyText } from '../choices.js';
+import { bountyText, bountyCard } from '../choices.js';
 
 export class PlayerViews {
   pieceView(p, rc = null) {
@@ -57,20 +57,27 @@ export class PlayerViews {
     for (const { r, c, piece } of boardOrder(this.board)) board.push(this.pieceView(piece, [r, c]));
     // a boss round's prep: the partner's board on its half of the boss field (Match.bossMateView, item 51)
     const bossMate = typeof this.m.bossMateView === 'function' ? this.m.bossMateView(this) : null;
-    const bossGroup = this.alive && this.m.bossGroupOf?.(this);
     return {
       t: 'm.private',
       playerId: this.playerId,
-      prepField: bossGroup ? { kind: 'bossPrep', side: bossGroup.side, round: this.m.round } : null,
-      prepMapChars: this.m.prepMapChars?.(this) || [],
       seat: this.seat,
       alive: this.alive,
+      prepField: this.alive && this.m.bossGroupOf(this)
+        ? { kind: 'bossPrep', side: this.m.bossGroupOf(this).side, round: this.m.round } : null,
       lp: this.lp,
       funds: this.funds,
       bandId: this.bandId,
       ready: this.ready,
-      canReady: this.alive && this.tempEmpty && this.m.phase === PHASE.PREP,
+      canReady: this.alive && this.tempEmpty && !this.personalChoice && this.m.phase === PHASE.PREP,
+      personalChoice: this.personalChoice ? {
+        id: this.personalChoice.id,
+        round: this.personalChoice.round,
+        sourceItemId: this.personalChoice.sourceItemId,
+        cards: this.personalChoice.cards.map((c) => bountyCard(this.gd, c)),
+      } : null,
       shop: {
+        ...(this.gd.focusSlots ? { bonusChessSlots: this.gd.focusSlots, cloneMode: this.m.isClone,
+          focusBondId: this.shop.focusBondId, focusOptions: this.shopFocusOptions() } : {}),
         level: this.shop.level,
         maxLevel: this.gd.maxShopLevel,
         upgradePrice: this.shop.level >= this.gd.maxShopLevel ? 0 : this.shop.upgradePrice,
@@ -78,8 +85,6 @@ export class PlayerViews {
         freeRefreshes: this.shop.freeRefreshes,
         frozen: this.shop.frozen,
         slots,
-        ...(this.gd.focusSlots ? { bonusChessSlots: this.gd.focusSlots, cloneMode: this.m.isClone,
-          focusBondId: this.shop.focusBondId, focusOptions: this.shopFocusOptions() } : {}),
         // `source` 'merge' = the promotion reward (晋升奖励); any other offer (a strategy, an item, a 特质) carries the
         // `label` the bar shows instead; `queued` = offers waiting behind it (player report #6 after 0.1.0)
         rewardOffer: offer ? { tier: offer.tier, source: offer.source === 'merge' ? 'merge' : 'special', label: offer.label || null, queued: this.offers.length - 1, slots: offer.slots.map((s) => ({ kind: s.kind === 'item' ? 'item' : 'chess', id: s.id, price: s.price, sold: !!s.sold })) } : null,
@@ -87,6 +92,8 @@ export class PlayerViews {
       hand: this.hand.map((p) => (p ? this.pieceView(p) : null)),
       temp: this.temp.map((p) => (p ? this.pieceView(p) : null)),
       board,
+      // The stage's 外勤医疗 reserve medic is present during prep, but is not a draggable board piece.
+      prepMapChars: this.m.prepMapChars(this),
       deployCap: this.deployCap,
       deployCount: this.deployCount,
       // + the mode-off bonds it has members of (`off: true`, the strip's grey 本局禁用 discs — bondsMeta.offBondCounts)
@@ -95,6 +102,9 @@ export class PlayerViews {
       nextEnemies: this.m.nextEnemiesFor(this),
       // DESIGN §16: the effective operator loadout ({ [baseChessId]: { skill, module } }; chess not listed use defaults)
       loadout: this.loadout,
+      // 0.2.2: the effective per-operator 潜能 / 练度 ({ [charId]: { potential, cultivate } }; operators not listed: 潜能 6,
+      // 精英2 Lv.60) — the client's cards compose the numbers from it (shared/potential.js)
+      ops: this.ops,
       // 0.2.0 补位: the base chess ids this player fields as their stand-ins in this match (the not-owned list the seat had
       // at the match start; [] = every operator owned) — the client shows these as their stand-ins (cards, pieces, the
       // detail card, with a small 「替补」 mark)

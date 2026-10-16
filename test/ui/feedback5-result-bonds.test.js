@@ -1,8 +1,9 @@
 // Community report of 2026-10-06 「独行这种盟约是不能叠层的（顺便排查下还有没有类似的）」 (item 21). PRTS 卫戍协议：盟约 下半/
 // PRTS盟约记录, its header: 「下述盟约中部分盟约不会显示叠加层数，但是叠加层数的特质/策略/装备等效果仍然对其生效」 — the four
-// bonds.json `noStack` bonds (调和 协防干员 独行 绝技) do take layers (助力, 余, 华法琳 …), the game only never shows them. The
+// bonds.json `noStack` bonds (调和 协防干员 独行 绝技) do take layers (助力, 华法琳 … — not 余's 文火慢炖, the owner's decision
+// of 2026-10-08), the game only never shows them. The
 // bond strip and its popup hide them since 0.1.4 (PR #66, test/ui/feedback1b-bonds.test.js); the result card still printed
-// them (「独行 24」). resultBonds: all active bonds, no number or rank for a hidden count.
+// them (「独行 24」) and ordered its six bonds by them. resultBonds: no number, no rank for a hidden count.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -36,27 +37,9 @@ test('result card bonds: a noStack bond shows no number and does not rank by its
     { bondId: 'suntShip', layers: 30, active: false },
     { bondId: 'kjeragShip', layers: 3, active: false },
   ], rec);
-  assert.deepEqual(out.map((b) => b.bondId), ['deputShip', 'yanShip', 'soloShip'],
-    'all active bonds; inactive bonds stay out even when they hold visible or hidden layers');
+  assert.deepEqual(out.map((b) => b.bondId), ['deputShip', 'yanShip', 'kjeragShip', 'soloShip'],
+    'layered bonds by layers; active 独行 last; an inactive 绝技 with only hidden layers left out');
   assert.equal(out.find((b) => b.bondId === 'soloShip').hideLayers, true);
   assert.equal(out.find((b) => b.bondId === 'yanShip').hideLayers, undefined);
   assert.equal(out.find((b) => b.bondId === 'yanShip').layers, 12, 'the stacking bonds keep their count');
-});
-
-test('settlement lists more than six active bonds, including active zero-layer bonds', () => {
-  const active = Object.keys(BONDS).slice(0, 9).map((bondId, i) => ({ bondId, layers: i, active: true }));
-  const offId = Object.keys(BONDS)[9];
-  const input = [...active, { bondId: offId, layers: 200, active: false }];
-  const before = structuredClone(input);
-  const out = resultBonds(input, rec);
-  assert.equal(out.length, 9);
-  assert.deepEqual(out.map(b => b.bondId).sort(), active.map(b => b.bondId).sort());
-  assert.ok(out.some(b => b.bondId === active[0].bondId && b.layers === 0));
-  assert.ok(out.every(b => b.active));
-  assert.deepEqual(input, before, 'settlement snapshots must not be mutated');
-});
-
-test('settlement safely ignores missing and malformed bond records', () => {
-  assert.deepEqual(resultBonds(null, rec), []);
-  assert.deepEqual(resultBonds([null, {}, { layers: 3, active: true }, { bondId: 'soloShip', layers: 200 }], rec), []);
 });

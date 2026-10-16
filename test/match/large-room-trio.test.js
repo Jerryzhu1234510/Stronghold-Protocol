@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DATA, makeMatch, give, legalTileFor, chessOfTier, checkInvariants } from './harness.js';
-import { supportChessId } from '../../shared/supports.js';
 import { planUnite, uniteBattleOpts, uniteTimeLimit } from '../../server/match/unite.js';
 import { TRIO_UNITE_RECT, trioUniteStage } from '../../shared/uniteLayout.js';
 import { Battle } from '../../server/sim/Battle.js';
@@ -13,7 +12,6 @@ import { playerLayer, bondOwnerId } from '../../public/js/ui/watchBonds.js';
 import { boardArea, bandFor, fieldRows } from '../../public/js/render/app.js';
 import { buildBoard } from '../../public/js/render/board3d/layout.js';
 
-const ready = Object.values(DATA.supports).filter(s => s.ready).map(s => s.charId);
 function uniteScenario(capacity, clientCombat = false, perfectCount = 4) {
   const h = makeMatch({ capacity, humans: capacity, fake: true, clientCombat, clients: false, instant: false }).start();
   h.toPrep(1); const m = h.m;
@@ -33,12 +31,12 @@ for (const capacity of [4, 5, 6, 7, 8]) for (const clientCombat of [false, true]
     const { h, m, plan } = uniteScenario(capacity, clientCombat, Math.min(4, capacity - 1));
     const helpers = capacity >= 7 ? 3 : 2;
     assert.equal(plan.helpers.length, helpers);
-    assert.equal(uniteTimeLimit(m, 60), capacity >= 7 ? 105.6 : 66);
+    assert.equal(uniteTimeLimit(m, 60), capacity >= 7 ? 105.6 : capacity === 4 ? 60 : 66);
     m.startUnite(plan);
     assert.equal(m.phase, PHASE.UNITE);
-    assert.equal(m.deadline - h.sched.now(), (capacity >= 7 ? 105.6 : 66) / m.gameSpeed * 1000);
+    assert.equal(m.deadline - h.sched.now(), (capacity >= 7 ? 105.6 : capacity === 4 ? 60 : 66) / m.gameSpeed * 1000);
     const field = m.fields[0], opts = clientCombat ? field.spec : field.battle.opts;
-    assert.equal(opts.timeLimit, capacity >= 7 ? 105.6 : 66);
+    assert.equal(opts.timeLimit, capacity >= 7 ? 105.6 : capacity === 4 ? 60 : 66);
     assert.equal(opts.players.length, helpers);
     assert.deepEqual(opts.players.map(p => [p.rowOffset ?? 0, p.colOffset]), helpers === 3 ? [[0, 8], [0, 0], [-7, 8]] : [[0, 8], [0, 0]]);
     assert.equal(opts.rect.r0, helpers === 3 ? 1 : 9);

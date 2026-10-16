@@ -3,14 +3,13 @@
 import { int, isObj, sortedPlayers } from './shared.js';
 import { t } from '../../../../shared/i18n.js';
 
-/** All active settlement bonds, with native hidden-layer rules and no display cap. */
+/** Retained continuous-mode settlements use the same uncapped bond ordering. */
 export function resultBonds(bonds, bondRec = () => null) {
-  const list = (Array.isArray(bonds) ? bonds : [])
-    .filter(b => b && typeof b.bondId === 'string' && b.active)
-    .map(b => bondRec(b.bondId)?.noStack ? { ...b, hideLayers: true } : b);
-  const shown = b => b.hideLayers ? 0 : b.layers || 0;
-  return list.sort((a, b) => shown(b) - shown(a));
+  return (Array.isArray(bonds) ? bonds : []).filter(b => b && typeof b.bondId === 'string' && b.active)
+    .map(b => bondRec(b.bondId)?.noStack ? { ...b, hideLayers: true } : b)
+    .sort((a, b) => (b.hideLayers ? 0 : b.layers || 0) - (a.hideLayers ? 0 : a.layers || 0));
 }
+
 
 // ---- result -----------------------------------------------------------------------------------------------------------
 
@@ -59,12 +58,13 @@ export function normalizeResult(res, pub) {
     hiddenReached: typeof r.hiddenReached === 'boolean' ? (r.hiddenReached || !!r.hiddenCleared) : !!r.hiddenCleared,
     difficulty: r.difficulty || pub?.difficulty || null,
     modeId: r.modeId || pub?.modeId || null,
-    trophyPolicy: r.trophyPolicy?.version === 1 && typeof r.trophyPolicy.custom === 'boolean'
-      ? { version: 1, custom: r.trophyPolicy.custom, multiplier: r.trophyPolicy.custom ? 0.5 : 1,
-          reason: r.trophyPolicy.custom ? 'custom' : 'normal' } : null,
     bossId: r.bossId ?? pub?.bossId ?? null,
     hiddenBossId: r.hiddenBossId ?? pub?.hiddenBossId ?? null,
     durationMs: Number.isFinite(r.durationMs) ? r.durationMs : null,
+    extensions: r.extensions ? { ...r.extensions } : null,
+    trophyPolicy: r.trophyPolicy?.version === 1 && typeof r.trophyPolicy.custom === 'boolean'
+      ? { version: 1, custom: r.trophyPolicy.custom, multiplier: r.trophyPolicy.custom ? 0.5 : 1,
+          reason: r.trophyPolicy.custom ? 'custom' : 'normal' } : null,
     players,
   };
 }

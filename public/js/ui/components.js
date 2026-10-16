@@ -14,12 +14,11 @@
 import { h, Fragment } from '../../vendor/preact.module.js';
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from '../../vendor/hooks.module.js';
 import htm from '../../vendor/htm.module.js';
-import { DIFFICULTY_NAMES, DIFFICULTY_COLORS, SEAT_HUES } from '../../../shared/constants.js';
+import { DIFFICULTY_NAMES, DIFFICULTY_COLORS } from '../../../shared/constants.js';
 import { t } from '../../../shared/i18n.js';
 import { serverNow } from '../store.js';
 import { data, useData, localAsset } from '../data.js';
 import { uiUrl } from './assetUrls.js';
-import { useRetryImage } from './imageRetry.js';
 
 /**
  * h() for htm with its static-subtree cache switched off. htm keeps the vnode it built for a fully static subtree in
@@ -43,7 +42,6 @@ const cx = (...parts) => parts.flat().filter(Boolean).join(' ');
 
 /** 24×24 glyph paths (original, simple geometric shapes). `eo` = even-odd fill rule. */
 export const ICONS = {
-  chat: { d: 'M3 3h18v14H8l-5 4zm2 2v11.2L7.3 15H19V5zm2 3h10v2H7zm0 4h7v2H7z', eo: true },
   check: { d: 'M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6L20.1 8.4 18.7 7z' },
   close: { d: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z' },
   exit: { d: 'M20 3H10v2h8v14h-8v2h10zM8.4 7.4 7 6l-6 6 6 6 1.4-1.4L4.8 13H15v-2H4.8z' },
@@ -57,6 +55,8 @@ export const ICONS = {
   users: { d: 'M9 4a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zM2 20a7 6.5 0 0 1 14 0zM16.5 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm.9 8.1A6.5 6 0 0 1 22.5 20H18a8.6 8 0 0 0-2.4-6.1 6 6 0 0 1 1.8-.8z' },
   rook: { d: 'M5 3h3v2h2V3h4v2h2V3h3v5l-2 2v7l2 2v2H5v-2l2-2v-7L5 8z' },
   signal: { d: 'M2 17h3v4H2zm6-4h3v8H8zm6-4h3v12h-3zm6-4h3v16h-3z' },
+  // 统计 (the stats page's entry): three columns on a baseline — apart from `signal`, the ping bars
+  chart: { d: 'M4 12h4v7H4zm6-6h4v13h-4zm6 3h4v10h-4zM3 20h18v2H3z' },
   refresh: { d: 'M12 4a8 8 0 0 1 7.4 5H17v2h6V5h-2v2.3A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8zm0 16a8 8 0 0 1-7.4-5H7v-2H1v6h2v-2.3A10 10 0 0 0 22 12h-2a8 8 0 0 1-8 8z' },
   snow: { d: 'M11 2h2v4.2l2.3-2.3 1.4 1.4-3.7 3.7v2h2l3.7-3.7 1.4 1.4-2.3 2.3H22v2h-4.2l2.3 2.3-1.4 1.4-3.7-3.7h-2v2l3.7 3.7-1.4 1.4-2.3-2.3V22h-2v-4.2l-2.3 2.3-1.4-1.4 3.7-3.7v-2H9l-3.7 3.7-1.4-1.4L6.2 13H2v-2h4.2L3.9 8.7l1.4-1.4L9 11h2V9L7.3 5.3l1.4-1.4L11 6.2z' },
   chevronRight: { d: 'M8.6 5 7.2 6.4 12.8 12l-5.6 5.6L8.6 19l7-7z' },
@@ -76,6 +76,8 @@ export const ICONS = {
   wifiOff: { d: 'M2 17h3v4H2zm6-4h3v8H8zm6-4h3v12h-3zm6-4h3v16h-3zM2.4 1 23 21.6 21.6 23 1 2.4z' },
   expand: { d: 'M3 3h7v2H5v5H3zm11 0h7v7h-2V5h-5zM3 14h2v5h5v2H3zm16 0h2v7h-7v-2h5z' },
   collapse: { d: 'M8 3h2v7H3V8h5zm6 0h2v5h5v2h-7zM3 14h7v7H8v-5H3zm11 0h7v2h-5v5h-2z' },
+  // 添加到桌面 (add to home screen): a house outline with a + inside
+  homePlus: { d: 'M12 2 22 10.5V21H2V10.5zm0 2.6-8 6.8V19h16v-7.6zM11 10h2v2.5h2.5v2H13V17h-2v-2.5H8.5v-2H11z', eo: true },
   rotate: { d: 'M7 2h8a2 2 0 0 1 2 2v7h-2V4H7v16h4v2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 12h5a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2zm0 2v4h5v-4z', eo: true },
   book: { d: 'M2 4h7.5A3.5 3.5 0 0 1 12 5.1 3.5 3.5 0 0 1 14.5 4H22v16h-7.5a1.5 1.5 0 0 0-1.5 1.5h-2A1.5 1.5 0 0 0 9.5 20H2zm2 2v12h5.5c.5 0 1 .1 1.5.3V7.5A1.5 1.5 0 0 0 9.5 6zm10.5 0A1.5 1.5 0 0 0 13 7.5v10.8c.5-.2 1-.3 1.5-.3H20V6z', eo: true },
   // 观战 (spectator seats; the same eye as gameComponents.js GIcon 'eye')
@@ -198,10 +200,10 @@ export function tierChipUrl(t) {
 export function TierChip({ tier, golden = false, size = 'md', class: cls }) {
   const n = Math.max(1, Math.min(6, Number(tier) | 0 || 1));
   const src = tierChipUrl(n);
-  const image = useRetryImage(src);
-  const img = image.ok;
+  const [bad, setBad] = useState(null);
+  const img = !!src && bad !== src;
   return html`<span class=${cx('tier', `tier--${n}`, `tier--${size}`, golden && 'tier--golden', img && 'tier--img', cls)} aria-label=${t('{tier}阶', { tier: n })}>
-    ${img ? html`<img src=${src} alt="" draggable=${false} onError=${image.onError} onLoad=${image.onLoad} />` : roman(n)}
+    ${img ? html`<img src=${src} alt="" draggable=${false} onError=${() => setBad(src)} />` : roman(n)}
   </span>`;
 }
 
@@ -215,8 +217,9 @@ export function BondDisc({
   name = '', icon, count, layers, tier = 0, maxTier = 3, active = false, disabled = false, layersDisabled = false,
   size = 'md', showName = true, onClick, class: cls, title,
 }) {
-  const image = useRetryImage(icon);
-  const imgOk = image.ok;
+  // Remember which URL failed (a per-URL flag can't race a reset effect).
+  const [badSrc, setBadSrc] = useState(null);
+  const imgOk = !!icon && badSrc !== icon;
   const n = Math.max(1, Math.min(8, maxTier | 0 || 3));
   const filled = Math.max(0, Math.min(n, tier | 0));
   const R = 46;
@@ -237,7 +240,7 @@ export function BondDisc({
       </svg>
       <span class="bond__core">
         ${imgOk
-          ? html`<img class="bond__icon" src=${icon} alt="" draggable=${false} onError=${image.onError} onLoad=${image.onLoad} />`
+          ? html`<img class="bond__icon" src=${icon} alt="" draggable=${false} onError=${() => setBadSrc(icon)} />`
           : html`<span class="bond__glyph">${glyph}</span>`}
       </span>
       ${stack != null ? html`<span class="bond__count">${stack}</span>` : null}
@@ -387,35 +390,57 @@ export function Countdown({ deadline, seconds, total, warnAt = 10, label = 'COUN
 
 // ---- Modal & dialogs ---------------------------------------------------------------------------
 
-const modalStack = []; // open modals, topmost last: only the topmost reacts to Escape
+const modalStack = []; // open modals, topmost last: only the topmost handles keyboard focus / Escape
 
 /**
  * Modal dialog (declarative). Esc / backdrop click call onClose.
  * @param {{ open: boolean, title?: any, micro?: string, tone?: string, onClose?: Function, actions?: any,
  *   width?: string, closeOnBackdrop?: boolean, class?: string, children?: any }} props
  */
-export function Modal({ open, title, titleHint, micro, tone = 'mint', onClose, actions, width, closeOnBackdrop = true, trapFocus = false, class: cls, children }) {
+export function Modal({ open, title, micro, tone = 'mint', onClose, actions, width, closeOnBackdrop = true, class: cls, children }) {
   const boxRef = useRef(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return undefined;
     const token = {};
     modalStack.push(token);
     const prevFocus = typeof document !== 'undefined' ? document.activeElement : null;
+    const box = boxRef.current;
+    // The independent guide can open above SettingsModal (its z-index is higher than --z-modal).
+    const topmost = () => modalStack[modalStack.length - 1] === token && !document.querySelector('.guide');
+    const available = (el) => !el.matches(':disabled') && !el.closest('[inert]') && el.getClientRects().length > 0
+      && getComputedStyle(el).visibility !== 'hidden';
+    const tabbable = () => [...box.querySelectorAll('button, [href], input, select, textarea, [tabindex], summary')]
+      .filter((el) => el.tabIndex >= 0 && available(el));
+    const focusFirst = () => (tabbable()[0] || box).focus();
     const onKey = (e) => {
-      if (e.key !== 'Escape' || modalStack[modalStack.length - 1] !== token || !closeRef.current) return;
-      e.stopPropagation();
-      closeRef.current();
+      if (!topmost()) return;
+      if (e.key === 'Escape' && closeRef.current) {
+        e.stopPropagation();
+        closeRef.current();
+      } else if (e.key === 'Tab') {
+        const els = tabbable();
+        const first = els[0] || box, last = els[els.length - 1] || box;
+        if (!els.includes(document.activeElement) || document.activeElement === (e.shiftKey ? first : last)) {
+          e.preventDefault();
+          (e.shiftKey ? last : first).focus();
+        }
+      }
+    };
+    const onFocus = (e) => {
+      if (topmost() && !box.contains(e.target)) focusFirst();
     };
     window.addEventListener('keydown', onKey);
-    const t = setTimeout(() => {
-      const el = boxRef.current?.querySelector('[data-autofocus]') || boxRef.current?.querySelector('button, input');
-      el?.focus?.();
-    }, 30);
+    window.addEventListener('focusin', onFocus);
+    const autofocus = box.querySelector('[data-autofocus]');
+    if (topmost()) {
+      if (autofocus && available(autofocus)) autofocus.focus();
+      else focusFirst();
+    }
     return () => {
       window.removeEventListener('keydown', onKey);
-      clearTimeout(t);
+      window.removeEventListener('focusin', onFocus);
       const i = modalStack.indexOf(token);
       if (i >= 0) modalStack.splice(i, 1);
       prevFocus?.focus?.();
@@ -424,23 +449,15 @@ export function Modal({ open, title, titleHint, micro, tone = 'mint', onClose, a
   if (!open) return null;
   return html`<div class="modal" role="presentation"
       onMouseDown=${(e) => { if (closeOnBackdrop && e.target === e.currentTarget && onClose) onClose(); }}>
-    <div ref=${boxRef} class=${cx('modal__box', 'brackets', `modal__box--${tone}`, cls)} role="dialog" aria-modal="true" aria-label=${typeof title === 'string' ? title : micro || '对话框'}
-         style=${width ? `width:${width}` : undefined} onKeyDown=${(e) => {
-           if (!trapFocus || e.key !== 'Tab') return;
-           const controls = [...e.currentTarget.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex="0"]')];
-           const first = controls[0], last = controls.at(-1);
-           if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
-             e.preventDefault(); (e.shiftKey ? last : first)?.focus();
-           }
-         }}>
+    <div ref=${boxRef} class=${cx('modal__box', 'brackets', `modal__box--${tone}`, cls)} role="dialog" aria-modal="true" tabindex="-1"
+         style=${width ? `width:${width}` : undefined}>
       <div class="modal__stripe" aria-hidden="true"></div>
-      ${title || micro ? html`<header class="modal__head" role="presentation">
+      ${title || micro ? html`<header class="modal__head">
         ${micro ? html`<${MicroLabel}>${micro}<//>` : null}
         ${title ? html`<h2 class="modal__title">${title}</h2>` : null}
-        ${titleHint ? html`<span class="modal__title-hint">${titleHint}</span>` : null}
       </header>` : null}
       <div class="modal__body">${children}</div>
-      ${actions ? html`<footer class="modal__actions" role="presentation">${actions}</footer>` : null}
+      ${actions ? html`<footer class="modal__actions">${actions}</footer>` : null}
     </div>
   </div>`;
 }
@@ -708,21 +725,22 @@ export function Spinner({ size = 'md', label, tone = 'mint', class: cls }) {
 
 // ---- Avatar frame ------------------------------------------------------------------------------
 
+const SEAT_HUES = [162, 196, 38, 280];
 /**
  * Square avatar frame with bracket corners. Falls back to a glyph (first letter / robot).
  * @param {{ name?: string, src?: string, size?: 'sm'|'md'|'lg'|'xl', seat?: number, host?: boolean, bot?: boolean,
  *   self?: boolean, ready?: boolean, offline?: boolean, dead?: boolean, empty?: boolean, class?: string }} props
  */
 export function AvatarFrame({ name = '', src, size = 'md', seat = 0, host, bot, self, ready, offline, dead, empty, class: cls }) {
-  const image = useRetryImage(src);
-  const imgOk = image.ok;
-  const hue = SEAT_HUES[((seat | 0) % SEAT_HUES.length + SEAT_HUES.length) % SEAT_HUES.length];
+  const [badSrc, setBadSrc] = useState(null);
+  const imgOk = !!src && badSrc !== src;
+  const hue = SEAT_HUES[((seat | 0) % 4 + 4) % 4];
   const glyph = [...(name || '').trim()][0] || '?';
   return html`<div class=${cx('avatar', `avatar--${size}`, 'brackets', host && 'is-host', bot && 'is-bot', self && 'is-self',
       ready && 'is-ready', offline && 'is-offline', dead && 'is-dead', empty && 'is-empty', cls)} style=${`--seat-hue:${hue}`}>
     <div class="avatar__img">
       ${empty ? html`<${Icon} name="plus" class="avatar__empty" />`
-        : imgOk ? html`<img src=${src} alt="" draggable=${false} onError=${image.onError} onLoad=${image.onLoad} />`
+        : imgOk ? html`<img src=${src} alt="" draggable=${false} onError=${() => setBadSrc(src)} />`
         : bot ? html`<${Icon} name="robot" class="avatar__bot" />`
         : html`<span class="avatar__glyph">${glyph}</span>`}
     </div>
@@ -833,11 +851,11 @@ export function PingPill({ ms, online = true, class: cls }) {
  */
 export function DifficultyIcon({ difficulty, class: cls }) {
   useData('assets');
+  const [badSrc, setBadSrc] = useState(null);
   const ui = DIFFICULTY_NAMES[difficulty] ? data.get('assets')?.ui : null;
   const src = ui && typeof ui === 'object' ? ui[`modeIcon/mode_${String(difficulty).toLowerCase()}_icon`] : null;
-  const image = useRetryImage(typeof src === 'string' ? src : null);
-  if (image.ok) {
-    return html`<img class=${cx('icon', 'dicon', cls)} src=${src} alt="" draggable=${false} onError=${image.onError} onLoad=${image.onLoad} />`;
+  if (typeof src === 'string' && src && badSrc !== src) {
+    return html`<img class=${cx('icon', 'dicon', cls)} src=${src} alt="" draggable=${false} onError=${() => setBadSrc(src)} />`;
   }
   return html`<${Icon} name="rook" class=${cls} />`;
 }
@@ -862,7 +880,7 @@ export function DifficultyTag({ difficulty, size = 'md', class: cls, code }) {
  *   placeholder?: string, maxLength?: number, transform?: (v: string) => string, autoFocus?: boolean,
  *   disabled?: boolean, size?: 'md'|'lg'|'code', icon?: string, class?: string, inputRef?: any, name?: string }} props
  */
-export function TextField({ label, micro, value, onInput, onEnter, placeholder, maxLength, transform, autoFocus, disabled, type = 'text', size = 'md', icon, class: cls, inputRef, name, hint, invalid }) {
+export function TextField({ label, micro, value, onInput, onEnter, placeholder, maxLength, transform, autoFocus, disabled, size = 'md', icon, class: cls, inputRef, name, hint, invalid }) {
   const localRef = useRef(null);
   const ref = inputRef || localRef;
   const composing = useRef(false);
@@ -882,7 +900,7 @@ export function TextField({ label, micro, value, onInput, onEnter, placeholder, 
     ${label || micro ? html`<span class="field__label">${label}${micro ? html`<span class="micro">${micro}</span>` : null}</span>` : null}
     <span class="field__box brackets">
       ${icon ? html`<${Icon} name=${icon} class="field__icon" />` : null}
-      <input id=${id} ref=${ref} type=${type} class="field__input" name=${name} value=${value} placeholder=${placeholder}
+      <input id=${id} ref=${ref} class="field__input" name=${name} value=${value} placeholder=${placeholder}
         maxLength=${maxLength} disabled=${disabled} autocomplete="off" spellcheck=${false}
         onInput=${handle}
         oncompositionstart=${() => { composing.current = true; }}

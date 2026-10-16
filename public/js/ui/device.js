@@ -20,7 +20,8 @@
 // CSS counterpart: public/css/devices.css (safe-area insets, touch-action, overscroll, tap-target expansion).
 
 import { useEffect, useState } from '../../vendor/hooks.module.js';
-import { html, Icon } from './components.js';
+import { pwaInstall } from '../pwa.js';
+import { html, Icon, Button } from './components.js';
 import { t } from '../../../shared/i18n.js';
 
 /** A touch held this long without moving opens the detail (contextmenu) on DOM controls. */
@@ -115,33 +116,20 @@ export function useDocClass(name, on = true) {
 
 // ---- fullscreen ----------------------------------------------------------------------------------------------------
 
-/** Called directly from a tap: browsers require user activation for fullscreen. */
-export async function enterLandscape(win = globalThis) {
-  const result = { fullscreen: false, landscape: false };
-  const el = win.document?.documentElement;
-  if (!el) return result;
-  try {
-    if (!fullscreen.active(win)) {
-      if (typeof el.requestFullscreen === 'function') await el.requestFullscreen({ navigationUI: 'hide' });
-      else if (typeof el.webkitRequestFullscreen === 'function') await el.webkitRequestFullscreen();
-      else return result;
-    }
-    result.fullscreen = true;
-  } catch { return result; }
-  try {
-    if (typeof win.screen?.orientation?.lock === 'function') {
-      await win.screen.orientation.lock('landscape');
-      result.landscape = true;
-    } else result.landscape = screenLandscape(win) === true;
-  } catch { result.landscape = screenLandscape(win) === true; }
-  return result;
-}
-
 export const fullscreen = {
   supported(win = globalThis) { return detectFeatures(win).fullscreen; },
   active(win = globalThis) { const d = win.document; return !!(d && (d.fullscreenElement || d.webkitFullscreenElement)); },
   async enter(win = globalThis) {
-    return (await enterLandscape(win)).fullscreen;
+    const el = win.document?.documentElement;
+    if (!el) return false;
+    try {
+      if (typeof el.requestFullscreen === 'function') await el.requestFullscreen({ navigationUI: 'hide' });
+      else if (typeof el.webkitRequestFullscreen === 'function') el.webkitRequestFullscreen();
+      else return false;
+    } catch { return false; }
+    // Android Chrome: a landscape game may lock the orientation while fullscreen (refused elsewhere — ignored)
+    try { await win.screen?.orientation?.lock?.('landscape'); } catch { /* not allowed here */ }
+    return true;
   },
   async exit(win = globalThis) {
     const d = win.document;
@@ -175,6 +163,24 @@ export function FullscreenButton({ class: cls = '' }) {
   </button>`;
 }
 
+/**
+ * Only a browser-issued install offer shows a button; installed and unsupported environments stay quiet.
+ * `square`: the glyph alone (the lobby's top bar, beside ⚙ / 📖), the name stays title / aria-label.
+ */
+export function PwaInstallButton({ class: cls = '', size = 'sm', square = false }) {
+  const [available, setAvailable] = useState(pwaInstall.available);
+  useEffect(() => pwaInstall.subscribe(setAvailable), []);
+  if (!available) return null;
+  return html`<${Button} variant="secondary" size=${size} icon="homePlus" square=${square} class=${cls}
+    title=${t('添加到桌面')} aria-label=${t('添加到桌面')}
+    data-testid="pwa-install" onClick=${() => pwaInstall.request()}>${square ? null : t('添加到桌面')}<//>`;
+}
+
+export function updateRotateHintPwaI18n(doc = globalThis.document) {
+  const btn = doc?.getElementById?.('rotate-hint-pwa');
+  if (btn) btn.textContent = t('添加到桌面');
+}
+
 // ---- boot-time installation ----------------------------------------------------------------------------------------
 
 let installed = null;
@@ -196,20 +202,6 @@ export function installDeviceSupport(win = globalThis) {
     for (const [k, v] of Object.entries(cls)) root.classList.toggle(k, v);
   };
   apply();
-  const rotateButton = doc.getElementById?.('rotate-fullscreen');
-  const rotateStatus = doc.getElementById?.('rotate-status');
-  on(rotateButton, 'click', async () => {
-    if (rotateButton.disabled) return;
-    rotateButton.disabled = true;
-    try {
-      const result = await enterLandscape(win);
-      if (rotateStatus) rotateStatus.textContent = result.landscape
-        ? '已切换横屏。'
-        : result.fullscreen ? '已进入全屏。浏览器无法自动横屏，请开启手机自动旋转后横放手机。'
-          : '浏览器未允许全屏横屏，请开启手机自动旋转后横放手机，或使用支持全屏的浏览器。';
-      apply();
-    } finally { rotateButton.disabled = false; }
-  });
   for (const q of ['(any-pointer: coarse)', '(pointer: coarse)', '(any-hover: hover)', '(prefers-reduced-motion: reduce)', '(display-mode: standalone)']) {
     let m = null;
     try { m = win.matchMedia?.(q); } catch { m = null; }
@@ -279,6 +271,13 @@ export function installDeviceSupport(win = globalThis) {
   on(doc, 'click', (e) => {
     if (lp.swallowUntil && Date.now() < lp.swallowUntil) { lp.swallowUntil = 0; e.preventDefault(); e.stopPropagation(); }
   }, { capture: true });
+
+  const pwaBtn = doc?.getElementById?.('rotate-hint-pwa');
+  if (pwaBtn) {
+    updateRotateHintPwaI18n(doc);
+    offs.push(pwaInstall.subscribe((available) => { pwaBtn.hidden = !available; }));
+    on(pwaBtn, 'click', () => { pwaInstall.request(); });
+  }
 
   installed = () => { for (const off of offs.splice(0)) { try { off(); } catch { /* ignore */ } } clearTimeout(rotTimer); installed = null; };
   return installed;

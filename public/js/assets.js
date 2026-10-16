@@ -23,6 +23,14 @@
 // by its view (`spine.restart(entry)`, RefLru.restart); such a fresh load — and any load after a failure — drops PIXI's
 // still-pending requests of that skeleton first (forgetPendingSpine), so it does not join them.
 //
+// Cosmetic plugins (DESIGN §32 P1a, docs/PLUGINS.md §9): the manifest the helpers read is the installation's with the
+// cosmetic layers laid over it — `cosmetics` (public/js/cosmetics.js createCosmeticLayers; public/js/content.js sets
+// them): the room's visual set, then the player's personal plugins, composed on the page's own manifest (every plugin
+// URL built from a set's checked composition, every reference copied out of that manifest: shared/plugins/visual.js). A
+// layer change is told like a late manifest (onChange 'manifest'). A plugin file that fails to load (an image, a model)
+// is reported (`cosmetics.fail`): its entry falls back to the art beneath it. This store itself loads with the first
+// match (ui/fieldHost.js), as in 0.2.6: the title page needs neither it nor its Spine cache.
+//
 // Pure at import time: no PIXI, no DOM access until a loader actually runs (Node tests import this file).
 //
 //   import { assets } from './assets.js';          // browser singleton (manifest fetched on first use, or seeded)
@@ -42,13 +50,11 @@
 // so it can be unit tested without a browser. Helpers never throw on unknown ids — they return null and the
 // caller falls back (docs/ASSETS.md "Other fallbacks").
 
-import { selectedSkin, sanitizeCosmetics } from '../../shared/cosmetics.js';
+import { cosmetics, createCosmeticLayers, EMPTY_MANIFEST } from './cosmetics.js';
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' && v ? v : null);
 const get = (o, k) => (isObj(o) && Object.hasOwn(o, k) ? o[k] : undefined);
-
-import { manifestForNative } from './resources/manifest.js';
 
 // ---- pure URL helpers (manifest first) ---------------------------------------------------------------------
 
@@ -66,8 +72,6 @@ export function baseCharId(id) {
 export function avatarUrl(m, id, opts) {
   const s = str(id);
   if (!s) return null;
-  const skin = selectedSkin(m, s);
-  if (skin?.avatar) return skin.avatar;
   const direct = get(get(m, 'chars'), s);
   let rec = direct, e2 = !!(opts && opts.e2);
   if (!rec) {
@@ -83,8 +87,6 @@ export function avatarUrl(m, id, opts) {
 export function portraitUrl(m, id, opts) {
   const s = str(id);
   if (!s) return null;
-  const skin = selectedSkin(m, s);
-  if (skin?.portrait) return skin.portrait;
   let rec = get(get(m, 'chars'), s), e2 = !!(opts && opts.e2);
   if (!rec) {
     rec = get(get(m, 'chars'), baseCharId(s));
@@ -159,7 +161,7 @@ export function subProfIconUrl(m, sub) {
 export function spineEntry(m, id, opts) {
   const s = str(id);
   if (!s) return null;
-  const ch = selectedSkin(m, s) || get(get(m, 'chars'), s) || get(get(m, 'chars'), baseCharId(s));
+  const ch = get(get(m, 'chars'), s) || get(get(m, 'chars'), baseCharId(s));
   if (ch && isObj(ch.spine)) {
     const sp = (opts && opts.back && isObj(ch.spine.back)) ? ch.spine.back : ch.spine.front;
     return validSpine(sp) ? sp : null;
@@ -209,7 +211,7 @@ export function localSpineEntry(sl, local, web) {
 
 /** Whether an operator/token/enemy has a Back model. */
 export function hasBackSpine(m, id) {
-  const ch = selectedSkin(m, id) || get(get(m, 'chars'), str(id) || '') || get(get(m, 'chars'), baseCharId(id) || '');
+  const ch = get(get(m, 'chars'), str(id) || '') || get(get(m, 'chars'), baseCharId(id) || '');
   return !!(ch && isObj(ch.spine) && validSpine(ch.spine.back));
 }
 
@@ -234,7 +236,11 @@ export function bgmEntry(m, kind) {
 /** SFX URL: group 'ui' | 'battle', key e.g. 'buy'. */
 export const sfxUrl = (m, group, key) => str(get(get(get(get(m, 'audio'), 'sfx'), str(group) || ''), str(key) || ''));
 
-/** Per-unit SFX: kind 'attack' | 'hit' | 'skill' | 'die' | 'born'; `skillIndex` picks `skills[i]` when present. */
+/**
+ * Per-unit SFX: kind 'attack' | 'hit' | 'skill' | 'die' | 'born'; `skillIndex` picks `skills[i]` and — for an attack or
+ * an impact — `attacks[i]` / `hits[i]` (the running skill's own files, tools/assets/audio.mjs pickModeAttacks /
+ * pickModeHits) when the manifest has them.
+ */
 export function unitSfxUrl(m, id, kind, skillIndex) {
   const u = get(get(get(get(m, 'audio'), 'sfx'), 'units'), str(id) || '') || get(get(get(get(m, 'audio'), 'sfx'), 'units'), baseCharId(id) || '');
   if (!isObj(u)) return null;
@@ -242,40 +248,19 @@ export function unitSfxUrl(m, id, kind, skillIndex) {
     const s = str(u.skills[skillIndex]);
     if (s) return s;
   }
+  const per = kind === 'attack' ? u.attacks : kind === 'hit' ? u.hits : null;
+  if (Number.isInteger(skillIndex) && isObj(per)) {
+    const a = str(per[skillIndex]);
+    if (a) return a;
+  }
   return str(u[kind]);
 }
 
-export function voiceLines(m, lang, charId) {
-  const langs = get(get(get(m, 'audio'), 'voice'), 'langs');
-  const byChar = get(langs, str(lang) || '');
-  const direct = get(byChar, str(charId) || '');
-  if (direct) return direct;
-  const fallback = get(get(get(get(m, 'audio'), 'voice'), 'fallbacks'), str(lang) || '');
-  const fallbackLang = get(fallback, str(charId) || '');
-  return get(get(langs, fallbackLang || ''), str(charId) || '') || null;
-}
+// ---- cosmetic plugins (DESIGN §32 P1a) ---------------------------------------------------------------------------
 
-/**
- * URL of one battle voice clip: `/assets/audio/voice/<lang>/<charId>/<voiceId><ext>`, where `<ext>` is the
- * block's `ext` ('.mp3' when the extractor had ffmpeg, '.wav' otherwise). A block without `ext` is one written
- * before the extension was part of it: its `root` carried '.mp3' itself.
- * @param {any} m manifest
- * @param {string} lang
- * @param {string} charId
- * @param {string} voiceId e.g. 'CN_023'
- * @returns {string|null}
- */
-export function voiceUrl(m, lang, charId, voiceId) {
-  const voice = get(get(m, 'audio'), 'voice');
-  const root = str(get(voice, 'root'));
-  let l = str(lang);
-  const c = str(charId);
-  const v = str(voiceId);
-  if (!root || !l || !c || !v) return null;
-  if (!get(get(get(voice, 'langs'), l), c)) l = get(get(get(voice, 'fallbacks'), l), c) || l;
-  const ext = str(get(voice, 'ext')) || '.mp3';
-  return `${root}/${l}/${c}/${v}${ext.startsWith('.') ? ext : `.${ext}`}`;
-}
+// The layers live in public/js/cosmetics.js (small: the title page loads it, not this store); re-exported for the code
+// and the tests that read them from here.
+export { createCosmeticLayers, cosmetics };
 
 // ---- generic caches ----------------------------------------------------------------------------------------
 
@@ -745,22 +730,26 @@ const transientFetch = (err) => {
  * after MANIFEST_BACKOFF_MS (bounded; a 404 or a body that is no JSON only on the next `ready()`). `onChange(fn)` is told
  * when the manifest (`'manifest'`) or the optional local-client manifest (`'local'`) arrives, so views built without it
  * resolve their models then (render/app.js → UnitView.retryAssets).
+ * Cosmetic plugins (`opts.cosmetics`, createCosmeticLayers; the browser singleton has the page's `cosmetics`): every
+ * helper reads the manifest with the layers laid over it, `manifest` is that one, and a layer change is told as
+ * 'manifest' (the views re-resolve what they draw next).
  * @param {{ url?: string, fetch?: typeof fetch, manifest?: object, localManifest?: object, loadImage?: (url) => Promise<any>,
  *           loadSpine?: (entry) => Promise<any>, unloadSpine?: (entry, value, keepPages:Set<string>) => (Promise<void>|void),
  *           spineMax?: number, spineTimeout?: number, spineWeigh?: (key, spineData) => number, spineIdleBytes?: number,
  *           spineQuietBytes?: number, spineIdleGrace?: number, spineEvictDelay?: number, spineQuietDelay?: number,
  *           spineTimers?: { set, clear }, spineNow?: () => number, retryDelays?: number[], backoff?: number[],
- *           wait?: (ms: number) => Promise<void>, timers?: { set, clear } }} [opts]
+ *           wait?: (ms: number) => Promise<void>, timers?: { set, clear },
+ *           cosmetics?: ReturnType<typeof createCosmeticLayers> | null }} [opts]
  */
 export function createAssets(options) {
   const opts = options && typeof options === 'object' ? options : {};
+  const layers = opts.cosmetics && typeof opts.cosmetics.apply === 'function' ? opts.cosmetics : null;
   const url = opts.url || '/data/assets.json';
   const localUrl = opts.localUrl || '/data/local-assets.json';
   let localPromise = isObj(opts.localManifest) ? Promise.resolve(opts.localManifest) : null;
   let localManifest = isObj(opts.localManifest) ? opts.localManifest : null;
   const doFetch = opts.fetch || ((...a) => globalThis.fetch(...a));
   let manifest = isObj(opts.manifest) ? opts.manifest : null;
-  let cosmeticChoices = sanitizeCosmetics(opts.cosmeticChoices);
   let readyPromise = manifest ? Promise.resolve(manifest) : null;
   const loadImage = opts.loadImage || loadImageElement;
   const images = new Map(); // url → { promise, value }
@@ -783,9 +772,8 @@ export function createAssets(options) {
   /** Adopt a manifest (fetched or seeded): resolves `ready()`, stops the background tries, tells the listeners. */
   function adopt(m) {
     if (manifest || !isObj(m)) return false;
-    manifest = manifestForNative(m);
-    manifest.cosmeticChoices = cosmeticChoices;
-    readyPromise = Promise.resolve(manifest);
+    manifest = m;
+    readyPromise = Promise.resolve(m);
     backoffN = 0;
     if (backoffTimer != null) { timers.clear(backoffTimer); backoffTimer = null; }
     notify('manifest');
@@ -872,16 +860,23 @@ export function createAssets(options) {
     now: opts.spineNow,
   });
 
-  /** Image element (cached; failures resolve to null). */
-  function image(u) {
+  /**
+   * A file of a cosmetic layer failed to load (DESIGN §32 P1a): its entry falls back to the art beneath it from now on
+   * (createCosmeticLayers fail — the listeners re-resolve their art). Whether it was a layer's file.
+   */
+  const failed = (u) => { try { return !!layers?.fail?.(u); } catch { return false; } };
+
+  /** Image element (cached; failures resolve to null — a cosmetic plugin's image that failed falls back: `failed`). */
+  function image(u, { retry = false } = {}) {
     const s = str(u);
     if (!s) return Promise.resolve(null);
     let e = images.get(s);
+    if (retry && e?.done && !e.value) { images.delete(s); e = null; }
     if (!e) {
       e = { value: null, done: false, promise: null };
       e.promise = Promise.resolve().then(() => loadImage(s)).then(
-        (img) => { e.value = img; e.done = true; return img; },
-        () => { e.done = true; return null; },
+        (img) => { e.value = img; e.done = true; if (!img) failed(s); return img; },
+        () => { e.done = true; failed(s); return null; },
       );
       images.set(s, e);
     }
@@ -896,7 +891,7 @@ export function createAssets(options) {
           const res = await doFetch(localUrl, { cache: 'no-cache' });
           if (!res || !res.ok) return localManifest;
           const json = await res.json();
-          if (!localManifest && isObj(json) && isObj(json.groups)) { localManifest = manifestForNative(json); notify('local'); }
+          if (!localManifest && isObj(json) && isObj(json.groups)) { localManifest = json; notify('local'); }
         } catch { /* optional art: absent */ }
         return localManifest;
       })();
@@ -904,7 +899,9 @@ export function createAssets(options) {
     return localPromise;
   }
 
-  const m = () => manifest || {};
+  const m = () => (layers ? layers.apply(manifest || EMPTY_MANIFEST) : manifest || {});
+  // a layer switched on or off draws like a manifest that arrived: the views re-resolve their art (render/app.js)
+  if (layers) layers.subscribe(() => notify('manifest'));
   return {
     ready,
     local,
@@ -913,15 +910,10 @@ export function createAssets(options) {
      * manifest is loaded: no second download, nothing to wait for. Returns whether it was adopted.
      */
     seed: (mf) => adopt(mf),
-    setCosmetics(choices) {
-      cosmeticChoices = sanitizeCosmetics(choices);
-      if (manifest) manifest.cosmeticChoices = cosmeticChoices;
-      notify('cosmetics');
-    },
     /** The same for the optional local-client manifest (data.js 'local'; `{ groups }`), unless one is known. */
     seedLocal(lm) {
       if (localManifest || !isObj(lm) || !isObj(lm.groups)) return false;
-      localManifest = manifestForNative(lm);
+      localManifest = lm;
       localPromise = Promise.resolve(lm);
       notify('local');
       return true;
@@ -933,7 +925,8 @@ export function createAssets(options) {
       return () => listeners.delete(fn);
     },
     localUrl: (group, name) => localAssetUrl(localManifest, group, name),
-    get manifest() { return manifest; },
+    /** The manifest the helpers read (the cosmetic layers over the loaded one), null until one is loaded. */
+    get manifest() { return manifest ? m() : null; },
     get loaded() { return !!manifest; },
     avatar: (id, o) => avatarUrl(m(), id, o),
     portrait: (id, o) => portraitUrl(m(), id, o),
@@ -956,6 +949,12 @@ export function createAssets(options) {
     },
     /** Cached image element promise (null on failure). */
     image,
+    /**
+     * Report a file that failed to load outside this store (a texture another loader made — render/app.js's shadow, an
+     * `<img>` of the interface: public/js/content.js): a cosmetic plugin's file falls back. Whether it was one.
+     * @param {string} u
+     */
+    failed,
     /** Already-loaded image element or null (sync). */
     imageNow(u) { const e = images.get(str(u) || ''); return e && e.done ? e.value : null; },
     /**
@@ -977,7 +976,13 @@ export function createAssets(options) {
      * hold() → release function (a scene that will need its skeletons again: RefLru).
      */
     spine: {
-      acquire: (entry, o) => (validSpine(entry) ? spine.acquire(entry.skel, entry, o) : Promise.reject(new Error('no spine entry'))),
+      // a cosmetic plugin's model that fails to load (any of its files) falls back to the installation's: its view loads
+      // that one (render/units.js retryAssets) — not while the tab is hidden (a load the hidden tab left hanging times out
+      // without the file being at fault: GitHub #68; the view tries again when it is shown)
+      acquire: (entry, o) => (validSpine(entry) ? spine.acquire(entry.skel, entry, o).catch((err) => {
+        if (!globalThis.document?.hidden) failed(entry.skel);
+        throw err;
+      }) : Promise.reject(new Error('no spine entry'))),
       restart: (entry) => (validSpine(entry) ? spine.restart(entry.skel, entry) : false),
       release: (entry) => { if (entry && entry.skel) spine.release(entry.skel); },
       peek: (entry) => (entry && entry.skel ? spine.peek(entry.skel) : null),
@@ -989,5 +994,5 @@ export function createAssets(options) {
   };
 }
 
-/** Browser singleton. */
-export const assets = createAssets();
+/** Browser singleton (with the page's cosmetic layers). */
+export const assets = createAssets({ cosmetics });

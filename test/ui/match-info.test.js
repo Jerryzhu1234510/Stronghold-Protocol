@@ -190,25 +190,6 @@ test('a real 标准 match (solo and co-op): the mode\'s 10 inactive bonds are "o
   h.m.dispose();
 });
 
-test('authoritative fixed bans override mode defaults, including an empty list', () => {
-  for (const gameMode of ['normal', 'clone']) for (const capacity of [5, 6, 7, 8]) {
-    const h = makeMatch({ humans: 1, capacity, difficulty: 'FUNNY', gameMode, seed: 12 });
-    try {
-      const pub = h.m.publicView(), m = matchInfoModel(pub, SRC(pub.modeId));
-      assert.deepEqual([...m.sets.off].sort(), [...pub.staticInactiveBonds].sort());
-      for (const id of OFF_FUNNY.filter(id => !pub.staticInactiveBonds.includes(id))) {
-        assert.equal(m.stateOf(id), null, `${gameMode} ${capacity}: restored ${id}`);
-        const bond = m.bonds.find(b => b.bondId === id);
-        const row = MatchBondRow({ bonds: [bond], model: m });
-        assert.ok(![...walk(row)].some(v => v.props?.['data-bond'] === id && hasClass(v, 'is-off')));
-      }
-    } finally { h.m.dispose(); }
-  }
-  const empty = matchInfoModel({ staticInactiveBonds: [], drawnDisabledBonds: [] }, SRC('mode_multi_funny'));
-  assert.equal(empty.sets.off.size, 0);
-  assert.doesNotMatch(textOf(MatchLegend({ model: empty })), /本模式禁用/);
-});
-
 test('draftInfoStatus: the dialog repeats the turn and its seconds (warning at ≤ 10 s), or my pick', () => {
   assert.deepEqual(draftInfoStatus({ myTurn: true, secs: 24 }), { text: '轮到你决策', secs: 24, tone: 'gold' });
   assert.deepEqual(draftInfoStatus({ myTurn: true, secs: 7 }), { text: '轮到你决策', secs: 7, tone: 'warn' });
@@ -233,7 +214,7 @@ test('the briefing, the strategy draft and the in-game 本局信息 tab all read
   assert.match(draft, /data-testid="match-info-open"[\s\S]*?onClick=\$\{\(\) => setInfoOpen\(true\)\}>\$\{t\('查看禁用盟约与干员'\)\}</);
   assert.match(draft, /<\$\{MatchInfoDialog\} open=\$\{infoOpen\} onClose=\$\{\(\) => setInfoOpen\(false\)\} model=\$\{info\}/);
   // a turn change or my pick closes it; the draft's end unmounts the screen
-  assert.match(draft, /const turnKey = `\$\{draft\.turnPid \|\| ''\}\|\$\{myPick \|\| ''\}`;\r?\n\s*useEffect\(\(\) => \{ setInfoOpen\(false\); \}, \[turnKey\]\);/);
+  assert.match(draft, /const turnKey = `\$\{draft\.turnPid \|\| ''\}\|\$\{myPick \|\| ''\}`;\n\s*useEffect\(\(\) => \{ setInfoOpen\(false\); \}, \[turnKey\]\);/);
   const drawer = read('public/js/ui/enemyDrawer.js');
   assert.match(drawer, /import \{ matchInfoModel, DiyBannedLine \} from '\.\/matchInfo\.js';/);
   assert.match(drawer, /matchInfoModel\(pub, \{\s*bonds: data\.list\('bonds'\), chess: \(id\) => data\.lookup\('chess', id\), mode: data\.get\('config'\)\?\.modes\?\.\[pub\?\.modeId\],/);

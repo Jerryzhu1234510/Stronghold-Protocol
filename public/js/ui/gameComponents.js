@@ -1,12 +1,11 @@
 // Shared in-match building blocks (Preact + htm): data hook, images with fallbacks, rich text,
 // unit thumbnails, LP tower, coin badge, official UI sprites. Styles: css/screens/game*.css.
 
-import { useMemo } from '../../vendor/hooks.module.js';
+import { useState, useMemo } from '../../vendor/hooks.module.js';
 import { html, Icon, TierChip, Tooltip } from './components.js';
 import { data, useData, localAsset } from '../data.js';
 import { parseRichText, rtClassName } from './richText.js';
 import { t as tr } from '../../../shared/i18n.js';
-import { useRetryImage } from './imageRetry.js';
 import {
   uiUrl, chessAvatarUrl, chessPortraitUrl, itemIconUrl, tokenAvatarUrl, enemyIconUrl, bondIconUrl, bandIconUrl,
 } from './assetUrls.js';
@@ -16,8 +15,6 @@ const cx = (...p) => p.flat().filter(Boolean).join(' ');
 /** Data files the in-match screens use (`backups`: the 补位 stand-ins' bodies — cards, the board model, the detail card). */
 export const GAME_FILES = ['config', 'assets', 'chess', 'bonds', 'items', 'bands', 'enemies', 'bosses', 'stages', 'tokens',
   'choices', 'effects', 'garrisons', 'factions', 'local', 'backups'];
-export const REQUIRED_GAME_FILES = GAME_FILES.filter(name => name !== 'assets' && name !== 'local');
-export const gameDataReady = (source = data) => REQUIRED_GAME_FILES.every(name => source.status(name) === 'ready');
 
 /**
  * Load every in-match data file; returns lookups (sync, null until loaded).
@@ -26,10 +23,9 @@ export const gameDataReady = (source = data) => REQUIRED_GAME_FILES.every(name =
  *   effect: (id:string)=>any, garrison: (id:string)=>any, factions: any, choices: any, backups: any, list: (name:string)=>any[] }}
  */
 export function useGameData() {
-  const settled = useData(...GAME_FILES);
-  const ready = settled && gameDataReady();
+  const ready = useData(...GAME_FILES);
   // (config / factions / choices are read once per memo: a language switch reads them again in the new locale)
-  return useMemo(() => makeLookups(ready), [ready, data.locale(), data.status('assets'), data.status('local')]);
+  return useMemo(() => makeLookups(ready), [ready, data.locale()]);
 }
 
 /** A 自选 operator's summon record (data/backups.json `tokens`, 0.2.0), or null. */
@@ -67,9 +63,9 @@ export function makeLookups(ready = true) {
  * @param {{ src?: string|null, class?: string, alt?: string, fallback?: any, style?: string }} props
  */
 export function Img({ src, class: cls, alt = '', fallback = null, style }) {
-  const image = useRetryImage(src);
-  if (!image.ok) return fallback;
-  return html`<img class=${cls} src=${src} alt=${alt} draggable=${false} loading="lazy" style=${style} onError=${image.onError} onLoad=${image.onLoad} />`;
+  const [bad, setBad] = useState(null);
+  if (!src || bad === src) return fallback;
+  return html`<img class=${cls} src=${src} alt=${alt} draggable=${false} loading="lazy" style=${style} onError=${() => setBad(src)} />`;
 }
 
 /** Official UI sprite by 'group/key' with a fallback. */

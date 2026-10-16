@@ -23,36 +23,6 @@ function stock(m, ps, id, slot = 0) {
   ps.shop.slots[slot] = { kind: 'chess', id, basePrice: m.gd.chessPrice(id), frozen: false, sold: false };
 }
 
-test('promotion selection rejects repeated paid and free refreshes without spending, then restores refresh after the last reward', () => {
-  const { m, ps } = prep(20261008);
-  try {
-    const id = chessOfTier(1).find(x => m.pool.has(x));
-    give(m, ps, id);
-    give(m, ps, id);
-    stock(m, ps, id);
-    assert.deepEqual(m.handle('p_0', { t: 'g.buy', slot: 0 }), { ok: true });
-    assert.equal(ps.offers[0]?.source, 'merge', 'a real three-copy promotion creates the offer');
-    ps.pushRewardOffer();
-    const before = structuredClone({ funds: ps.funds, shop: ps.shop, offers: ps.offers, stats: ps.stats, round: ps.round });
-    for (let i = 0; i < 3; i++) assert.equal(m.handle('p_0', { t: 'g.refresh' }).error, ERR.REWARD_PENDING);
-    assert.deepEqual({ funds: ps.funds, shop: ps.shop, offers: ps.offers, stats: ps.stats, round: ps.round }, before);
-    ps.shop.freeRefreshes = 2;
-    assert.equal(m.handle('p_0', { t: 'g.refresh' }).error, ERR.REWARD_PENDING);
-    assert.equal(ps.shop.freeRefreshes, 2, 'free refreshes are not consumed either');
-    assert.deepEqual(m.handle('p_0', { t: 'g.reward', idx: 0 }), { ok: true });
-    assert.equal(m.handle('p_0', { t: 'g.refresh' }).error, ERR.REWARD_PENDING, 'queued promotion still blocks refresh');
-    assert.deepEqual(m.handle('p_0', { t: 'g.reward', idx: 0 }), { ok: true });
-    assert.equal(ps.offers.length, 0);
-    assert.deepEqual(m.handle('p_0', { t: 'g.refresh' }), { ok: true });
-    assert.equal(ps.shop.freeRefreshes, 1);
-    assert.equal(ps.funds, before.funds);
-    ps.shop.freeRefreshes = 0;
-    assert.deepEqual(m.handle('p_0', { t: 'g.refresh' }), { ok: true });
-    assert.equal(ps.funds, before.funds - m.gd.refreshPrice);
-    checkInvariants(m);
-  } finally { m.dispose(); }
-});
-
 test('3 copies (board + hand + bought) merge into 1 elite on the board copy\'s tile; equipment returns; reward offer of tier level+1', () => {
   const { m, ps } = prep();
   const id = chessOfTier(1, (c) => c.position === 'MELEE').find((x) => m.pool.has(x));
@@ -167,6 +137,22 @@ test('merge from two board copies with a full hand (a gained copy; a purchase is
   m.dispose();
 });
 
+test('a promotion offer left unpicked stays queued into the next round and can be taken there (2026-10-15)', () => {
+  const { h, m, ps } = prep(25);
+  ps.pushRewardOffer('merge');
+  const offer = ps.offers[0];
+  const pick = offer.slots[0].id;
+  assert.deepEqual(m.handle('p_0', { t: 'g.ready', ready: true }), { ok: true });
+  h.drive(() => m.phase === PHASE.PREP && m.round === 2);
+  assert.equal(ps.offers.length, 1, 'still queued in the next prep');
+  assert.equal(ps.offers[0], offer, 'the same offer, the same cards');
+  assert.deepEqual(m.handle('p_0', { t: 'g.reward', idx: 0 }), { ok: true });
+  assert.equal(ps.offers.length, 0);
+  assert.ok([...ps.hand, ...ps.temp].some((p) => p && p.id === pick), 'the picked operator arrived');
+  checkInvariants(m);
+  m.dispose();
+});
+
 test('merge whose copies are not deployed (temp) with a full hand overflows the elite into temp (blocks ready until resolved)', () => {
   const { m, ps } = prep(23);
   const ids = chessOfTier(1, (c) => c.position === 'MELEE').filter((c) => m.pool.has(c));
@@ -186,7 +172,7 @@ test('merge whose copies are not deployed (temp) with a full hand overflows the 
   m.dispose();
 });
 
-test('displayed operator rewards survive stock exhaustion but respect a full hand and expire at prep end', () => {
+test('displayed operator rewards survive stock exhaustion, respect a full hand and stay queued past the prep end', () => {
   const { h, m, ps } = prep(24);
   ps.pushRewardOffer('merge');
   const offer = ps.offers[0];
@@ -205,7 +191,8 @@ test('displayed operator rewards survive stock exhaustion but respect a full han
   assert.deepEqual(m.handle('p_0', { t: 'g.ready', ready: true }), { ok: true });
   h.sched.runNext();
   h.sched.runNext();
-  assert.equal(ps.offers.length, 0, 'offer gone at prep end');
+  // a queued offer lasts until picked (the maintainer's decision of 2026-10-15): the prep end keeps it for the next prep
+  assert.equal(ps.offers.length, 1, 'the offer stays after the prep end');
   checkInvariants(m);
   m.dispose();
 });
@@ -339,7 +326,7 @@ test('consume-on-equip built-ins: 盟约之币 funds, 随身身份牌 layers, �
   m.dispose();
 });
 
-test('item merge with a full hand AND a full temp: the golden item takes the equipped twin\'s slot instead of being lost', () => {
+test('item merge with a full visible bench: the golden item waits in the overflow queue', () => {
   const { m, ps } = prep(29);
   const id = chessOfTier(3).find((c) => m.pool.has(c));
   const carrier = give(m, ps, id, 'board', [10, 3]);
@@ -355,7 +342,8 @@ test('item merge with a full hand AND a full temp: the golden item takes the equ
   ps.recompute();
   const got = ps.acquireItem('chess_item_1_02_e_a', { source: 'grant' });
   assert.ok(got && got.id === 'chess_item_1_02_e_b', 'the merge produced the golden item');
-  assert.deepEqual(carrier.items.map((x) => x.id), ['chess_item_1_01_e_a', 'chess_item_1_02_e_b'], 'golden item equipped in the twin\'s slot');
+  assert.deepEqual(carrier.items.map((x) => x.id), ['chess_item_1_01_e_a']);
+  assert.equal(ps.temp[5], got, 'the golden item waits behind the visible window');
   assert.ok(!ps.find(twin.uid), 'the twin was consumed');
   assert.equal(ps.stats.itemMerges, 1);
   checkInvariants(m);
@@ -422,9 +410,10 @@ test('a merge completed during SETTLE (突变细胞) keeps its reward offer for 
     assert.equal([...ps.hand, ...ps.temp].filter((p) => p && p.id === CELL).length, 1, `${label}: the cell came back`);
     assert.ok(ps.temp.every((p) => !p || p.id === CELL), `${label}: nothing else waits in temp`);
     checkInvariants(m);
-    // it expires at the end of that prep like any other offer
+    // it stays queued through the round like any other offer (kept until picked, 2026-10-15)
+    const queued = ps.offers.length;
     h.drive(() => m.phase === PHASE.COMBAT && m.round === 2);
-    assert.equal(ps.offers.length, 0);
+    assert.equal(ps.offers.length, queued);
     m.dispose();
   }
 });

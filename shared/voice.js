@@ -48,7 +48,7 @@ export function skillSlotOf(skillId) {
 export function battleLines(records) {
   const place = [];
   const select = [];
-  const skill = {};
+  const skill = /** @type {Record<string,string>} */ ({});
   for (const r of Array.isArray(records) ? records : []) {
     const id = r?.voiceId;
     if (typeof id !== 'string' || !id) continue;

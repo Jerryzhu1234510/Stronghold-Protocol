@@ -69,7 +69,7 @@ describe('roundStartReplay — once per round, in 回合开始, on the own board
 
   test('screens/game.js asks after the wiring effect and marks the round only once the view took the sequence', () => {
     const src = readFileSync(path.join(ROOT, 'public/js/screens/game.js'), 'utf8');
-    const wiring = src.indexOf('}, [view, showPrep, priv, editable, field, combat, mode, watchingOther, watching, holdSeq, prepCamKey]);');
+    const wiring = src.indexOf('}, [view, showPrep, priv, editable, field, combat, mode, watchingOther, watching, holdSeq]);');
     const replay = src.indexOf('const plan = roundStartReplay(');
     assert.ok(wiring > 0 && replay > wiring, 'the replay effect runs after setPrep in the same commit');
     assert.match(src, /roundStartReplay\(\{ phase, round: pub\?\.round, replayed: replayedRef\.current, ownBoard: showPrep && alive && !spectator, board: priv\?\.board \}\)/);

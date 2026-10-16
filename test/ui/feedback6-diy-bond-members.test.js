@@ -7,7 +7,6 @@
 // hand, for a bond that counts the hand), ✕ when all its bonds are off this match (m.private.diyBanned). A watched
 // teammate's popup lists their 自选 pieces on the field (their picks are not on the client) and such a row opens THEIR
 // operator's card, not the empty 甄选干员 slot's.
-import { snapshotComponent } from '../helpers/componentSnapshot.js';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -26,8 +25,7 @@ globalThis.fetch = async (url) => {
 };
 
 const G = await import('../../public/js/ui/gameLogic.js');
-const { BondPopup: BondPopupComponent } = await import('../../public/js/ui/bondStrip.js');
-const BondPopup = snapshotComponent(BondPopupComponent);
+const { BondPopup } = await import('../../public/js/ui/bondStrip.js');
 const { resolveDetail } = await import('../../public/js/ui/detailPanel.js');
 const { ownerBoard } = await import('../../public/js/ui/watchBonds.js');
 const { data } = await import('../../public/js/data.js');

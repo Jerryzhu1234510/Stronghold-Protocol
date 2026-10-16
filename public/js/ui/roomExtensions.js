@@ -2,6 +2,7 @@ import { useEffect, useState } from '../../vendor/hooks.module.js';
 import { html, Button, Modal, Panel } from './components.js';
 import { net } from '../net.js';
 import { toastError } from './toasts.js';
+import { t } from '../../../shared/i18n.js';
 
 export function RoomExtensionsPanel({ room, editable }) {
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
@@ -19,12 +20,12 @@ export function RoomExtensionsPanel({ room, editable }) {
     finally { setBusy(false); }
   };
   return html`<div class="room-extensions-entry">
-    <${Button} size="sm" onClick=${() => setOpen(true)}>房间扩展设置${active ? ` · ${active}项已开启` : ' · 原版规则'}<//>
+    <${Button} size="sm" onClick=${() => setOpen(true)}>${t('房间扩展设置')}${active ? t(' · {active}项已开启', { active }) : t(' · 原版规则')}<//>
     ${open ? html`<${Modal} open=${true} onClose=${() => !busy && setOpen(false)} width="min(860px,94vw)">
       <${Panel} class="room-extensions" tone="mint">
-        <header><h3>房间扩展设置</h3><${Button} size="sm" onClick=${() => setOpen(false)}>关闭<//></header>
-        <p>房主开局前统一配置；修改后全员重新准备。本场开局后锁定，默认使用原版规则。</p>
-        ${room.gameMode === 'versus' ? html`<p role="status">对抗测试暂不支持扩展设置，切回正常或克隆模式后可用。</p>` : null}
+        <header><h3>${t('房间扩展设置')}</h3><${Button} size="sm" onClick=${() => setOpen(false)}>${t('关闭')}<//></header>
+        <p>${t('房主开局前统一配置；修改后全员重新准备。本场开局后锁定，默认使用原版规则。')}</p>
+        ${room.gameMode === 'versus' ? html`<p role="status">${t('对抗测试暂不支持扩展设置，切回正常或克隆模式后可用。')}</p>` : null}
         <div class="room-extensions__list">${room.extensionCatalog.map(d => html`<label key=${d.id} class=${`room-extension${d.options ? ' room-extension--select' : ''}`}>
           <span><b>${d.label}</b><small>${d.description}</small></span>
           ${d.type === 'boolean' ? html`<input type="checkbox" aria-label=${d.label} checked=${!!draft[d.id]} disabled=${disabled}
@@ -36,9 +37,9 @@ export function RoomExtensionsPanel({ room, editable }) {
               value=${draft[d.id] ?? d.default} disabled=${disabled}
               onInput=${e => { const value = Number(e.currentTarget.value); setDraft(v => ({ ...v, [d.id]: value })); }} /></span>`}
         </label>`)}</div>
-        <footer><span>${editable ? '其他玩家可以查看全部设置。' : '由房主修改，所有玩家同步查看。'}</span>
-          <${Button} disabled=${disabled} onClick=${() => setDraft(Object.fromEntries(room.extensionCatalog.map(d => [d.id, d.default])))}>恢复默认<//>
-          <${Button} variant="primary" loading=${busy} disabled=${disabled || !room.extensionCatalog.every(d => d.type === 'boolean' || Number.isInteger(draft[d.id]) && draft[d.id] >= d.min && draft[d.id] <= d.max)} onClick=${save}>保存并重新准备<//>
+        <footer><span>${editable ? t('其他玩家可以查看全部设置。') : t('由房主修改，所有玩家同步查看。')}</span>
+          <${Button} disabled=${disabled} onClick=${() => setDraft(Object.fromEntries(room.extensionCatalog.map(d => [d.id, d.default])))}>${t('恢复默认')}<//>
+          <${Button} variant="primary" loading=${busy} disabled=${disabled || !room.extensionCatalog.every(d => d.type === 'boolean' || Number.isInteger(draft[d.id]) && draft[d.id] >= d.min && draft[d.id] <= d.max)} onClick=${save}>${t('保存并重新准备')}<//>
         </footer>
       <//>
     <//>` : null}

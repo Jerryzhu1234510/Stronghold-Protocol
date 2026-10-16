@@ -17,14 +17,16 @@ test('UI patch changes new HTML imports while cached old modules and an existing
   const oldModule = 'export const zoom = 1;';
   const newModule = Buffer.from('export const zoom = 1.2;');
   try {
-    for (const dir of ['server', 'shared', 'data']) await cp(path.join(root, dir), path.join(fixture, dir), { recursive: true });
+    for (const dir of ['server', 'shared', 'data', 'tools/assets']) await cp(path.join(root, dir), path.join(fixture, dir), { recursive: true });
     await mkdir(path.join(fixture, 'public/js/render'), { recursive: true });
     await mkdir(path.join(fixture, 'public/js/ui'), { recursive: true });
     await writeFile(path.join(fixture, 'public/js/ui/fieldHost.js'), 'export const band = 144;');
     await writeFile(path.join(fixture, 'public/js/render/projection.js'), oldModule);
     await writeFile(path.join(fixture, 'public/index.html'), '<html><head><script type="importmap">{"imports":{"preact":"/vendor/preact.module.js"}}</script></head><body>camera</body></html>');
     await cp(path.join(root, 'package.json'), path.join(fixture, 'package.json'));
-    gateway = await startGateway({ releaseRoot: fixture, port: 0, log: { info() {} } });
+    await cp(path.join(root, 'HOT-RELEASE.json'), path.join(fixture, 'HOT-RELEASE.json'));
+    await writeFile(path.join(fixture, 'MANIFEST.json'), '{"files":{}}');
+    gateway = await startGateway({ releaseRoot: fixture, accountFile: path.join(fixture, '..', path.basename(fixture) + '-accounts.json'), allowCreateAccounts: true, port: 0, log: { info() {}, error() {} } });
     const id = gateway.active.id, origin = `http://127.0.0.1:${gateway.port}`, prefix = `/_build/${id}`;
     const published = await fetch(origin + prefix + '/js/render/projection.js').then(r => r.text());
     client = await TestClient.connect(`ws://127.0.0.1:${gateway.port}${prefix}/ws`);
@@ -64,7 +66,7 @@ test('UI patch changes new HTML imports while cached old modules and an existing
     for (const [name, bytes] of Object.entries(perfModules)) {
       const alias = prefix + perfPatch.modules[name].alias;
       assert.equal(perfImports[prefix + name], alias);
-      assert.equal(await fetch(origin + alias).then(r => r.text()), pinText(bytes.toString(), 'text/javascript', perfPatch.modules[name].alias, id));
+      assert.equal(await fetch(origin + alias).then(r => r.text()), bytes.toString());
     }
     assert.equal(await readFile(perfPatch.backup, 'utf8'), priorEntry, 'backup preserves the previous entry');
     assert.equal(client.isOpen, true, 'performance patch preserves the live match connection');

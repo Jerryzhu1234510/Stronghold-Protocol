@@ -41,7 +41,7 @@ function nativeContext(p, piece, g, depth = 0) {
   rng.int = n => Math.floor(rng() * n);
   rng.pick = list => list.length ? list[rng.int(list.length)] : null;
   rng.shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const roller = { gd, pool: room?.rewardPool, rngMeta: rng };
+  const roller = { gd, pool: room?.rewardPool, itemPool: room?.itemPool, rngMeta: rng };
   roller.rollItemId = opts => MatchSpDraft.prototype.rollItemId.call(roller, opts);
   const ctx = {
     data, gd, source, round: p.metaWindow.index, rng,

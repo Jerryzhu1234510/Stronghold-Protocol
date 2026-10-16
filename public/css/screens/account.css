@@ -16,13 +16,13 @@
   padding: .09rem .13rem; cursor: pointer; text-align: left;
   background: rgba(11, 20, 18, 0.62); color: var(--text, #d8e3de);
   border: 1px solid var(--line-2, #2c3a35); border-radius: .03rem;
-  font: inherit; font-size: .15rem;
+  font: inherit; font-size: calc(.15 * var(--t));
   clip-path: polygon(.09rem 0, 100% 0, 100% calc(100% - .09rem), calc(100% - .09rem) 100%, 0 100%, 0 .09rem);
   transition: border-color .16s, background .16s;
 }
 .acc-card__toggle:hover { border-color: var(--mint-500, #4ed8af); background: rgba(16, 30, 26, 0.75); }
 .acc-card__toggle .icon { flex: none; opacity: .85; }
-.acc-card__why { margin-left: auto; opacity: .55; font-size: .13rem; text-align: right; }
+.acc-card__why { margin-left: auto; opacity: .55; font-size: calc(.13 * var(--t)); text-align: right; }
 
 /* ---- 表单 ---------------------------------------------------------------- */
 .acc-card--form {
@@ -32,7 +32,7 @@
 }
 .acc-card__tabs { display: flex; align-items: center; gap: .04rem; }
 .acc-tab {
-  padding: .04rem .13rem; cursor: pointer; font: inherit; font-size: .14rem;
+  padding: .04rem .13rem; cursor: pointer; font: inherit; font-size: calc(.14 * var(--t));
   background: transparent; color: var(--text, #d8e3de); opacity: .6;
   border: 1px solid transparent; border-radius: .02rem;
 }
@@ -42,11 +42,11 @@
 .acc-card__close:hover { opacity: 1; }
 
 .acc-card__err,
-.acc-card__hint { font-size: .13rem; line-height: 1.4; padding: .05rem .08rem; border-radius: .02rem; }
+.acc-card__hint { font-size: calc(.13 * var(--t)); line-height: 1.4; padding: .05rem .08rem; border-radius: .02rem; }
 .acc-card__err { color: #ffb4a2; background: rgba(120, 40, 30, 0.28); border: 1px solid rgba(255, 120, 90, 0.35); }
 .acc-card__hint { color: var(--text, #d8e3de); opacity: .65; background: rgba(255, 255, 255, 0.03); }
 /* 一条说明就够：两句解释合成一行（原来是两行 11.5px，是卡片变高的主因之一） */
-.acc-card__note { font-size: .12rem; line-height: 1.35; opacity: .5; }
+.acc-card__note { font-size: calc(.12 * var(--t)); line-height: 1.35; opacity: .5; }
 .acc-card__note--dim { opacity: .38; }
 
 /* ---- 已登录：标题页那一行 ------------------------------------------------ */
@@ -54,7 +54,7 @@
 .acc-card__row { display: flex; align-items: center; gap: .08rem; }
 .acc-card__row .micro { margin-left: auto; }
 .acc-card__signout {
-  padding: .03rem .09rem; cursor: pointer; font: inherit; font-size: .13rem;
+  padding: .03rem .09rem; cursor: pointer; font: inherit; font-size: calc(.13 * var(--t));
   background: none; color: inherit; opacity: .6;
   border: 1px solid var(--line-2, #2c3a35); border-radius: .02rem;
 }
@@ -64,10 +64,10 @@
 .acc-badge { display: inline-flex; align-items: center; gap: .06rem; min-width: 0; }
 .acc-badge__img { width: .24rem; height: .24rem; border-radius: .02rem; flex: none; object-fit: cover; border: 1px solid var(--line-2, #2c3a35); }
 .acc-badge__img--initial {
-  display: grid; place-items: center; font-size: .13rem; font-weight: 700;
+  display: grid; place-items: center; font-size: calc(.13 * var(--t)); font-weight: 700;
   background: rgba(78, 216, 175, 0.14); color: var(--mint-500, #4ed8af);
 }
-.acc-badge__name { font-size: .15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-badge__name { font-size: calc(.15 * var(--t)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- 标题页：以账号身份进入 --------------------------------------------- */
 .title-account {
@@ -78,27 +78,27 @@
   clip-path: polygon(.11rem 0, 100% 0, 100% calc(100% - .11rem), calc(100% - .11rem) 100%, 0 100%, 0 .11rem);
 }
 .title-account:hover { background: rgba(18, 40, 34, 0.8); }
-.title-account__label { font-size: .13rem; opacity: .6; }
-.title-account__name { font-size: .18rem; color: var(--mint-500, #4ed8af); }
-.title-account__edit { margin-left: auto; font-size: .13rem; opacity: .6; }
+.title-account__label { font-size: calc(.13 * var(--t)); opacity: .6; }
+.title-account__name { font-size: calc(.18 * var(--t)); color: var(--mint-500, #4ed8af); }
+.title-account__edit { margin-left: auto; font-size: calc(.13 * var(--t)); opacity: .6; }
 .title-account:hover .title-account__edit { opacity: 1; }
 
 /* ---- 账号菜单 ------------------------------------------------------------ */
 .acc-modal { display: grid; gap: .08rem; min-width: min(4.4rem, 84vw); }
 .acc-modal__id { display: flex; align-items: center; gap: .1rem; padding-bottom: .04rem; }
 .acc-modal__sep { border: 0; border-top: 1px solid var(--line-2, #2c3a35); margin: .06rem 0 .02rem; }
-.acc-modal__note { font-size: .12rem; opacity: .5; }
+.acc-modal__note { font-size: calc(.12 * var(--t)); opacity: .5; }
 
 /* ---- 设置面板里的「安装与离线」 ------------------------------------------ */
 .install-sec { margin-top: .14rem; padding-top: .12rem; border-top: 1px solid var(--line-2, #2c3a35); }
 .install-sec__title { display: flex; align-items: baseline; gap: .08rem; }
-.install-sec__title h4 { margin: 0; font-size: .15rem; }
+.install-sec__title h4 { margin: 0; font-size: calc(.15 * var(--t)); }
 .install-sec__row {
   display: flex; align-items: center; gap: .08rem; flex-wrap: wrap;
-  font-size: .14rem; padding: .05rem 0;
+  font-size: calc(.14 * var(--t)); padding: .05rem 0;
 }
 .install-sec__row > span:first-child { opacity: .8; }
 .install-sec__row b { margin-left: auto; opacity: .75; font-weight: 600; }
 .install-sec__row--ok { color: var(--mint-500, #4ed8af); }
-.install-sec__hint { opacity: .6; font-size: .13rem; }
-.install-sec__note { font-size: .12rem; line-height: 1.45; opacity: .45; margin-top: .04rem; }
+.install-sec__hint { opacity: .6; font-size: calc(.13 * var(--t)); }
+.install-sec__note { font-size: calc(.12 * var(--t)); line-height: 1.45; opacity: .45; margin-top: .04rem; }

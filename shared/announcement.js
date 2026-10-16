@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 // One terminal announcement: three 30-second passes, five minutes AFTER each finished pass.
 export const ANNOUNCEMENT = Object.freeze({ passes: 3, scrollMs: 30_000, gapMs: 300_000, maxChars: 300 });
 export const announcementLifetime = () => ANNOUNCEMENT.passes * ANNOUNCEMENT.scrollMs + (ANNOUNCEMENT.passes - 1) * ANNOUNCEMENT.gapMs;
@@ -22,6 +23,6 @@ export function parseAnnouncementCommand(line) {
   if (!text || /^help$/i.test(text)) return { action: 'help' };
   if (/^clear$/i.test(text)) return { action: 'clear' };
   if (/^status$/i.test(text)) return { action: 'status' };
-  if ([...text].length > ANNOUNCEMENT.maxChars) return { action: 'error', error: `公告最多 ${ANNOUNCEMENT.maxChars} 个字，请缩短内容。` };
+  if ([...text].length > ANNOUNCEMENT.maxChars) return { action: 'error', error: t('公告最多 {maxChars} 个字，请缩短内容。', { maxChars: ANNOUNCEMENT.maxChars }) };
   return { action: 'publish', text };
 }

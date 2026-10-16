@@ -1,8 +1,9 @@
 import { createInterface } from 'node:readline';
 import { sendSession } from './net.js';
 import { announcementLifetime, announcementPhase, parseAnnouncementCommand } from '../shared/announcement.js';
+import { N_ } from '../shared/i18n.js';
 
-export const ANNOUNCEMENT_HELP = '公告：announce 要显示的文字 | announce clear 撤下 | announce status 查看。每遍30秒，结束后间隔5分钟，共3遍。';
+export const ANNOUNCEMENT_HELP = N_('公告：announce 要显示的文字 | announce clear 撤下 | announce status 查看。每遍30秒，结束后间隔5分钟，共3遍。');
 
 // Accessible only through process stdin / server-owner code; no player API can publish announcements.
 export function createAnnouncements({ registry, log = console, input = null, now = Date.now, timers = globalThis }) {

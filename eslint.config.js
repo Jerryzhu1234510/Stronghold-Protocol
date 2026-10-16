@@ -1,7 +1,8 @@
 // Correctness lint only (npm run lint). No formatter, no stylistic rules, no repo-wide reformat.
 //
 // Node: server, shared, tools, scripts, types.
-// Browser: public/js (also loaded under Node by unit tests, so `process` is a known global).
+// Browser: public/js (also loaded under Node by unit tests, so `process` is a known global) and the plugin studio's page,
+// public/studio.
 // Tests: Node globals plus browser globals (page.evaluate callbacks).
 // Warnings (unused vars, and a few rules that fire on intentional patterns) do not fail the run.
 // `npm run lint` does not pass --max-warnings=0.
@@ -71,7 +72,7 @@ export default [
     rules,
   },
   {
-    files: ['public/js/**/*.js'],
+    files: ['public/js/**/*.js', 'public/studio/**/*.js'],
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: 'module',
@@ -89,5 +90,11 @@ export default [
       globals: { ...globals.node, ...globals.browser, PIXI: 'readonly' },
     },
     rules,
+  },
+  {
+    // Puppeteer callbacks execute inside the page, as in the browser test fixtures above.
+    files: ['tools/qa-*.mjs', 'tools/check-*.mjs', 'tools/verify-*.mjs', 'tools/diagnose-*-cache.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser, PIXI: 'readonly', __SP__: 'readonly' } },
+    rules: { 'no-redeclare': ['error', { builtinGlobals: false }] },
   },
 ];

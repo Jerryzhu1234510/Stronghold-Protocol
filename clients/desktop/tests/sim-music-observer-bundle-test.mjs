@@ -7,7 +7,7 @@ const here=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(here,'
 const require=createRequire(import.meta.url),{instrument}=require('../sim-music-observer.cjs');
 const {flatStage,flatRoutes,chessRec,enemyRec}=await import(pathToFileURL(path.join(root,'test/helpers/battleHarness.js')));
 const original=await fs.readFile(path.join(root,'public/js/browser/sim.js'),'utf8');
-const changed=instrument(original,'/js/browser/sim.js');assert.notEqual(changed,original);
+const changed=instrument(original,'/js/browser/sim.js');assert.ok(original.includes('__SPDesktopMusicBridge')?changed===original:changed!==original);
 const base=await import('data:text/javascript;base64,'+Buffer.from(original).toString('base64'));
 const observed=await import('data:text/javascript;base64,'+Buffer.from(changed).toString('base64'));
 const globals={};for(const name of ['bonds','effects','items','config'])globals[name]=JSON.parse(await fs.readFile(path.join(root,'data/'+name+'.json'),'utf8'));
@@ -32,7 +32,7 @@ function run(module){
  return {result:battle.result(),snapshot:battle.snapshot(),draws,events:battle.drainEvents(),errorCount:battle.errorCount};
 }
 try{
- const plain=run(base),instrumented=run(observed);
+ const observerBridge=globalThis.__SPDesktopMusicBridge;delete globalThis.__SPDesktopMusicBridge;const plain=run(base);globalThis.__SPDesktopMusicBridge=observerBridge;const instrumented=run(observed);
  assert.deepEqual(instrumented.result,plain.result,'observer cannot change deterministic battle results');
  assert.deepEqual(instrumented.snapshot,plain.snapshot,'observer cannot change final unit states');
  assert.equal(instrumented.draws,plain.draws,'observer consumes no additional random draws');assert.ok(plain.draws>0,'comparison exercised RNG');

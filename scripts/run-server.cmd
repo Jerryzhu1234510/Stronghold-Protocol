@@ -5,6 +5,7 @@ rem Output goes to logs\server.log (rotated at 10 MB to logs\server.old.log); th
 setlocal EnableExtensions
 cd /d "%~dp0.."
 set "NODE_EXE=node"
+set "HOST=::"
 if exist "%~dp0service.env.cmd" call "%~dp0service.env.cmd"
 if not exist "logs" mkdir "logs"
 

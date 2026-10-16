@@ -7,6 +7,7 @@ import { WebSocketServer } from 'ws';
 import { createStaticHandler } from '../http/static.js';
 import { AssaultRoom } from './assault.js';
 import { versusCatalog } from './http.js';
+import { t } from '../../shared/i18n.js';
 
 export async function startVersus({ port = 3227, host = '127.0.0.1' } = {}) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -45,7 +46,7 @@ export async function startVersus({ port = 3227, host = '127.0.0.1' } = {}) {
         } else if (msg.action === 'resume') {
           if (client.room) throw new Error('已经加入房间');
           const session = sessions.get(msg.token); if (!session) throw new Error('测试会话已失效');
-          for (const other of clients) if (other !== client && other.player === session.player) { other.ws.close(4001, '另一页面接管'); other.player = null; other.room = null; }
+          for (const other of clients) if (other !== client && other.player === session.player) { other.ws.close(4001, t('另一页面接管')); other.player = null; other.room = null; }
           Object.assign(client, session); client.player.connected = true;
           send(ws, { type: 'joined', code: client.room.code, token: msg.token, playerId: client.player.id });
         } else {

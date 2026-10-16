@@ -8,14 +8,14 @@ import { DATA, makeMatch, give, checkInvariants, chessOfTier } from './harness.j
 
 const gdOf = (modeId = 'mode_multi_normal') => new GameData(DATA, modeId);
 
-test('pool caps follow config (12/14/18/16/8/5, 缪尔赛思 4) and only visible, unbanned chess enter', () => {
+test('co-op pool doubles the measured single-player capacities; only visible, unbanned chess enter', () => {
   const gd = gdOf();
   const pool = new SharedPool(gd, { banned: [] });
   const caps = { 1: 12, 2: 14, 3: 18, 4: 16, 5: 8, 6: 5 };
   assert.equal(pool.entries.size, gd.visibleChess.length);
   assert.equal(pool.entries.size, 113);
   for (const [id, e] of pool.entries) {
-    const expect = id === 'chess_char_6_11_a' ? 4 : caps[e.tier];
+    const expect = 2 * (DATA.config.economy.poolCopiesOverrides[id] ?? caps[e.tier]);
     assert.equal(e.cap, expect, id);
     assert.equal(e.left, e.cap);
     assert.ok(DATA.chess[id].visible && !DATA.chess[id].isGolden);
@@ -114,12 +114,33 @@ test('effect-only items are never shop items: not in shopItemsByTier, never in t
   const pool = new SharedPool(gd);
   const rng = createRng(4);
   for (let level = 1; level <= 6; level++) for (let i = 0; i < 400; i++) assert.ok(!EFFECT_ONLY.includes(pool.rollItem(rng, level)));
-  // every shop-eligible pool (凯瑟琳 / 列装 / 定向投放 / 见者有份) and the plain "random item" roll of effects
+  // shop-eligible pools other than 凯瑟琳, and the plain "random item" roll, never draw an effect-only item.
+  // 凯瑟琳's pool is shop-eligible equipment plus 突变细胞 (maintainer 2026-10-14, #631); the four hammers stay out.
+  const CELL = 'chess_item_5_08_e_a';
+  const HAMMERS = EFFECT_ONLY.filter((id) => id !== CELL);
   const m = makeMatch({ mode: 'coop', seed: 3, fake: true }).m;
-  for (const pid of ['pool_equip_normal', 'pool_equip_shop_1', 'pool_equip_kathe', 'pool_equip_narant']) {
+  for (const pid of ['pool_equip_normal', 'pool_equip_shop_1', 'pool_equip_narant']) {
     for (let i = 0; i < 300; i++) assert.ok(!EFFECT_ONLY.includes(m.rollItemId({ pool: pid, shopLevel: 6 })), pid);
   }
+  for (let i = 0; i < 300; i++) {
+    const id = m.rollItemId({ pool: 'pool_equip_kathe', shopLevel: 1 });
+    assert.ok(id && !HAMMERS.includes(id), id);
+  }
   for (let i = 0; i < 300; i++) assert.ok(!EFFECT_ONLY.includes(m.rollItemId({ maxTier: 6 })));
+  const kathe = DATA.choices.pools.pool_equip_kathe;
+  assert.equal(kathe.rule, 'shopEligible');
+  assert.equal(kathe.maxTier, undefined);
+  assert.deepEqual(kathe.also, [CELL]);
+  const orig = m.itemPool.canGain.bind(m.itemPool);
+  m.itemPool.canGain = (id) => m.gd.baseIdOf(id) === CELL;
+  try {
+    assert.equal(m.rollItemId({ pool: 'pool_equip_kathe', shopLevel: 1 }), CELL, '定向投放 can draw 突变细胞 at shop level 1');
+    assert.equal(m.rollItemId({ pool: 'pool_equip_narant', shopLevel: 6 }), null);
+    assert.equal(m.rollItemId({ maxTier: 6 }), null);
+    assert.equal(m.pool.rollItem(createRng(1), 6, m.itemPool), null, 'the shop item slot still cannot roll it');
+  } finally {
+    m.itemPool.canGain = orig;
+  }
   m.dispose();
 });
 
@@ -135,7 +156,7 @@ test('维多利亚 25-layer reward: the 4 special 维式重锤 (and nothing else
   m.dispose();
 });
 
-test('洛洛 and 焰尾 use the measured eight-item and 10/10/3 subsets; the custom equipment supply remains unlimited', () => {
+test('洛洛 and 焰尾 use the measured eight-item and 10/10/3 subsets; exhausted shop items are excluded', () => {
   const m = makeMatch({ mode: 'coop', seed: 3, fake: true }).m;
   const rock = DATA.choices.pools.pool_equip_rockr.weighted;
   assert.deepEqual(rock.map(([id, n]) => [m.gd.item(id).name, n]), [
@@ -146,7 +167,10 @@ test('洛洛 and 焰尾 use the measured eight-item and 10/10/3 subsets; the cus
   const seen = new Set();
   for (let i = 0; i < 300; i++) seen.add(m.rollPool('pool_equip_rockr').id);
   assert.deepEqual([...seen].sort(), rock.map(x => x[0]).sort());
-  assert.equal(m.itemPool, undefined, 'the custom fork retains unlimited equipment supply');
+  const normal = rock[0][0], ps = m.order[0];
+  for (let i = 0; i < m.itemPool.cap(normal); i++) assert.ok(ps.acquireItem(normal));
+  assert.equal(m.itemPool.left(normal), 0);
+  for (let i = 0; i < 100; i++) assert.notEqual(m.rollPool('pool_equip_rockr').id, normal);
   m.dispose();
 });
 

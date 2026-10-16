@@ -39,7 +39,7 @@ import { trioUniteRoutes } from '../../shared/uniteLayout.js';
 
 // Only 7–8 seat rooms recruit a third helper and extend the timer; 5–6 retain the pair.
 export const largeUnite = m => !m.isSolo && Number(m.capacity ?? m.gd?.capacity ?? 4) >= 7;
-export const uniteTimeLimit = (m, base) => m.isSolo ? base : Math.round(base * (largeUnite(m) ? 1.6 : 1) * 1100) / 1000;
+export const uniteTimeLimit = (m, base) => m.isSolo || m.capacity <= 4 ? base : Math.round(base * (largeUnite(m) ? 1.6 : 1) * 1100) / 1000;
 
 /**
  * @param {import('./Match.js').Match} m

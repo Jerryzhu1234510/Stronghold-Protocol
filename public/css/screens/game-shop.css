@@ -156,6 +156,9 @@
 .scard__idesc { font-size: .12rem; line-height: 1.45; color: var(--text-lo); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .scard--sold { background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .02) 0 .08rem, transparent .08rem .16rem), rgba(8, 11, 10, .75); border: 1px dashed var(--line-2); justify-content: center; align-items: center; }
 .scard__soldtxt { display: flex; flex-direction: column; align-items: center; gap: .02rem; font-size: .16rem; color: var(--text-dim); }
+/* a slot the 调度中心's upgrade opened and nothing filled yet (ui/shopBar.js EmptyCard, also .scard--sold): the bare frame — no hatching,
+   no SOLD OUT text */
+.scard--sold.scard--empty { background: rgba(8, 11, 10, .4); border-color: var(--line); }
 
 /* ---- funds card ---- */
 .funds { width: 1.18rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .08rem; padding: .06rem; border-left: 1px solid var(--line); }
@@ -235,31 +238,3 @@
 .shopbar.has-armed .scard:not(.is-armed):not(.scard--sold) { filter: brightness(.72); }
 .lvcard.is-armed { background: linear-gradient(180deg, #ffd65a, #e0a800); color: #1d1400; box-shadow: 0 0 0 2px #fff4c2, 0 0 .3rem rgba(255, 198, 0, .5); animation: pulse-gold 1.1s var(--ease-in-out) infinite; }
 .lvcard.is-armed .lvcard__label { letter-spacing: .12em; padding-left: .12em; }
-
-/* The optional focus sits in the top HUD, independently of the original shop controls. */
-.shop-focus {
-  position: relative; flex: none;
-  pointer-events: auto; display: flex; align-items: center; gap: 6px;
-  height: 32px; padding: 0 6px; border: 1px solid var(--mint-700);
-  background: rgba(8, 11, 10, .94); color: var(--text-lo); font-size: max(12px, .15rem);
-}
-.shop-focus > span { white-space: nowrap; }
-.shop-focus select {
-  width: 86px; min-width: 0; height: 30px; padding: 0 4px;
-  background: #111c16; border: 0; color: var(--mint-400); font: inherit;
-}
-.shop-focus select:focus-visible { outline: 2px solid var(--mint-400); outline-offset: -2px; }
-.shopbar--expanded .shopbar__row { max-width: calc(100vw - 3.4rem); }
-.shopbar--expanded .shopbar__row > :not(.shopbar__cards) { flex: none; }
-.shopbar--expanded .shopbar__cards { min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; padding-top: .16rem; margin-top: -.16rem; }
-.shopbar--expanded .shopbar__cards > * { flex: none; }
-.shopbar--expanded:not(.has-reward) .shopbar__cards .scard { width: 1.4rem; }
-.gm.is-dragging .shopbar { opacity: .2; }
-.gm.is-dragging .shopbar *, .gm.is-dragging .shopbar *::before { pointer-events: none; }
-
-.gm.is-dragging .shop-focus { opacity: .2; pointer-events: none; }
-.gm.is-dragging .shop-focus select { pointer-events: none; }
-
-@media (max-width: 700px) {
-  .shop-focus > span { display: none; }
-}

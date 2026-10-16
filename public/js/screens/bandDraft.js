@@ -264,8 +264,8 @@ export function BandDraftScreen() {
       total=${clock ? clock.total : null} onExit=${() => setExit(true)} />
     <main class="draft__main">
       <aside class="draft-order">
-        <p class="draft-order__repeat">${repeatLimit > 0 ? `重复开局名额 ${repeatUsed}/${repeatLimit}；同一种策略最多2人选择` : ''}</p>
-        <h3 class="brief-h"><span>${clone ? '策略投票' : solo ? t('独立模拟') : t('决策顺序')}</span><${MicroLabel}>${clone ? 'TEAM VOTE' : solo ? 'FREE PICK' : 'RANDOM ORDER'}</${MicroLabel}></h3>
+        <p class="draft-order__repeat">${repeatLimit > 0 ? t('重复开局名额 {repeatUsed}/{repeatLimit}；同一种策略最多2人选择', { repeatUsed, repeatLimit }) : ''}</p>
+        <h3 class="brief-h"><span>${clone ? t('策略投票') : solo ? t('独立模拟') : t('决策顺序')}</span><${MicroLabel}>${clone ? 'TEAM VOTE' : solo ? 'FREE PICK' : 'RANDOM ORDER'}</${MicroLabel}></h3>
         ${(solo ? players.filter((p) => p.playerId === myId) : draft.order.map((pid) => players.find((p) => p.playerId === pid)).filter(Boolean)).map((p, i) => {
           const picked = (clone ? votes.get(p.playerId) : draft.picks.get(p.playerId)) || (p.playerId === myId ? myPick : p.bandId) || null;
           const cur = !picked && (clone || solo || draft.turnPid === p.playerId);
@@ -288,7 +288,7 @@ export function BandDraftScreen() {
         })}
         <${Button} variant="secondary" icon="search" block=${true} class="draft-order__info" data-testid="match-info-open"
           aria-haspopup="dialog" onClick=${() => setInfoOpen(true)}>${t('查看禁用盟约与干员')}<//>
-        ${!solo ? html`<p class="draft-order__tip" data-testid="draft-tip">${clone ? '全员确认或倒计时结束，立即采用票数最多的策略；最高票并列时随机选取。全员确认前可改票。' : draftTip({ timed, turnSeconds: turnLen, autoName: myPick ? null : autoName, selected: autoId === sel })}</p>` : null}
+        ${!solo ? html`<p class="draft-order__tip" data-testid="draft-tip">${clone ? t('全员确认或倒计时结束，立即采用票数最多的策略；最高票并列时随机选取。全员确认前可改票。') : draftTip({ timed, turnSeconds: turnLen, autoName: myPick ? null : autoName, selected: autoId === sel })}</p>` : null}
       </aside>
 
       <section class="draft-grid" role="listbox" aria-label=${t('策略')}>
@@ -301,7 +301,7 @@ export function BandDraftScreen() {
               class=${cx('dband', sel === b.bandId && 'is-sel', myPick === b.bandId && 'is-mine', isTaken && 'is-taken', offNames.length && 'is-off')} onClick=${() => { setSel(b.bandId); audio.sfx('tab', { volume: 0.5 }); }}>
             <${BandIcon} bandId=${b.bandId} size="lg" />
             <span class="dband__name">${b.name}</span>
-            ${clone ? html`<span class="dband__votes num">${who.length} 票</span>` : null}
+            ${clone ? html`<span class="dband__votes num">${t('{n} 票', { n: who.length })}</span>` : null}
             <span class="dband__lp num"><i></i>${solo ? b.totalHp : roomStartLp(b.totalHp, pub?.capacity)}</span>
             <${BandOffTag} names=${offNames} />
             ${who.length ? html`<span class="dband__who">${who.slice(0, 4).map((p) => html`<${PlayerAvatar} key=${p.playerId} player=${p} size="sm" />`)}</span>` : null}
@@ -321,17 +321,17 @@ export function BandDraftScreen() {
           <div class="draft-detail__eff">
             <${MicroLabel} tone="mint">EFFECT</${MicroLabel}>
             <b>${band.effectName || ''}</b>
-            <${RichText} as="p" text=${clone && band.bandId === 'band_ducklord' ? (band.descRaw || band.desc) + '\n克隆模式：从第5回合起，每回合随机替换0～' + players.length + '名神秘顾客。' : band.descRaw || band.desc} class="draft-detail__desc" />
+            <${RichText} as="p" text=${clone && band.bandId === 'band_ducklord' ? (band.descRaw || band.desc) + t('\n克隆模式：从第5回合起，每回合随机替换0～') + players.length + t('名神秘顾客。') : band.descRaw || band.desc} class="draft-detail__desc" />
           </div>` : html`<p class="t-dim">${t('选择一个策略查看详情')}</p>`}
         <div class="draft-detail__actions">
-          ${clone && myVote ? html`<p class="draft-detail__status t-mint"><${Icon} name="check" />已投票「${gd.band(myVote)?.name}」，等待其他博士确认</p>`
+          ${clone && myVote ? html`<p class="draft-detail__status t-mint"><${Icon} name="check" />${t('已投票「')}${gd.band(myVote)?.name}${t('」，等待其他博士确认')}</p>`
             : myPick ? html`<p class="draft-detail__status t-mint"><${Icon} name="check" />${t('已选择「{name}」', { name: gd.band(myPick)?.name || '' })}${!solo && !draft.done ? t('，等待其他博士') : ''}</p>`
             : selTaken ? html`<p class="draft-detail__status draft-detail__status--taken"><${Icon} name="close" />${t('队友已选，请选择其他策略')}</p>`
             : !myTurn ? html`<p class="draft-detail__status"><${Icon} name="hourglass" />${turnName ? t('{turnName} 正在决策…', { turnName }) : t('等待轮到你')}</p>` : null}
           <div class="draft-detail__btns">
             ${!solo && !clone ? html`<${Button} variant="secondary" size="lg" icon="chevrons" disabled=${!canSkip} loading=${busy === 'skip'} onClick=${skip}
               title=${skipsLeft > 0 ? t('跳过本轮，稍后再选') : t('跳过次数已用完')}>${t('跳过')}${skipsLeft > 0 ? '' : t('（已用）')}<//>` : null}
-            <${Button} variant="primary" size="lg" icon="check" disabled=${!myTurn || !band || selTaken || (clone && myVote === sel)} loading=${busy === 'pick'} onClick=${confirm}>${clone ? myVote ? '修改投票' : '确认投票' : selTaken ? t('队友已选') : t('确认选择')}<//>
+            <${Button} variant="primary" size="lg" icon="check" disabled=${!myTurn || !band || selTaken || (clone && myVote === sel)} loading=${busy === 'pick'} onClick=${confirm}>${clone ? myVote ? t('修改投票') : t('确认投票') : selTaken ? t('队友已选') : t('确认选择')}<//>
           </div>
         </div>
       </aside>

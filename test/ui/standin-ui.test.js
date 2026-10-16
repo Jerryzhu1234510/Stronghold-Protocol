@@ -6,7 +6,6 @@
 // stand-in's portrait, name, skill, talents; the chess's bonds and 特质; 「银灰的替补」), the bond popups (own and a
 // teammate's), the result lineup and the equip-replace dialog — while the rules keep the chess (placement and ranges
 // by the stand-in's body, as before).
-import { snapshotComponent } from '../helpers/componentSnapshot.js';
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -30,8 +29,7 @@ const { createStore } = await import('../../public/js/store.js');
 const G = await import('../../public/js/ui/gameLogic.js');
 const { ChessCard } = await import('../../public/js/ui/shopBar.js');
 const { ChessDetail, resolveDetail } = await import('../../public/js/ui/detailPanel.js');
-const { BondPopup: BondPopupComponent } = await import('../../public/js/ui/bondStrip.js');
-const BondPopup = snapshotComponent(BondPopupComponent);
+const { BondPopup } = await import('../../public/js/ui/bondStrip.js');
 const { ownerBoard } = await import('../../public/js/ui/watchBonds.js');
 const { replaceRequest } = await import('../../public/js/ui/equipReplace.js');
 const { LineupThumb } = await import('../../public/js/screens/result.js');

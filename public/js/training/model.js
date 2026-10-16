@@ -1,5 +1,6 @@
 // Local-only training scenarios. No network, accounts, room state or result uploads.
 import { computeBonds } from '../../../server/match/bondsMeta.js';
+import { t } from '../../../shared/i18n.js';
 
 export const TRAINING_KEY = 'sp-local-training-v1';
 export const TRAINING_HISTORY_KEY = 'sp-local-training-results-v1';
@@ -28,10 +29,10 @@ export function validateScenario(input, raw) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('训练方案无效');
   if (!own(raw.stages, input.stageId)) throw new Error('未知地图');
   if (!['normal', 'boss'].includes(input.kind)) throw new Error('未知战场类型');
-  const seed = integer(input.seed, 1, 0xffffffff, '随机种子');
-  const seconds = integer(input.seconds, 10, LIMITS.seconds, '训练时长');
-  const round = integer(input.round, 1, 20, '测试回合');
-  const hpMul = integer(input.hpMul, 1, 96, '敌人生命倍率');
+  const seed = integer(input.seed, 1, 0xffffffff, t('随机种子'));
+  const seconds = integer(input.seconds, 10, LIMITS.seconds, t('训练时长'));
+  const round = integer(input.round, 1, 20, t('测试回合'));
+  const hpMul = integer(input.hpMul, 1, 96, t('敌人生命倍率'));
   if (!Array.isArray(input.units) || input.units.length > LIMITS.units) throw new Error(`最多 ${LIMITS.units} 名干员`);
   const occupied = new Set();
   const units = input.units.map((u, i) => {
@@ -47,15 +48,15 @@ export function validateScenario(input, raw) {
   const layers = {};
   for (const [id, n] of Object.entries(input.layers || {})) {
     if (!own(raw.bonds, id)) throw new Error('未知盟约');
-    layers[id] = integer(n, 0, LIMITS.layers, '盟约层数');
+    layers[id] = integer(n, 0, LIMITS.layers, t('盟约层数'));
   }
   if (!Array.isArray(input.enemies) || input.enemies.length > LIMITS.groups) throw new Error(`最多 ${LIMITS.groups} 组敌人`);
   let total = 0;
   const enemies = input.enemies.map(e => {
     if (!e || !own(raw.enemies, e.enemyKey)) throw new Error('未知敌人');
-    const count = integer(e.count, 1, LIMITS.enemies, '敌人数量'); total += count;
-    const time = integer(e.time, 0, seconds - 1, '入场时间');
-    const interval = integer(e.interval, 0, 30, '入场间隔');
+    const count = integer(e.count, 1, LIMITS.enemies, t('敌人数量')); total += count;
+    const time = integer(e.time, 0, seconds - 1, t('入场时间'));
+    const interval = integer(e.interval, 0, 30, t('入场间隔'));
     if (time + (count - 1) * interval >= seconds) throw new Error('最后一名敌人必须在训练结束前入场');
     return { enemyKey: e.enemyKey, count, time, interval };
   });
@@ -98,7 +99,7 @@ export function battleOptions(input, raw) {
 export function defaultScenario(raw) {
   const s = { version: 1, stageId: own(raw.stages, 'act2autochess_m01') ? 'act2autochess_m01' : Object.keys(raw.stages)[0],
     kind: 'normal', seed: 20261015, seconds: 90, round: 11, hpMul: 1, noBossCap: false, units: [], enemies: [], layers: {} };
-  for (const name of ['星熊', '能天使', '白面鸮']) {
+  for (const name of [t('星熊'), t('能天使'), t('白面鸮')]) {
     const c = Object.values(raw.chess).find(c => c.name === name && !c.isGolden && !c.isDiy);
     if (!c) continue;
     const tile = legalTiles(raw, s, c.chessId).find(([r, col]) => !s.units.some(u => u.row === r && u.col === col));

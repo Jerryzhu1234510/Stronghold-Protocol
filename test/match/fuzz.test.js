@@ -24,7 +24,12 @@ function randomIntent(rng, m, ps) {
   const uid = () => (pieces.length && rng() < 0.8 ? rng.pick(pieces) : 1 + rng.int(5000));
   const to = () => (rng() < 0.6 ? { area: 'board', row: rng() < 0.8 ? 9 + rng.int(4) : rng.int(19), col: rng() < 0.8 ? 2 + rng.int(9) : rng.int(21) } : { area: 'hand', idx: rng.int(10) });
   switch (t) {
+    case 'g.infoReady': return { t, setupRevision: m.setupRevision ?? 0 };
+    case 'g.rerollVote': return { t, voteId: m.setupVote?.id ?? 1 + rng.int(10), agree: rng() < 0.5 };
+    case 'g.prepVote': case 'g.uniteVote': return { t, voteId: 'qa-'+rng.int(10), agree: rng() < 0.5 };
+    case 'g.prepExtend': return { t, seconds: rng() < 0.5 ? 30 : 60 };
     case 'g.shopFocus': return { t, bondId: null };
+    case 'g.versus': return { t, command: { action: 'qa-unknown' } };
     case 'g.band': return { t, bandId: rng() < 0.8 ? rng.pick(BANDS) : rng.pick(['constructor', '__proto__', 'band_x', 'a'.repeat(64)]) };
     case 'g.buy': return { t, slot: rng.int(16) };
     case 'g.sell': case 'g.destroy': return { t, uid: uid() };

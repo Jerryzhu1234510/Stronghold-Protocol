@@ -3,6 +3,7 @@ import { OPERATORS, MONSTERS, EQUIPMENT, byId, data } from './catalog.js';
 import { versusCanStand } from '../../shared/versusPlacement.js';
 import { versusUpgradeState, versusShopSlots, versusIncomeBetween } from '../../shared/versusEconomy.js';
 import { resetMetaWindow } from './metaWindow.js';
+import { t } from '../../shared/i18n.js';
 
 const BANK_KEYS = ['coins','level','upgradeNext','operators','monsters','items','offers','shop','freeRefresh','layers','bonds'];
 const freshBank = () => ({coins:20,level:1,upgradeNext:0,operators:[],monsters:{},items:[],offers:[],shop:{},freeRefresh:0});
@@ -38,7 +39,7 @@ export class AssaultRoom extends VersusRoom {
     for(let i=0;i<entrants.length;i+=2) {
       const pair=entrants.slice(i,i+2),d={id:`r${this.round}d${i/2}`,color:GROUP_COLORS[i/2],pair,battles:[],elapsed:0,done:false,winner:null,reason:null,leg:0,legs:[]};
       this.duels.push(d);pair.forEach((p,j)=>{p.duel=d.id;p.side=j?'R':'L';});this.beginLeg(d);
-      if(pair.some(p=>p.eliminated))this.finishDuel(d,pair.find(p=>!p.eliminated)||pair[0],'退出');
+      if(pair.some(p=>p.eliminated))this.finishDuel(d,pair.find(p=>!p.eliminated)||pair[0],t('退出'));
     }
   }
   beginLeg(d) {
@@ -66,12 +67,12 @@ export class AssaultRoom extends VersusRoom {
     const defender=d.pair.find(p=>p.role==='defend');
     if(defender.hp>0&&d.elapsed<this.duelSeconds)return;
     d.legs.push({defender:defender.id,attacker:d.pair.find(p=>p.role==='attack').id,leaks:defender.stats.leaks-d.startLeaks,
-      heldSeconds:Math.min(d.elapsed,this.duelSeconds),killValue:defender.killValue,hp:defender.hp,reason:defender.hp<=0?'蓝门失守':'时间耗尽'});
+      heldSeconds:Math.min(d.elapsed,this.duelSeconds),killValue:defender.killValue,hp:defender.hp,reason:defender.hp<=0?t('蓝门失守'):t('时间耗尽')});
     if(d.leg===1){this.beginLeg(d);return;}
     const ranked=[...d.legs].sort((a,b)=>a.leaks-b.leaks||b.heldSeconds-a.heldSeconds||b.killValue-a.killValue);
     const tied=ranked[0].leaks===ranked[1].leaks&&ranked[0].heldSeconds===ranked[1].heldSeconds&&ranked[0].killValue===ranked[1].killValue;
     const id=tied?d.pair[Math.floor(this.random()*2)].id:ranked[0].defender;
-    this.finishDuel(d,d.pair.find(p=>p.id===id),tied?'攻守完全同分 · 抽签':'攻守两段结算');
+    this.finishDuel(d,d.pair.find(p=>p.id===id),tied?t('攻守完全同分 · 抽签'):t('攻守两段结算'));
   }
   finishDuel(d,winner,reason) {
     if(d.done)return;

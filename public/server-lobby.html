@@ -15,26 +15,7 @@
 @media(max-width:480px){.topbar{gap:13px}.brand{gap:10px}.main-nav{width:100%;justify-content:space-between;border-top:1px solid #2b4030}.nav-link{flex:1;font-size:12px}.nav-link .icon{display:block;width:14px;height:14px}.hero{gap:13px}.hero-readout{padding:15px 13px;gap:12px}.hero-readout>div{min-width:38px}.hero-readout strong{font-size:23px}.hero-readout span:not(.readout-divider){font-size:8px}.hero-description{max-width:185px}.hero .eyebrow{letter-spacing:.025em}.hero .eyebrow .line{display:none}h1{font-size:27px}.notice-top time{font-size:9px}.section-heading.compact h2{font-size:18px}.section-note{letter-spacing:0}.server-grid{grid-template-columns:1fr}.server-card{padding:23px}.server-title-row{flex-wrap:nowrap}.server-name{width:auto;padding-bottom:0;gap:12px}.server-symbol{width:37px;height:41px}.server-name h3{font-size:25px}.server-name p{font-size:10px}.latency{position:static;margin-left:0;margin-top:2px;font-size:9px}.card-top{margin-bottom:22px}.node-code{font-size:10px}.node-rule{display:block}.node-state{font-size:11px}.server-metrics{grid-template-columns:1.55fr 1fr 1fr 1fr;column-gap:8px;row-gap:0;margin-top:26px;padding-bottom:20px}.metric.primary strong{font-size:43px}.metric strong{font-size:22px}.metric span{font-size:9px}.card-status-line{flex-direction:row;align-items:center;min-height:43px}.enter-button{font-size:13px;min-height:46px}.selection-bottom p{max-width:68%}.section-eyebrow{font-size:8px}.section-heading h2{font-size:24px}.server-tools{padding-bottom:1px}.status-summary{max-width:145px;font-size:9px}.icon-button{height:29px;width:29px}.guide-section .section-note{display:none}.community{margin-top:18px}.community-heading{gap:12px}.community-icon{width:35px;height:35px;flex-shrink:0}.community p{font-size:10px}}
 @media(prefers-reduced-motion:reduce){:root{scroll-behavior:auto}*,*:before,*:after{animation:none!important;transition:none!important}}
 </style>
-  <script>window.SP_LOBBY_CONFIG = {
-  "version": "l01",
-  "qq": "561101140",
-  "statusEndpoint": "https://weishuxieyi.icu/healthz",
-  "nodes": [
-    {
-      "id": "8443",
-      "name": "8443服",
-      "url": "https://weishuxieyiwangye.cn:8443/",
-      "statusEndpoint": "https://weishuxieyiwangye.cn:8443/lobby/status.json",
-      "ping": "https://weishuxieyiwangye.cn:8443/lobby/ping"
-    },
-    {
-      "id": "icu",
-      "name": "icu服",
-      "url": "https://weishuxieyi.icu/",
-      "ping": "https://weishuxieyi.icu/healthz"
-    }
-  ]
-};</script>
+  <script src="/js/compat030/server-lobby-html-1.js"></script>
 </head>
 <body>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -106,7 +87,7 @@
         <div class="server-grid">
           <article class="server-card" data-server="8443" aria-labelledby="name-8443">
             <div class="card-top"><span class="node-code">NODE <b>01</b><span class="node-rule"></span></span><span class="node-state" id="state-8443"><span class="status-dot pending"></span>检测中</span></div>
-            <div class="server-title-row"><div class="server-name"><span class="server-symbol"><svg class="icon"><use href="#i-server"/></svg></span><div><h3 id="name-8443">8443服 <span class="tag neutral">友服</span></h3><p>weishuxieyiwangye.cn:8443</p></div></div><span class="latency" id="latency-8443" title="你的浏览器到站点的请求耗时，非游戏内延迟"><svg class="icon"><use href="#i-signal"/></svg><span>测量中</span></span></div>
+            <div class="server-title-row"><div class="server-name"><span class="server-symbol"><svg class="icon"><use href="#i-server"/></svg></span><div><h3 id="name-8443">8443服 <span class="tag mint">本服</span></h3><p>weishuxieyiwangye.cn:8443</p></div></div><span class="latency" id="latency-8443" title="你的浏览器到站点的请求耗时，非游戏内延迟"><svg class="icon"><use href="#i-signal"/></svg><span>测量中</span></span></div>
             <div class="server-metrics"><div class="metric primary"><strong class="number" id="online-8443">—</strong><span>当前在线</span></div><div class="metric"><strong class="number" id="rooms-8443">—</strong><span>活跃房间</span></div><div class="metric"><strong class="number" id="matches-8443">—</strong><span>进行对局</span></div><div class="metric"><strong class="number" id="waiting-8443">—</strong><span>等待房间</span></div></div>
             <div class="card-status-line"><span class="node-info" id="info-8443">正在获取站点信息</span><span class="last-server" id="last-8443" hidden><svg class="icon"><use href="#i-clock"/></svg>上次选择</span></div>
             <a class="enter-button secondary-button" data-enter="8443" href="https://weishuxieyiwangye.cn:8443/" rel="noreferrer"><span>进入 8443服</span><svg class="icon"><use href="#i-arrow"/></svg></a>
@@ -114,7 +95,7 @@
 
           <article class="server-card recommended" data-server="icu" aria-labelledby="name-icu">
             <div class="card-top"><span class="node-code">NODE <b>02</b><span class="node-rule"></span></span><span class="node-state" id="state-icu"><span class="status-dot pending"></span>检测中</span></div>
-            <div class="server-title-row"><div class="server-name"><span class="server-symbol"><svg class="icon"><use href="#i-server"/></svg></span><div><h3 id="name-icu">icu服 <span class="tag mint">本服</span></h3><p>weishuxieyi.icu</p></div></div><span class="latency" id="latency-icu" title="你的浏览器到站点的请求耗时，非游戏内延迟"><svg class="icon"><use href="#i-signal"/></svg><span>测量中</span></span></div>
+            <div class="server-title-row"><div class="server-name"><span class="server-symbol"><svg class="icon"><use href="#i-server"/></svg></span><div><h3 id="name-icu">icu服 <span class="tag neutral">友服</span></h3><p>weishuxieyi.icu</p></div></div><span class="latency" id="latency-icu" title="你的浏览器到站点的请求耗时，非游戏内延迟"><svg class="icon"><use href="#i-signal"/></svg><span>测量中</span></span></div>
             <div class="server-metrics"><div class="metric primary"><strong class="number" id="online-icu">—</strong><span>当前在线</span></div><div class="metric"><strong class="number" id="rooms-icu">—</strong><span>活跃房间</span></div><div class="metric"><strong class="number" id="matches-icu">—</strong><span>进行对局</span></div><div class="metric"><strong class="number" id="waiting-icu">—</strong><span>等待房间</span></div></div>
             <div class="card-status-line"><span class="node-info" id="info-icu">正在获取站点信息</span><span class="last-server" id="last-icu" hidden><svg class="icon"><use href="#i-clock"/></svg>上次选择</span></div>
             <a class="enter-button primary-button" data-enter="icu" href="/game.html" rel="noreferrer"><span>进入 icu服</span><svg class="icon"><use href="#i-arrow"/></svg></a>
@@ -128,175 +109,13 @@
         <div class="section-heading"><div><p class="eyebrow section-eyebrow">02 <span>/</span> BEFORE DEPLOYMENT</p><h2 id="guide-title">准备就绪，即刻出发</h2></div><span class="section-note">游玩指南</span></div>
         <div class="guide-grid"><article><span class="step-index">01</span><div><h3>选择站点</h3><p>挑选响应合适的服务器。已有账号的玩家，建议回到熟悉的站点。</p></div></article><article><span class="step-index">02</span><div><h3>进入游戏</h3><p>按站点提示登录或进入大厅。首次加载素材时，请稍作等待。</p></div></article><article><span class="step-index">03</span><div><h3>邀请同伴</h3><p>与朋友进入同一服务器，再通过房间邀请链接加入对局。</p></div></article></div>
       </section>
-      <section class="community" aria-labelledby="community-title"><div class="community-heading"><span class="community-icon"><svg class="icon"><use href="#i-users"/></svg></span><div><h2 id="community-title">找到你的同伴</h2><p>交流阵容、组队联机，也欢迎反馈游戏问题。</p></div></div><button id="copy-qq" class="qq-button" type="button" aria-label="复制 QQ 交流群号 561101140"><span>QQ 交流群 <strong id="qq-number">561101140</strong></span><svg class="icon"><use href="#i-copy"/></svg></button></section>
+      <section class="community" aria-labelledby="community-title"><div class="community-heading"><span class="community-icon"><svg class="icon"><use href="#i-users"/></svg></span><div><h2 id="community-title">找到你的同伴</h2><p>交流阵容、组队联机，也欢迎反馈游戏问题。</p></div></div><button id="copy-qq" class="qq-button" type="button" aria-label="复制 QQ 交流群号 1127927007"><span>QQ 交流群 <strong id="qq-number">1127927007</strong></span><svg class="icon"><use href="#i-copy"/></svg></button></section>
     </main>
     <footer><div><span class="footer-brand">SP <span>/</span> 联机大厅</span><p>卫戍协议 · 盟约 / 非官方同人作品</p></div><a href="https://github.com/sganggs/Stronghold-Protocol" target="_blank" rel="noopener noreferrer">项目主页<svg class="icon small"><use href="#i-external"/></svg></a><span class="footer-code">CONNECT · COOPERATE · DEFEND</span></footer>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <dialog id="random-dialog" aria-labelledby="random-title"><button class="dialog-close icon-button" type="button" aria-label="关闭">×</button><span class="tag mint">目的地已选定</span><h2 id="random-title">这次，去 8443服。</h2><p>确认后进入所选服务器。</p><a id="random-enter" class="enter-button primary-button" href="https://weishuxieyiwangye.cn:8443/" rel="noreferrer"><span>进入 8443服</span><svg class="icon"><use href="#i-arrow"/></svg></a><button class="dialog-again" id="random-again" type="button">再选一次</button></dialog>
-  <script>(() => {
-  'use strict';
-  const config = window.SP_LOBBY_CONFIG;
-  if (!config || !Array.isArray(config.nodes)) return;
-  const byId = id => document.getElementById(id);
-  const safeUrl = value => { try { const u = new URL(value); return (u.protocol === 'https:' || u.protocol === 'http:' && u.origin === location.origin) && !u.username && !u.password ? u.href : null; } catch { return null; } };
-  const localPreview = /^(localhost|127\.0\.0\.1|\[::1\]|192\.168\.|10\.)/.test(location.hostname);
-  const ownNode = config.nodes.find(node => node.id === 'icu');
-  if (ownNode) {
-    ownNode.displayUrl = localPreview ? ownNode.url : location.origin;
-    ownNode.url = location.origin + '/game.html';
-    ownNode.ping = location.origin + '/healthz';
-    config.statusEndpoint = ownNode.ping;
-  }
-  if (localPreview) config.nodes[0].ping = '';
-  for (const node of config.nodes) {
-    const url = new URL(node.url);
-    if (url.origin === location.origin && /^\/(?:index\.html)?$/.test(url.pathname)) node.url = url.origin + '/game.html';
-  }
-  const nodes = config.nodes.filter(n => /^(8443|icu)$/.test(n.id) && safeUrl(n.url));
-  let snapshot = {}, busy = false, lastRefresh = 0, toastTimer, randomId;
-  const storageKey = 'sp-lobby:last-server:v1';
-  const count = n => Number.isSafeInteger(n) && n >= 0 ? n.toLocaleString('zh-CN') : '—';
-  const toast = message => { clearTimeout(toastTimer); byId('toast').textContent = message; byId('toast').hidden = false; toastTimer = setTimeout(() => { byId('toast').hidden = true; }, 3500); };
-  function remember(id) { try { localStorage.setItem(storageKey, id); } catch {} markLast(id); }
-  function markLast(id) { nodes.forEach(n => { byId('last-' + n.id).hidden = n.id !== id; }); }
-  nodes.forEach(n => {
-    const title = byId('name-' + n.id);
-    title.firstChild.textContent = n.name + ' ';
-    title.closest('.server-name').querySelector('p').textContent = new URL(n.displayUrl || n.url).host;
-    document.querySelectorAll('[data-enter="' + n.id + '"]').forEach(a => {
-      a.href = n.url; a.querySelector('span').textContent = '进入 ' + n.name;
-      a.addEventListener('click', () => remember(n.id));
-    });
-  });
-  const notice = document.querySelector('.notice-card > p');
-  if (nodes.length === 2) {
-    notice.replaceChildren();
-    nodes.forEach((n, i) => { if (i) notice.append(' 与 '); const strong = document.createElement('strong'); strong.textContent = n.name; notice.append(strong); });
-    notice.append(' 已接入联机大厅。查看站点状态，选择你的目的地，开启下一场对局。');
-  }
-  try { markLast(localStorage.getItem(storageKey)); } catch {}
-  byId('qq-number').textContent = String(config.qq || '561101140');
-  byId('copy-qq').setAttribute('aria-label', '复制 QQ 交流群号 ' + byId('qq-number').textContent);
-  byId('copy-qq').addEventListener('click', async () => {
-    const qq = byId('qq-number').textContent;
-    try {
-      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
-      await navigator.clipboard.writeText(qq); toast('群号已复制：' + qq);
-    } catch {
-      const range = document.createRange(); range.selectNodeContents(byId('qq-number'));
-      const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-      toast('群号：' + qq + '，请长按或按 Ctrl+C 复制');
-    }
-  });
-  function renderStatus(data) {
-    snapshot = data && typeof data.nodes === 'object' ? data.nodes : {};
-    let known = 0, total = 0, onlineNodes = 0;
-    nodes.forEach(n => {
-      const s = snapshot[n.id] || {};
-      const healthy = s.state === 'online', reachable = s.state === 'reachable';
-      if (healthy) onlineNodes++;
-      const el = byId('state-' + n.id), dot = document.createElement('span');
-      dot.className = 'status-dot' + (healthy || reachable ? '' : ' unknown');
-      el.replaceChildren(dot, document.createTextNode(healthy ? '在线' : reachable ? '可访问' : '状态未知'));
-      for (const metric of ['online', 'rooms', 'matches', 'waiting']) byId(metric + '-' + n.id).textContent = count(s[metric]);
-      if (Number.isSafeInteger(s.online) && s.online >= 0) { known++; total += s.online; }
-      byId('info-' + n.id).textContent = s.partial ? '部分版本暂未返回，人数仅含已确认版本' : healthy ? '站点运行中 · 数据约每 30 秒更新' : reachable ? '站点可访问 · 暂未提供人数数据' : '暂未获取状态 · 仍可尝试进入';
-    });
-    byId('total-online').textContent = known ? count(total) : '—';
-    byId('total-label').textContent = known === nodes.length ? '当前在线玩家' : known ? '已确认在线玩家' : '暂未获取人数';
-    const summary = byId('status-summary'), dot = document.createElement('span');
-    dot.className = 'status-dot' + (onlineNodes === nodes.length ? '' : ' unknown');
-    summary.replaceChildren(dot, document.createTextNode(onlineNodes === nodes.length ? '全部节点状态正常' : onlineNodes ? onlineNodes + ' 个节点已确认在线' : '站点状态暂不可用'));
-  }
-  async function latency(n) {
-    const el = byId('latency-' + n.id), started = performance.now();
-    try {
-      const url = safeUrl(n.ping);
-      if (!url) throw new Error('no ping');
-      const r = await fetch(url, { mode: 'no-cors', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', signal: AbortSignal.timeout(6500) });
-      if (r.type !== 'opaque' && !r.ok) throw new Error('ping unavailable');
-      const ms = Math.max(1, Math.round(performance.now() - started));
-      el.querySelector('span').textContent = ms.toLocaleString('zh-CN') + ' ms';
-      el.classList.toggle('slow', ms > 300); el.classList.remove('unknown');
-    } catch { el.querySelector('span').textContent = '未测得'; el.classList.add('unknown'); el.classList.remove('slow'); }
-  }
-  async function ownStatus() {
-      const endpoint = safeUrl(config.statusEndpoint);
-      if (!endpoint) throw new Error('no endpoint');
-      const r = await fetch(endpoint, { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', signal: AbortSignal.timeout(8000) });
-      if (!r.ok) throw new Error('unavailable');
-      let result = await r.json();
-      if (!result.nodes && new URL(endpoint).origin === location.origin) {
-        try {
-          const hot = await fetch('/__hot/status', { cache: 'no-store', signal: AbortSignal.timeout(4000) }).then(response => {
-            if (!response.ok) throw new Error('no hot gateway');
-            return response.json();
-          });
-          const versions = hot.versions.filter(version => version.healthy && /^[a-zA-Z0-9_-]{1,64}$/.test(version.id));
-          if (!versions.length) throw new Error('no healthy releases');
-          const health = await Promise.all(versions.map(version => fetch('/_build/' + version.id + '/healthz', {
-            cache: 'no-store', signal: AbortSignal.timeout(4000)
-          }).then(async response => {
-            if (!response.ok) throw new Error('release unavailable');
-            const value = await response.json();
-            if (!value.ok) throw new Error('release unhealthy');
-            return value;
-          })));
-          const totals = { ok: true, onlinePlayers: 0, roomsOnline: 0, matchesOnline: 0, waitingRooms: 0 };
-          for (const value of health) for (const key of ['onlinePlayers', 'roomsOnline', 'matchesOnline', 'waitingRooms']) {
-            if (!Number.isSafeInteger(value[key]) || value[key] < 0) throw new Error('invalid population');
-            totals[key] += value[key];
-          }
-          result = totals;
-        } catch { /* Direct servers and local previews keep their own health counts. */ }
-      }
-      return result.nodes?.icu || { state: result.ok ? 'online' : 'unknown', online: result.onlinePlayers, rooms: result.roomsOnline, matches: result.matchesOnline, waiting: result.waitingRooms };
-  }
-  async function nodeStatus(node) {
-    if (node.id === 'icu') return ownStatus();
-    const endpoint = safeUrl(node.statusEndpoint);
-    if (!endpoint) throw new Error('no node status endpoint');
-    const response = await fetch(endpoint, { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', signal: AbortSignal.timeout(8000) });
-    if (!response.ok) throw new Error('node status unavailable');
-    const result = await response.json();
-    // The friend server also reports icu; use only its own node to avoid double counting.
-    const status = result.nodes?.[node.id];
-    if (!status || typeof status !== 'object' || Array.isArray(status)) throw new Error('missing node status');
-    return status;
-  }
-  async function refresh(manual = false) {
-    if (busy || Date.now() - lastRefresh < 5000) return;
-    busy = true; lastRefresh = Date.now();
-    const button = byId('refresh-status'); button.disabled = true; button.classList.add('is-loading');
-    try {
-      const results = await Promise.allSettled(nodes.map(nodeStatus));
-      const status = {};
-      results.forEach((result, i) => { if (result.status === 'fulfilled') status[nodes[i].id] = result.value; });
-      renderStatus({ nodes: status });
-      if (manual) toast(Object.keys(status).length ? '站点状态已刷新' : '暂时无法获取状态，选服入口仍可使用');
-    } finally { await Promise.allSettled(nodes.map(latency)); busy = false; button.disabled = false; button.classList.remove('is-loading'); }
-  }
-  byId('refresh-status').addEventListener('click', () => { void refresh(true); });
-  const dialog = byId('random-dialog');
-  function selectRandom() {
-    let eligible = nodes.filter(n => snapshot[n.id]?.state === 'online');
-    if (!eligible.length) eligible = nodes;
-    if (eligible.length > 1 && randomId) eligible = eligible.filter(n => n.id !== randomId);
-    const n = eligible[Math.floor(Math.random() * eligible.length)]; if (!n) return;
-    randomId = n.id; byId('random-title').textContent = '这次，去 ' + n.name + '。';
-    const a = byId('random-enter'); a.href = n.url; a.querySelector('span').textContent = '进入 ' + n.name;
-  }
-  byId('random-server').addEventListener('click', () => { selectRandom(); dialog.showModal(); });
-  byId('random-again').addEventListener('click', selectRandom);
-  byId('random-enter').addEventListener('click', () => remember(randomId));
-  dialog.querySelector('.dialog-close').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('click', e => { if (e.target === dialog) { const b = dialog.getBoundingClientRect(); if (e.clientX < b.left || e.clientX > b.right || e.clientY < b.top || e.clientY > b.bottom) dialog.close(); } });
-  document.querySelectorAll('.nav-link').forEach(a => a.addEventListener('click', () => { document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('is-active', link === a)); }));
-  renderStatus(null); void refresh();
-  setInterval(() => { if (!document.hidden) void refresh(); }, 30000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastRefresh > 30000) void refresh(); });
-})();
-</script>
+  <script src="/js/compat030/server-lobby-html-2.js"></script>
 </body>
 </html>
+

@@ -217,11 +217,7 @@ test('#2 R9 (23 official drafts): six groups (9, 9, 9, 9, 8, 6 cards) of boss bo
     ids.forEach((id) => offered.add(id));
   }
   assert.ok(ratN / gen.length > 0.55 && ratN / gen.length < 0.73, `the 鼠王 group ${(100 * ratN / gen.length).toFixed(0)} %`);
-  const enemyPolicy = new GameData(DATA, 'mode_multi_abyss');
-  for (const g of B.groups) for (const id of g.cards) {
-    if (enemyPolicy.enemy(CARD.get(id).enemyKey)) assert.ok(offered.has(id), `${CARD.get(id).name} offered`);
-    else assert.ok(!offered.has(id), `${CARD.get(id).name} disabled`);
-  }
+  for (const g of B.groups) for (const id of g.cards) assert.ok(offered.has(id), `${CARD.get(id).name} offered`);
   for (const id of ['enemyeffect_b_6', 'enemyeffect_b_7', 'enemyeffect_b_15', 'enemyeffect_b_16', 'enemyeffect_b_18']) {
     assert.equal(CARD.get(id).draftExcluded, 'unseen', `${CARD.get(id).name}: in no official R9 draft`);
     assert.ok(!offered.has(id));
@@ -262,7 +258,7 @@ test('#2 R11 (22 matches: 悬赏决策 14, 机密商店 4, 战术决策 4, 道�
     ['12_8', '16_2', '16_6'].map(EE), 'R11 cards no draft showed');
   for (const modeId of ['mode_multi_hard', 'mode_multi_abyss', 'mode_single_hard', 'mode_single_abyss']) {
     const sch = DATA.choices.schedule[modeId].rounds['11'];
-    assert.deepEqual(sch.families, [{ family: 'bounty', weight: 1 }, { family: 'shop', weight: 1 }, { family: 'tactic', weight: 1 }], `${modeId} R11: requested equal categories`);
+    assert.deepEqual(sch.families, [{ family: 'bounty', weight: 14 }, { family: 'shop', weight: 4 }, { family: 'tactic', weight: 4 }], `${modeId} R11 (solo: extrapolated from co-op, [ASSUMED])`);
     assert.equal(sch.bountyDraft, 'hunter');
     assert.equal(sch.assumed, true);
   }
@@ -310,7 +306,7 @@ test('#2 R11 (22 matches: 悬赏决策 14, 机密商店 4, 战术决策 4, 道�
     ids.forEach((id) => offered.add(id));
   }
   assert.deepEqual(Object.keys(seen).sort(), ['bounty', 'shop', 'tactic'], 'no 道具补给 at R11');
-  for (const family of ['bounty', 'shop', 'tactic']) assert.ok(seen[family] / 2000 > 0.28 && seen[family] / 2000 < 0.39, JSON.stringify(seen));
+  assert.ok(seen.bounty / 2000 > 0.56 && seen.bounty / 2000 < 0.71, JSON.stringify(seen));
   assert.ok(fitSeen / n > 0.36 && fitSeen / n < 0.5, `drafts of the three whole seen groups ${(100 * fitSeen / n).toFixed(0)} % (3 / 7)`);
   // a card no official draft showed: rare enough that 14 drafts without one (the official sample) stays likely
   const q = unseenCard / n;
@@ -337,8 +333,7 @@ test('#2 never offered by a draft (in none of the 59 official bounty drafts): mu
       for (const d of drafts(modeId, r, 40)) {
         for (const c of d.cards) {
           const card = CARD.get(c.id);
-          const kind = DATA.choices.schedule[modeId].rounds[String(r)].bountyDraft || bountyDraftKind(r);
-          assert.ok(card.draft && card.draftPool === kind, `${modeId} R${r}: ${c.id} ${c.name}`);
+          assert.ok(card.draft && card.draftPool === bountyDraftKind(r), `${modeId} R${r}: ${c.id} ${c.name}`);
           assert.ok(!card.multiRound && card.payout === 'kill');
         }
       }

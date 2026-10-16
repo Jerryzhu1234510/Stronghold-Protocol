@@ -25,12 +25,12 @@ export class BattleEconomy {
     if (!pp) return 0;
     const ps = this.getPlayer(playerId);
     const live = ps && ps.bonds[bondId] ? (ps.bonds[bondId].layers ?? 0) : (pp.layerGains[bondId] ?? 0);
-    const limit = Number.isFinite(this.flags.bondLayerCap) ? Math.max(0, Math.min(999, this.flags.bondLayerCap)) : 999;
-    if (!(Math.min(layerGainRoom(live, Infinity), limit - live) > 0)) return 0;
+    const room = (n) => Math.min(layerGainRoom(live, n), Math.max(0, (this.flags.bondLayerCap ?? Infinity) - live));
+    if (!(room(Infinity) > 0)) return 0;
     const source = opts.source ?? null;
     const ctx = { playerId, bondId, n, reason, source, tile: Array.isArray(opts.tile) ? opts.tile : this._sourceTile(source) };
     if (this._hooks.layerGain) { this.emit('layerGain', ctx); if (!(ctx.n > 0) || !Number.isFinite(ctx.n)) return 0; }
-    const add = Math.min(layerGainRoom(live, ctx.n), limit - live);
+    const add = room(ctx.n);
     if (!(add > 0)) return 0;
     pp.layerGains[bondId] = (pp.layerGains[bondId] ?? 0) + add;
     if (ps && ps.bonds[bondId]) ps.bonds[bondId].layers = (ps.bonds[bondId].layers ?? 0) + add;

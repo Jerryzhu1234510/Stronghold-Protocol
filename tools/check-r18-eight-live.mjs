@@ -1,3 +1,4 @@
+/* global __SP_VIEW__, __perfProbe, __SP_RUNNER__ */
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
@@ -83,3 +84,4 @@ finally{
  await browser.close();report.finishedAt=new Date().toISOString();await fs.writeFile(out+'/live-eight-'+profile+'.json',JSON.stringify(report,null,2));
  console.log(JSON.stringify({passed:report.passed,failure:report.failure,errors:report.errors,cleanup:report.cleanup,peers:report.peers.map(p=>({players:p.players,deltas:p.deltas,decodeErrors:p.decodeErrors.length})),samples:report.samples.length}));
 }
+

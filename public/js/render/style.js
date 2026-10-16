@@ -6,7 +6,8 @@ export const TILE_H = Object.freeze({
   forbid: 0.3,     // '#' forbidden block (data: HIGH)
   sep: 0.55,       // 'X' hard separator wall (rows 6 / 13)
   bench: 0.16,     // 'a' / 'A' hand & temp slots (data: HIGH)
-  platform: 0.26,  // active 射击台 / mound devices
+  platform: 0.465, // active 射击台: the top of the official model (trap_1106_achplat, 46.5 cm; round 40)
+  mound: 0.26,     // active mound devices
 });
 
 /** Stage glyph → material + height class (data/stages.json legend, DATA.md §12). */
@@ -56,17 +57,22 @@ export const COLORS = Object.freeze({
   rangeStand: 0x4ed8af,
   hpAlly: 0x5fe07a,
   hpAllyLow: 0xe8c547,
-  hpNeg: 0xff4b3e,
   hpEnemy: 0xff4b3e,
   hpBoss: 0xff2d55,
   hpGhost: 0xfff0c8,
   hpBack: 0x0c0f0e,
+  // the red bar of a negative-HP pool (斩业星熊's 我执, b.snap `neg`) — the same red as an enemy's HP
+  hpNeg: 0xff4b3e,
   sp: 0x6fd3ff,
   spReady: 0xffe066,
   spActive: 0xffb347,
-  shield: 0xdfe8ff,
+  // the ammo bar's yellow cells (b.snap `ammo`) and 伺夜's 狼影 pips (b.snap `wolves`)
   ammo: 0xffd04a,
   wolf: 0xe8f0ff,
+  // 秘术师's stored attack energies (b.snap `energy`): a violet no other HUD state uses — the purse's gold coin and its
+  // count are told apart from the orb and its count at a glance
+  energy: 0xb07dff,
+  shield: 0xdfe8ff,
 });
 
 /** Chess tier accents (theme.css --tier-1…6) and rarity-ish frames for enemies. */

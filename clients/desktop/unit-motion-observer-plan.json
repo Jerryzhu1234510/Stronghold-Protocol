@@ -46,43 +46,43 @@
         },
         {
           "variant": "canonical",
-          "sha256": "6992d95205bcabfb1198aae8a2e9b349337472282e02dddde5857daff366877a",
-          "bytes": 125977,
+          "sha256": "396e9e442f79b9ce7e82544c2aeb3930cdb29863484b6a9f8583b5eeb5c602bc",
+          "bytes": 148171,
           "edits": [
             {
-              "offset": 113227,
+              "offset": 134870,
               "text": "try{globalThis.__SPDesktopUnitMotion?.drop3d?.(this);}catch{}"
             },
             {
-              "offset": 85027,
+              "offset": 103820,
               "text": "}finally{try{globalThis.__SPDesktopUnitMotion?.step3d?.(this,dt,cam,t);}catch{}}"
             },
             {
-              "offset": 74544,
+              "offset": 92255,
               "text": "try{"
             }
           ],
-          "transformedSha256": "242d23bbcff9ac37d8a4b400b52700eb6de257d88bfeb8f03281f68c06e04a03"
+          "transformedSha256": "0344c60259613b457ec2a3e56fa078e15dab220094ede5e9d6be00bcc880e626"
         },
         {
           "variant": "SP_BUILD_TEMPLATE",
-          "sha256": "088677aca691b924b613fa0808b529223c0a7feb8075eb0abd9ba4a2402d2321",
-          "bytes": 126198,
+          "sha256": "90935b8691a8445324a17237d6388601f621a07bc12041b572c7dd63909bc4e6",
+          "bytes": 148324,
           "edits": [
             {
-              "offset": 113448,
+              "offset": 135023,
               "text": "try{globalThis.__SPDesktopUnitMotion?.drop3d?.(this);}catch{}"
             },
             {
-              "offset": 85248,
+              "offset": 103973,
               "text": "}finally{try{globalThis.__SPDesktopUnitMotion?.step3d?.(this,dt,cam,t);}catch{}}"
             },
             {
-              "offset": 74765,
+              "offset": 92408,
               "text": "try{"
             }
           ],
-          "transformedSha256": "ff03786ff7492177d948c6ed1517f7785617f26ecb46219d7c2a9d5fcddfbe93"
+          "transformedSha256": "b2572d97a448998b0345fb665f82cea06749484ab5db529e1c765b83fdc3338d"
         }
       ]
     },
@@ -130,11 +130,11 @@
         },
         {
           "variant": "canonical",
-          "sha256": "5c2f7b6afd60d0ccfe62279df930e6d15e46fee479b9fbef6882ce7835ce7701",
-          "bytes": 31084,
+          "sha256": "f15b8604e3e760dfe6e14e56be015ac04995ccae16ad2dc531711f3e41d71cee",
+          "bytes": 31612,
           "edits": [
             {
-              "offset": 30715,
+              "offset": 31243,
               "text": "try{globalThis.__SPDesktopUnitMotion?.dropDomView?.(root);}catch{}"
             },
             {
@@ -146,15 +146,15 @@
               "text": " ref=${(() => {try{return globalThis.__SPDesktopUnitMotion?.ref?.({kind:p.kind==='chess'?'op':p.kind,side:'ally',id:'p:'+p.uid},L.tile,{prep:true,area});}catch{return undefined;}})()}"
             }
           ],
-          "transformedSha256": "f29b614b24e67f92baa11304040676dfe6b79f3ddffd6de1040e9512fc425402"
+          "transformedSha256": "60d0df132b98aee55b03348b2fa0776a2a59bfd1f4960f44831ac4ec3a86d858"
         },
         {
           "variant": "SP_BUILD_TEMPLATE",
-          "sha256": "c4a30110229e6e61fb0f503cc349b146a645cbb89c5f046fb52544f6057f0e48",
-          "bytes": 31228,
+          "sha256": "22d17f62d270ef964c4344fb99acb531ae3dbcbd1669c56c0804572f473a7ec4",
+          "bytes": 31756,
           "edits": [
             {
-              "offset": 30859,
+              "offset": 31387,
               "text": "try{globalThis.__SPDesktopUnitMotion?.dropDomView?.(root);}catch{}"
             },
             {
@@ -166,7 +166,7 @@
               "text": " ref=${(() => {try{return globalThis.__SPDesktopUnitMotion?.ref?.({kind:p.kind==='chess'?'op':p.kind,side:'ally',id:'p:'+p.uid},L.tile,{prep:true,area});}catch{return undefined;}})()}"
             }
           ],
-          "transformedSha256": "d35fa15d2c754ee6c43bfdfb06150e50714537dca725a08329fb0f70f0c9da1c"
+          "transformedSha256": "6ef9bfcbe8ecd8efe42c73f5ad60fe573ed06cf4df55e45a5d1ab61264a2614c"
         }
       ]
     }

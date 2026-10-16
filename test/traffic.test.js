@@ -58,7 +58,7 @@ test('HTTP: body bytes by category as written (compressed), 304s counted, /healt
     assert.ok(t.http.other.bytes > 0);
     assert.equal(t.http.total.requests, 8);
     assert.equal(typeof t.since, 'string');
-    assert.equal(srv.assetTraffic.snapshot().http.total.requests, 9, 'the traffic request itself once it has finished');
+    assert.equal(srv.traffic.snapshot().http.total.requests, 9, 'the traffic request itself once it has finished');
   } finally {
     await srv.close();
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -70,15 +70,15 @@ test('WebSocket: wire bytes both ways (after permessage-deflate) and the payload
   try {
     const c = await TestClient.connect(`ws://127.0.0.1:${srv.port}/ws`);
     await c.hello('流量计数');
-    const live = srv.assetTraffic.snapshot().ws;
+    const live = srv.traffic.snapshot().ws;
     assert.equal(live.connections, 1);
     assert.equal(live.open, 1);
     assert.ok(live.messagesOut >= 1 && live.payloadOut > 0, JSON.stringify(live));
     assert.ok(live.messagesIn >= 1 && live.payloadIn > 0);
     assert.ok(live.wireOut > 0 && live.wireIn > 0);
     await c.close();
-    for (let i = 0; i < 50 && srv.assetTraffic.snapshot().ws.open; i++) await new Promise((r) => setTimeout(r, 20));
-    const done = srv.assetTraffic.snapshot().ws;
+    for (let i = 0; i < 50 && srv.traffic.snapshot().ws.open; i++) await new Promise((r) => setTimeout(r, 20));
+    const done = srv.traffic.snapshot().ws;
     assert.equal(done.open, 0);
     assert.ok(done.wireOut >= live.wireOut, 'the closed socket\'s bytes stay in the totals');
   } finally {

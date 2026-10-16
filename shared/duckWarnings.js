@@ -1,12 +1,13 @@
+import { N_ } from './i18n.js';
 // Presentation only. Read the committed spawn schedule; never roll or alter it.
 export const DUCK_WARNING_HINTS = Object.freeze({
-  enemy_1539_reid: '低血量会强化，并有一次复起；为后续形态保留输出。',
-  enemy_1512_mcmstr: '首次倒下后会爆炸并眩晕周围单位，留意后续形态。',
-  enemy_1517_xi: '注意十字范围攻击与护盾；进入后续形态后攻势增强。',
-  enemy_1516_jakill: '具有远程法术与眩晕，后续形态具备破甲能力。',
-  enemy_2008_flking: '会削弱我方攻击、防御与费用回复，并周期性生成护盾。',
-  enemy_1513_dekght: '双骑士联动：一只倒下后，另一只会强化。',
-  enemy_1513_dekght_2: '双骑士联动：一只倒下后，另一只会强化。',
+  enemy_1539_reid: N_('低血量会强化，并有一次复起；为后续形态保留输出。'),
+  enemy_1512_mcmstr: N_('首次倒下后会爆炸并眩晕周围单位，留意后续形态。'),
+  enemy_1517_xi: N_('注意十字范围攻击与护盾；进入后续形态后攻势增强。'),
+  enemy_1516_jakill: N_('具有远程法术与眩晕，后续形态具备破甲能力。'),
+  enemy_2008_flking: N_('会削弱我方攻击、防御与费用回复，并周期性生成护盾。'),
+  enemy_1513_dekght: N_('双骑士联动：一只倒下后，另一只会强化。'),
+  enemy_1513_dekght_2: N_('双骑士联动：一只倒下后，另一只会强化。'),
 });
 
 export function duckReinforcements(spawns, routes = [], enemyName = key => key) {

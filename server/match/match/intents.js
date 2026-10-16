@@ -8,14 +8,18 @@ import { unitStatsEntry } from '../../../shared/protocol.js';
 import { PHASE, ERR, EMOTES, EMOTE_COOLDOWN_MS, GEO } from '../../../shared/constants.js';
 import { deriveSeed } from '../../sim/rng.js';
 import { OK, fail } from './common.js';
+import { onHumanEmote } from '../botEmotes.js';
 
 export class MatchIntents {
   _handle(ps, msg) {
     switch (msg.t) {
       case 'g.infoReady':
         if (this.phase !== PHASE.INFO_CHECK) return fail(ERR.WRONG_PHASE);
+        if (this.setupVote) return fail(ERR.WRONG_PHASE, 'setup reroll vote in progress');
+        if ((msg.setupRevision ?? 0) !== this.setupRevision) return fail(ERR.BAD_TARGET, 'setup changed; confirm the current revision');
         if (!ps.infoReady) { ps.infoReady = true; this.markPublic(); this.maybeEndInfo(); }
         return OK;
+      case 'g.rerollVote': return this.voteSetupReroll(ps, msg.voteId, msg.agree);
       case 'g.band': return this.pickBand(ps, msg.bandId);
       case 'g.bandSkip': return this.skipBand(ps);
       // the strategy highlighted in the draft screen (what a timed-out turn takes, timeoutBand)
@@ -32,7 +36,9 @@ export class MatchIntents {
       case 'g.art': return ps.useArt(msg.itemUid, msg.row, msg.col, msg.dir);
       case 'g.destroy': return ps.destroy(msg.uid);
       case 'g.reward': return ps.pickReward(msg.idx);
-      case 'g.choice': return this.pickCard(ps, msg.idx);
+      case 'g.choice': return msg.choiceId !== undefined
+        ? this.pickPersonalChoice(ps, msg.idx, msg.choiceId)
+        : this.pickCard(ps, msg.idx);
       case 'g.ready': return ps.setReady(!!msg.ready);
       case 'g.prepExtend': return this.requestPrepExtension(ps, msg.seconds);
       case 'g.prepVote': return this.castPrepVote(ps, msg.voteId, msg.agree);
@@ -49,6 +55,9 @@ export class MatchIntents {
       case 'g.leave': this.onLeave(ps.playerId); return OK;
       case 'b.progress': return this._onProgress(ps, msg);
       case 'b.result': return this._onResult(ps, msg);
+      // the host's answer to a delegated bot layout rehearsal (DESIGN §14): a report, never an error — an unknown,
+      // expired or foreign task is ignored (MatchRehearsal._onRehearsalResult)
+      case 'b.rehearsalResult': this._onRehearsalResult(ps, msg); return OK;
       default: return fail(ERR.BAD_MSG);
     }
   }
@@ -59,6 +68,7 @@ export class MatchIntents {
     if (now - ps.lastEmoteAt < EMOTE_COOLDOWN_MS) return fail(ERR.RATE);
     ps.lastEmoteAt = now;
     this.broadcast({ t: 'm.emote', playerId: ps.playerId, id });
+    if (!ps.isBot && !ps.autoplay) onHumanEmote(this, ps, id);
     return OK;
   }
 

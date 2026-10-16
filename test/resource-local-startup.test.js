@@ -34,14 +34,17 @@ test('native bundled clients do not inherit the web-only startup restriction',as
  const h=runtime({native:true});await h.run();assert.equal(h.state.registered,0);assert.equal(h.state.reads,0);
 });
 
-test('8443 native clients block preload calls before registration while retaining the web worker identity',async()=>{
+test('8443 clients block preload calls before registration and keep native and web policies distinct',async()=>{
  const native=runtime({native:true,hostname:'weishuxieyiwangye.cn'});
  const result=await vm.runInContext("resourceCacheAction('warm',{manual:true,concurrency:16})",native.context);
  assert.equal(result.networkPreloadAllowed,false);assert.equal(result.preload.state,'disabled');
  assert.equal(native.state.registered,0);assert.equal(native.state.reads,0);
  assert.match(vm.runInContext('workerUrl',native.context),/noPreload=1/);
  const web=runtime({hostname:'weishuxieyiwangye.cn'});
- assert.equal(vm.runInContext('workerUrl',web.context),'https://game.test/_build/current/js/resources/worker.js?localOnly=1');
+ const webUrl=new URL(vm.runInContext('workerUrl',web.context));
+ assert.equal(webUrl.pathname,'/_build/current/sw.js');
+ assert.equal(webUrl.searchParams.get('localOnly'),'1');assert.equal(webUrl.searchParams.get('native'),null);
+ assert.equal(new URL(vm.runInContext('workerUrl',native.context)).searchParams.get('native'),'1');
 });
 
 test('8443 auxiliary documents remain local-only even without an HTML policy flag',async()=>{

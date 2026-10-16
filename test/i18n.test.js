@@ -120,7 +120,7 @@ test('public/i18n/en.json: valid, English values, placeholders kept, the pilot s
   for (const [k, v] of entries) {
     assert.equal(typeof v, 'string', k);
     assert.ok(v.trim(), `empty translation for ${k}`);
-    assert.ok(!/[一-鿿]/.test(v.replace(/\{[^{}]*\}/g, '')), `Chinese left in the translation of ${k}: ${v}`);
+    assert.ok((EN._meta.compatibilityFallbacks || []).includes(k) || !/[一-鿿]/.test(v.replace(/\{[^{}]*\}/g, '')), `Chinese left in the translation of ${k}: ${v}`);
     const want = new Set([...k.matchAll(/\{([A-Za-z0-9_$]+)\}/g)].map((m) => m[1]));
     const have = new Set([...v.matchAll(/\{([A-Za-z0-9_$]+)(?:\|[^{}]*)?\}/g)].map((m) => m[1]));
     for (const p of want) assert.ok(have.has(p), `${k}: {${p}} missing in "${v}"`);
@@ -133,7 +133,7 @@ test('public/i18n/en.json: valid, English values, placeholders kept, the pilot s
 });
 
 test('the whole client, shared and the server messages: no Chinese literal left unwrapped, every msgid in public/i18n/en.json (extract 0, check --strict)', async () => {
-  // what tools/i18n.mjs scans: public/js (not dev / vendor / assets / fonts), shared, server — server/sim only for the
+  // what tools/i18n.mjs scans: public/js (not dev / vendor / assets / fonts), public/studio, shared, server — server/sim only for the
   // texts it sends (msg() / ctx.toast), its own t() / N_() are other helpers
   const SKIP = new Set(['node_modules', 'vendor', 'assets', 'fonts', 'dev']);
   const files = [];
@@ -145,7 +145,7 @@ test('the whole client, shared and the server messages: no Chinese literal left 
       else if (/\.m?js$/.test(name)) files.push(r);
     }
   };
-  for (const root of ['public/js', 'shared', 'server']) visit(root);
+  for (const root of ['public/js', 'public/studio', 'shared', 'server']) visit(root);
   assert.ok(files.length > 300, `${files.length} files`);
   const missing = [];
   let used = 0;

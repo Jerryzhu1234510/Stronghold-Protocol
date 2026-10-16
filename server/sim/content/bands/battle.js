@@ -16,8 +16,9 @@
 //   act1autochess_band13_buff 克莱门莎 崇高牺牲 a <bond_id> operator knocked down ⇒ +its tier (等阶) <bond_id> layers
 //                                               (bond_add_type by_charlevel; no "已激活" in the text ⇒ requireActive false)
 //   act1autochess_band16_buff 大帝 加急调派     "每次部署后再部署时间减少50%": every deployment of an operator stacks one
-//                                               redeploy ×(1 + respawn_time) for the rest of the battle [ASSUMED cumulative:
-//                                               "每次" — the first redeploy is −50 % under either reading]
+//                                               redeploy ×(1 + respawn_time) for the rest of the battle, with no cap (PRTS
+//                                               卫戍协议：盟约 下半 / PRTS盟约记录 备注 "※该策略效果可无限叠加"; a 20-stack cap
+//                                               until 0.2.2 — GitHub #328, PR #329)
 //   act1autochess_band17_buff 桑葚 药枚实验     at combat start the player's units on the front-most (最右边) column: each
 //                                               attack has `prob` to gain 1 shield layer (max 1)
 //   act1autochess_band18_buff 休谟斯 回收利用   a ground (地面) operator's skill ends ⇒ a random operator on its 4
@@ -84,7 +85,7 @@ const BY_KEY = {
     }, { priority: PRIO_BAND_REVIVE });
   },
 
-  // 克莱门莎 崇高牺牲
+  // 克莱门莎 崇高牺牲: PRTS requires the 阿戈尔 bond to be active.
   act1autochess_band13_buff(battle, ps, p, bandId) {
     const bond = typeof p.bond_id === 'string' && p.bond_id ? p.bond_id : null;
     if (!bond) return;
@@ -93,7 +94,7 @@ const BY_KEY = {
       const u = c.unit;
       if (c.reason !== 'killed' || !isOp(u) || u.ownerId !== ps.playerId || !unitBonds(u).includes(bond)) return;
       const n = byLevel ? tierOf(u) : Math.max(1, Math.floor(num(p.value, 1)));
-      if (gainLayers(battle, { playerId: ps.playerId, bonds: bond, n, requireActive: false, source: u, reason: 'band' }) > 0) {
+      if (gainLayers(battle, { playerId: ps.playerId, bonds: bond, n, requireActive: true, source: u, reason: 'band' }) > 0) {
         fxOn(battle, 'layer', u, keyOf(bandId), bandId, { bond, n });
       }
     });
@@ -107,7 +108,7 @@ const BY_KEY = {
     battle.on('deploy', (c) => {
       const u = c.unit;
       if (!isOp(u) || u.ownerId !== ps.playerId) return;
-      battle.addBuff(u, { key, mods: { redeployMul: mul }, refresh: 'stack', stacks: 1, maxStacks: 20, persist: true, allowDead: true });
+      battle.addBuff(u, { key, mods: { redeployMul: mul }, refresh: 'stack', stacks: 1, maxStacks: Infinity, persist: true, allowDead: true });
     });
   },
 
@@ -212,9 +213,9 @@ const BY_KEY = {
 // Touch 外勤医疗 (auto_chess_change_map, every player's field)
 
 /** Map-character variants of band_amedic: [{ cond, cnt, chars: [tokenId…] }]. */
-export function amedicVariants() {
+export function amedicVariants(bandId = AMEDIC_BAND) {
   const out = [];
-  for (const b of buffsOf(bandRecord(AMEDIC_BAND))) {
+  for (const b of buffsOf(bandRecord(bandId))) {
     if (b.key !== 'auto_chess_change_map') continue;
     const chars = new Set();
     for (const [k, v] of Object.entries(b.p)) if (k.includes('#') && num(v) > 0) chars.add(k.split('#')[0]);
@@ -241,7 +242,7 @@ function installMapChars(battle) {
     const chars = [];
     for (const ps of holders) {
       const elites = deployedOps(battle, ps.playerId).filter(isElite).length;
-      for (const id of amedicCharsFor(elites, variants)) chars.push({ playerId: ps.playerId, id });
+      for (const id of amedicCharsFor(elites, bandRecord(ps.bandId)?.effectRef === AMEDIC_BAND ? amedicVariants(ps.bandId) : variants)) chars.push({ playerId: ps.playerId, id });
     }
     for (const [i, { playerId, id }] of chars.entries()) {
       // The reserve medic occupies this stage slot in preparation; Touch replaces it at battle start. [ASSUMED]

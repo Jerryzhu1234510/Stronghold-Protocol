@@ -12,6 +12,7 @@ import { PopulationStrip } from '../ui/population.js';
 import { RoomCapacityPicker } from '../ui/roomCapacity.js';
 import { flushProfiles } from '../ui/profileEntry.js';
 import { MULTIPLAYER_PENDING } from '../../../shared/integrationStage.js';
+import { t } from '../../../shared/i18n.js';
 
 export function QuickMatchEntry({ beforeMatch, disabled = false }) {
   const conn = useStore((s) => s.connection, shallowEqual);
@@ -40,7 +41,7 @@ export function QuickMatchEntry({ beforeMatch, disabled = false }) {
   };
   return html`<div class="quick-match-entry">
     <${RoomCapacityPicker} value=${capacity} onChange=${setCapacity} disabled=${busy} />
-    <label class="quick-match-entry__difficulty">匹配难度
+    <label class="quick-match-entry__difficulty">${t('匹配难度')}
       <select value=${difficulty} disabled=${busy} onChange=${(event) => {
         setDifficulty(event.target.value); savePref('lobby.difficulty', event.target.value);
       }}>
@@ -48,9 +49,9 @@ export function QuickMatchEntry({ beforeMatch, disabled = false }) {
       </select>
     </label>
     <${Button} variant="primary" size="xl" block=${true} icon="users" loading=${busy}
-      disabled=${disabled || !connected} onClick=${match}>快速匹配<//>
+      disabled=${disabled || !connected} onClick=${match}>${t('快速匹配')}<//>
     ${capacity > 4 ? html`<p class="stage-warning">${MULTIPLAYER_PENDING}</p>` : null}
-    <p class="quick-match-entry__hint">同难度、同人数组队 · ${capacity > 4 ? `满${capacity}人完成分组 · 战斗下一阶段开放` : `满${capacity}人开局`}</p>
+    <p class="quick-match-entry__hint">${t('同难度、同人数组队 ·')} ${capacity > 4 ? t('满{capacity}人完成分组 · 战斗下一阶段开放', { capacity }) : t('满{capacity}人开局', { capacity })}</p>
   </div>`;
 }
 
@@ -78,27 +79,27 @@ export function MatchmakingScreen({ room, online }) {
     <main class="matchmaking-screen__body">
       <div class="matchmaking-screen__heading">
         <p class="matchmaking-screen__eyebrow">ALLIANCE // ${party ? 'PARTY MATCH' : 'QUICK MATCH'}</p>
-        <h1 ref=${heading} tabIndex=${-1}>${party ? '好友整队匹配中' : '正在匹配队友'}</h1>
+        <h1 ref=${heading} tabIndex=${-1}>${party ? t('好友整队匹配中') : t('正在匹配队友')}</h1>
         <${DifficultyTag} difficulty=${room.difficulty} size="lg" />
       </div>
       <p class="matchmaking-screen__status" role="status">${online
-        ? capacity > 4 ? `已找到 ${count} / ${capacity} 名博士，满员后进入验收等待室` : party ? `${count} 人好友队 · 正在寻找 ${capacity - count} 位队友，满${capacity}人自动开始` : `已找到 ${count} / ${capacity} 名博士，满员自动开始`
-        : party ? '连接中断，全队匹配已暂停，重连后回到同盟' : '连接中断，重连后可重新匹配'}</p>
-      <ol class="matchmaking-seats" aria-label="匹配队伍">
+        ? capacity > 4 ? t('已找到 {count} / {capacity} 名博士，满员后进入验收等待室', { count, capacity }) : party ? t('{count} 人好友队 · 正在寻找 {1} 位队友，满{capacity}人自动开始', { count, 1: capacity - count, capacity }) : t('已找到 {count} / {capacity} 名博士，满员自动开始', { count, capacity })
+        : party ? t('连接中断，全队匹配已暂停，重连后回到同盟') : t('连接中断，重连后可重新匹配')}</p>
+      <ol class="matchmaking-seats" aria-label=${t('匹配队伍')}>
         ${seats.map((seat, index) => html`<li key=${index} class=${`matchmaking-seat${seat ? ' is-filled' : ''}`}>
           <${AvatarFrame} name=${seat?.name || ''} seat=${index} self=${seat?.playerId === me.playerId} size="lg" />
-          <strong>${seat ? seat.name : '等待博士加入'}</strong>
-          <span>${seat ? (seat.playerId === me.playerId ? '你 · 已加入' : '队友 · 已加入') : '空缺席位'}</span>
+          <strong>${seat ? seat.name : t('等待博士加入')}</strong>
+          <span>${seat ? (seat.playerId === me.playerId ? t('你 · 已加入') : t('队友 · 已加入')) : t('空缺席位')}</span>
         </li>`)}
       </ol>
       ${capacity > 4 ? html`<p class="stage-warning">${MULTIPLAYER_PENDING}</p>` : null}
       <p class="matchmaking-screen__hint">${party
-        ? `只匹配同难度的${capacity}人房间，好友不会拆队。等待和开局后均可聊天；取消匹配回到原同盟。`
-        : `同一难度的${capacity}名博士组成同盟。人数已锁定，需要调整请先取消匹配。`}</p>
+        ? t('只匹配同难度的{capacity}人房间，好友不会拆队。等待和开局后均可聊天；取消匹配回到原同盟。', { capacity })
+        : t('同一难度的{capacity}名博士组成同盟。人数已锁定，需要调整请先取消匹配。', { capacity })}</p>
       <div class="matchmaking-screen__actions">
         <${ReleaseNotesButton} size="lg" />
         <${LoadoutButton} from="room" size="lg" />
-        <${Button} variant="secondary" size="lg" disabled=${!online} loading=${busy} onClick=${cancel}>${party ? '取消全队匹配' : '取消匹配'}<//>
+        <${Button} variant="secondary" size="lg" disabled=${!online} loading=${busy} onClick=${cancel}>${party ? t('取消全队匹配') : t('取消匹配')}<//>
       </div>
       <${PingPill} ms=${conn.ping} online=${online} />
       <${PopulationStrip} />

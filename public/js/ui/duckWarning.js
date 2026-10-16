@@ -4,6 +4,7 @@ import { activeDuckWarnings } from '../../../shared/duckWarnings.js';
 import { battleRunner } from '../battle/runner.js';
 import { net } from '../net.js';
 import { audio } from '../audio.js';
+import { t } from '../../../shared/i18n.js';
 
 const MARK = Object.freeze({ group: 'duck-reinforcement', color: 0xffa34c, fill: 0.3, line: 2 });
 
@@ -46,16 +47,16 @@ export function DuckWarning({ field, view, round }) {
   }, [view, field, tileKey]);
   if (!active.length) return null;
   const collapsed = folded === key;
-  return html`<aside class=${`duck-warning${collapsed ? ' is-folded' : ''}`} aria-label="鸭爵强敌入场预警">
+  return html`<aside class=${`duck-warning${collapsed ? ' is-folded' : ''}`} aria-label=${t('鸭爵强敌入场预警')}>
     <button class="duck-warning__head" type="button" aria-expanded=${!collapsed} onClick=${() => setFolded(collapsed ? '' : key)}>
-      <span>⚠ 鸭爵强敌 · ${active[0].arrived ? '已入场' : `${active[0].remaining} 秒后入场`}</span><span>${collapsed ? '展开' : '收起'}</span>
+      <span>${t('⚠ 鸭爵强敌 ·')} ${active[0].arrived ? t('已入场') : t('{0} 秒后入场', { 0: active[0].remaining })}</span><span>${collapsed ? t('展开') : t('收起')}</span>
     </button>
     ${collapsed ? null : html`<div class="duck-warning__body" role="status" aria-live="polite">
       ${active.slice(0, 2).map(g => html`<div key=${g.id} class="duck-warning__group">
-        <strong>${g.enemies.map(e => `${e.name}（${e.coins}金）`).join(' ＋ ')}</strong>
+        <strong>${g.enemies.map(e => t('{name}（{coins}金）', { name: e.name, coins: e.coins })).join(' ＋ ')}</strong>
         <p>${[...new Set(g.enemies.map(e => e.hint))].join(' ')}</p>
       </div>`)}
-      ${active.length > 2 ? html`<small>另有 ${active.length - 2} 批增援即将入场，留意标记入口。</small>` : null}
+      ${active.length > 2 ? html`<small>${t('另有')} ${active.length - 2} ${t('批增援即将入场，留意标记入口。')}</small>` : null}
     </div>`}
   </aside>`;
 }

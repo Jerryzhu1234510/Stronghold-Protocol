@@ -6,7 +6,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { installCompat } from '../../public/js/ui/compat.js';
-import { detectFeatures, featureClasses, fullscreen, enterLandscape, installDeviceSupport, LONG_PRESS_MS, screenLandscape } from '../../public/js/ui/device.js';
+import { detectFeatures, featureClasses, fullscreen, installDeviceSupport, LONG_PRESS_MS, screenLandscape } from '../../public/js/ui/device.js';
 import { checkButtons } from '../../public/js/ui/hud.js';
 import { penPlacement, penZoneTiles, previewEnemyKey, PEN } from '../../public/js/ui/gameLogic.js';
 import { bannerVisible } from '../../public/js/ui/connBanner.js';
@@ -53,44 +53,6 @@ function fakeWindow({ media = {}, touchPoints = 0, fs = true } = {}) {
 }
 
 // ---- compat ------------------------------------------------------------------------------------------------------------
-
-test('portrait button requests fullscreen before orientation, and handles denied/unsupported APIs', async () => {
-  const { win, doc } = fakeWindow();
-  const calls = [];
-  doc.documentElement.requestFullscreen = async () => { calls.push('fullscreen'); doc.fullscreenElement = doc.documentElement; };
-  win.screen.orientation = { lock: async value => { calls.push(value); assert.ok(doc.fullscreenElement); } };
-  assert.deepEqual(await enterLandscape(win), { fullscreen: true, landscape: true });
-  assert.deepEqual(calls, ['fullscreen', 'landscape']);
-  win.screen.orientation.lock = async () => { throw new Error('unsupported'); };
-  assert.deepEqual(await enterLandscape(win), { fullscreen: true, landscape: false });
-  doc.fullscreenElement = null;
-  doc.documentElement.requestFullscreen = async () => { throw new Error('denied'); };
-  assert.deepEqual(await enterLandscape(win), { fullscreen: false, landscape: false });
-  assert.deepEqual(await enterLandscape(fakeWindow({ fs: false }).win), { fullscreen: false, landscape: false });
-});
-
-test('portrait button remains retryable and explains manual rotation when browser refuses', async () => {
-  const { win, doc } = fakeWindow({ fs: false, touchPoints: 1 });
-  let click;
-  const button = { disabled: false, addEventListener(type, fn) { if (type === 'click') click = fn; }, removeEventListener() {} };
-  const status = { textContent: '' };
-  doc.getElementById = id => id === 'rotate-fullscreen' ? button : status;
-  const stop = installDeviceSupport(win);
-  try {
-    await click();
-    assert.match(status.textContent, /浏览器未允许全屏横屏/);
-    assert.match(status.textContent, /自动旋转/);
-    assert.equal(button.disabled, false);
-    doc.documentElement.requestFullscreen = async () => { doc.fullscreenElement = doc.documentElement; };
-    await click();
-    assert.match(status.textContent, /已进入全屏/);
-    assert.match(status.textContent, /横放手机/);
-    win.screen.orientation = { lock: async () => {} };
-    await click();
-    assert.equal(status.textContent, '已切换横屏。');
-    assert.equal(button.disabled, false);
-  } finally { stop(); }
-});
 
 describe('ui/compat.js polyfills (Safari 15.0–15.3 / Firefox ESR)', () => {
   test('installs only what is missing, with standard behaviour', () => {
@@ -418,8 +380,9 @@ describe('room: copy the invite without navigator.clipboard (LAN over http, iOS)
     const ta = {
       style: {}, value: '',
       setAttribute(k) { calls.push(['attr', k]); },
+      focus() { document.activeElement = ta; },
       select() { calls.push(['select']); },
-      setSelectionRange(a, b) { calls.push(['range', a, b]); },
+      setSelectionRange(a, b) { this.selectionStart = a; this.selectionEnd = b; calls.push(['range', a, b]); },
       remove() { calls.push(['remove']); },
     };
     const saved = { document: globalThis.document, secure: globalThis.isSecureContext, nav: Object.getOwnPropertyDescriptor(globalThis, 'navigator') };
