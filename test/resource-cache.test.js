@@ -52,7 +52,8 @@ function locks() {
   } };
 }
 function runtime({ id = 'a', caches = storage(), sharedLocks = locks(), bodies = {}, manifest = null, maxBytes = null,
-  assetNetwork = async () => {}, manifestNetwork = async () => {}, routeNetwork = async () => {}, localOnly = false } = {}) {
+  assetNetwork = async () => {}, manifestNetwork = async () => {}, routeNetwork = async () => {}, localOnly = false,
+  hostname = 'game.test', noPreload = false } = {}) {
   const handlers = {}, counts = new Map(), modes = new Map();
   manifest ??= { version: 1, entries: Object.fromEntries(Object.entries(bodies).map(([url, body]) => [url, { hash: hash(body), bytes: Buffer.byteLength(body) }])), aliases: {} };
   const catalog = resourceRoutingCatalog(manifest);
@@ -70,7 +71,10 @@ function runtime({ id = 'a', caches = storage(), sharedLocks = locks(), bodies =
     await assetNetwork(p);
     return new Response(bodies[p] ?? 'network', { headers: { 'content-type': p.endsWith('.mp3') ? 'audio/mpeg' : 'application/octet-stream' } });
   };
-  const self = { location: { href: `https://game.test/_build/${id}/js/resources/worker.js${localOnly ? '?localOnly=1' : ''}` }, skipWaiting() {}, clients: { async claim() {} }, addEventListener(name, fn) { handlers[name] = fn; } };
+  const workerUrl = new URL(`https://${hostname}/_build/${id}/js/resources/worker.js`);
+  if (localOnly) workerUrl.searchParams.set('localOnly','1');
+  if (noPreload) workerUrl.searchParams.set('noPreload','1');
+  const self = { location: workerUrl, skipWaiting() {}, clients: { async claim() {} }, addEventListener(name, fn) { handlers[name] = fn; } };
   vm.runInNewContext(code, { ...policy, MAX_BYTES: maxBytes ?? policy.MAX_BYTES, createResourceTransport, resourceCacheLimit: value => maxBytes ?? policy.resourceCacheLimit(value), self, navigator: { locks: sharedLocks }, caches, crypto: webcrypto, fetch: network, URL, Request, Response, Headers, AbortSignal, AbortController, TextEncoder, setTimeout, clearTimeout, Uint8Array, Date, Promise, Map, Error, Number, String });
   async function emit(name, extra = {}) {
     const waits = []; let response;
@@ -80,10 +84,26 @@ function runtime({ id = 'a', caches = storage(), sharedLocks = locks(), bodies =
   return {
     counts, caches, modes,
     ready: () => emit('install'),
-    async get(p, headers, cache = 'default') { const request = new Request(`https://game.test/_build/${id}${p}`, { headers, cache }); return await emit('fetch', { request }) ?? network(request); },
+    async get(p, headers, cache = 'default') { const request = new Request(`https://${hostname}/_build/${id}${p}`, { headers, cache }); return await emit('fetch', { request }) ?? network(request); },
     async message(action, extra = {}) { let reply; await emit('message', { data: { action, ...extra }, ports: [{ postMessage(v) { reply = v; } }] }); return reply; },
   };
 }
+
+test('8443 native and explicit no-preload workers refuse legacy bulk commands without metadata or asset downloads', async () => {
+  for (const options of [{hostname:'weishuxieyiwangye.cn'}, {noPreload:true}]) {
+    const h=runtime({...options,bodies:{'/assets/a.png':'present'}});
+    const warm=await h.message('warm',{manual:true,concurrency:16,warmId:'old-page'});
+    assert.equal(warm.networkPreloadAllowed,false);assert.equal(warm.preload.state,'disabled');
+    assert.equal(warm.preload.downloadedBytes,0);
+    assert.equal((await h.message('status')).preload.state,'disabled');
+    assert.equal(h.counts.size,0,'not even the full resource catalogue is downloaded');
+    const origin='https://'+(options.hostname||'game.test'),cache=await h.caches.open(policy.CACHE_NAME);
+    await cache.put(origin+'/__sp_resource_content/'+hash('present'),new Response('present'));
+    const response=await h.get('/assets/a.png');
+    assert.equal(response.headers.get('x-sp-resource-cache'),'HIT');assert.equal(await response.text(),'present');
+    assert.equal(h.counts.get('/assets/a.png'),undefined,'disabling bulk downloads retains existing cached bytes');
+  }
+});
 
 test('local-only play reuses imported bytes with cache preference off and never redownloads missing media', async () => {
   const bodies = { '/assets/art.png': 'imported art', '/assets/audio/bgm/music.mp3': 'imported music' };

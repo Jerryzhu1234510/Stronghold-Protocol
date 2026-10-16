@@ -1,10 +1,15 @@
 import { isBundledClient } from './manifest.js';
 let starting;
+// Bundled clients use native files, but must not expose the bulk network downloader.
+export const networkPreloadAllowed = () => !(globalThis.__SP_LOCAL_RESOURCES_REQUIRED === true
+  || globalThis.location?.hostname?.toLowerCase() === 'weishuxieyiwangye.cn');
 // Every document on 8443, including child frames and auxiliary pages, must choose
 // the same worker policy. A missing HTML flag must never downgrade its scope.
-export const localResourcesRequired = () => (globalThis.__SP_LOCAL_RESOURCES_REQUIRED === true
-  || globalThis.location?.hostname?.toLowerCase() === 'weishuxieyiwangye.cn') && !isBundledClient();
-const worker = new URL('./worker.js', import.meta.url);
+export const localResourcesRequired = () => !networkPreloadAllowed() && !isBundledClient();
+// Keep web-only worker identities stable so existing tabs do not compete over
+// the registration. Native legacy workers can be upgraded separately.
+const worker = new URL(!networkPreloadAllowed() && !localResourcesRequired()
+  ? './worker.js?noPreload=1' : './worker.js', import.meta.url);
 // The policy is part of the worker identity, so suspension/restart cannot reset it.
 if (localResourcesRequired()) worker.searchParams.set('localOnly', '1');
 const workerUrl = worker.href;
@@ -15,7 +20,7 @@ const startupError = message => Object.assign(new Error(message), { code: 'LOCAL
 let restoring = false;
 function restoreRequiredWorker() {
   const controller = globalThis.navigator?.serviceWorker?.controller;
-  if (!localResourcesRequired() || !controller || controller.scriptURL === workerUrl || restoring) return;
+  if (networkPreloadAllowed() || !controller || controller.scriptURL === workerUrl || restoring) return;
   restoring = true; starting = undefined;
   Promise.resolve().then(startResourceCache).catch(() => null).finally(() => { restoring = false; });
 }
@@ -82,6 +87,10 @@ export function startResourceCache() {
   }).catch(() => { starting = undefined; return null; });
 }
 export async function resourceCacheAction(action = 'status', extra = {}) {
+  if (action === 'warm' && !networkPreloadAllowed()) return {
+    ok: true, enabled: true, localOnly: localResourcesRequired(), networkPreloadAllowed: false,
+    preload: { state: 'disabled', reason: 'local-resources', downloadedBytes: 0 },
+  };
   const registration = await startResourceCache();
   if (!registration) throw new Error('当前环境无法使用素材缓存');
   if (!registration.active) {

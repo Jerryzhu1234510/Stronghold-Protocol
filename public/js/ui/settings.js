@@ -14,13 +14,14 @@ import { openGuide } from './guide.js';
 import { detectFeatures } from './device.js';
 import { LangToggle, machineTranslationNote } from './lang.js';
 import { t, tc, N_ } from '../../../shared/i18n.js';
-import { cacheSupported, resourceCacheAction, localResourcesRequired } from '../resources/client.js';
+import { cacheSupported, resourceCacheAction, networkPreloadAllowed } from '../resources/client.js';
+import { isBundledClient } from '../resources/manifest.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
 function ResourceCacheSetting({ open }) {
   const [status, setStatus] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  const supported = cacheSupported(), localOnly = localResourcesRequired();
+  const supported = cacheSupported(), localOnly = !networkPreloadAllowed(), native = isBundledClient();
   const action = async (name, extra) => {
     setBusy(true); setError('');
     try { setStatus(await resourceCacheAction(name, extra)); }
@@ -37,10 +38,12 @@ function ResourceCacheSetting({ open }) {
     return () => { alive = false; clearInterval(timer); };
   }, [open, supported, localOnly]);
   if (localOnly) return html`<div class="set-resource-cache">
+    ${native ? html`<div class="set-row"><span class="set-row__label">客户端内置素材<${MicroLabel}>BUNDLED RESOURCES<//></span><strong>已启用</strong></div>
+      <p class="set-hint">联网预下载已关闭，不会再批量下载已有素材。缺少素材时请使用客户端资源补全包。</p>` : html`
     <div class="set-row"><span class="set-row__label">本地素材读取<${MicroLabel}>LOCAL RESOURCES<//></span><strong>已启用</strong></div>
     <p class="set-hint" role="status">${error || `本页本地读取 ${status?.hits ?? 0} 次；缺失 ${status?.localMisses ?? 0} 次。`}</p>
     <p class="set-hint">素材直接读取已导入的资源库，不会自动下载。缺音乐／语音时暂时静音；缺图片／模型时请补导两个资源包。已有素材继续有效，请不要清除站点数据。</p>
-    <a class="set-key" href="/#resource-pack">返回选服大厅补导资源</a>
+    <a class="set-key" href="/#resource-pack">返回选服大厅补导资源</a>`}
   </div>`;
   return html`<div class="set-resource-cache">
     <div class="set-row">

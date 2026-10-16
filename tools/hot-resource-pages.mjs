@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 const allowed = new Set(['/js/resources/client.js', '/js/resources/manifest.js', '/js/versus/app.js',
   '/js/browser/main.js', '/js/browser/versus.js', '/js/browser/training.js']);
+const preloadGroup = ['/js/resources/preload.js', '/js/resources/worker.js', '/js/ui/resourcePreload.js', '/js/ui/settings.js'];
 const pages = ['index.html', 'versus.html', 'training.html', 'js/browser/game.html', 'js/browser/versus.html'];
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const flag = "<script>window.__SP_LOCAL_RESOURCES_REQUIRED = location.hostname === 'weishuxieyiwangye.cn';</script>";
@@ -14,7 +15,8 @@ const flag = "<script>window.__SP_LOCAL_RESOURCES_REQUIRED = location.hostname =
 export async function applyResourcePages({ releaseRoot, modules, expected }) {
   const root = await realpath(releaseRoot), pub = path.join(root, 'public');
   const names = Object.keys(modules).sort();
-  if (names.length !== allowed.size || names.some(name => !allowed.has(name))) throw Error('Expected the complete approved resource module group');
+  const complete = [...allowed, ...(names.length === allowed.size ? [] : preloadGroup)];
+  if (names.length !== complete.length || names.some(name => !complete.includes(name))) throw Error('Expected the complete approved resource module group');
   const originals = {};
   for (const relative of [...names.map(n => n.slice(1)), ...pages]) {
     const bytes = await readFile(path.join(pub, relative));
@@ -24,7 +26,10 @@ export async function applyResourcePages({ releaseRoot, modules, expected }) {
   const published = {};
   for (const name of names) {
     const bytes = modules[name], sha256 = digest(bytes);
-    const alias = name.replace(/\.js$/, `.local-${sha256.slice(0, 16)}.js`);
+    // A root-level worker can control the whole pinned release without changing
+    // headers in the live backend. Its payload preserves the original URL bases.
+    const alias = name === '/js/resources/worker.js' ? `/worker.local-${sha256.slice(0,16)}.js`
+      : name.replace(/\.js$/, `.local-${sha256.slice(0, 16)}.js`);
     published[name] = { alias, sha256 };
   }
   const revision = 'local-' + digest(JSON.stringify(published)).slice(0, 16), html = {};
@@ -80,7 +85,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const manifest = JSON.parse(await readFile(path.join(payload, 'manifest.json'), 'utf8'));
   const modules = {};
   for (const [name, entry] of Object.entries(manifest.modules)) {
-    if (!allowed.has(name) || !/^[a-z0-9.-]+$/.test(entry.file)) throw Error('Invalid payload path');
+    if (!(allowed.has(name) || preloadGroup.includes(name)) || !/^[a-z0-9.-]+$/.test(entry.file)) throw Error('Invalid payload path');
     let bytes;
     if (entry.delta) {
       const base = await readFile(path.join(releaseRoot, 'public', name.slice(1)));

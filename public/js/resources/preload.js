@@ -1,4 +1,4 @@
-import { cacheSupported, resourceCacheAction } from './client.js';
+import { cacheSupported, resourceCacheAction, networkPreloadAllowed } from './client.js';
 import { preloadConcurrency } from './policy.js';
 
 // Pages keep a bounded worker queue supplied. A closed/suspended browser cannot be forced to run.
@@ -7,7 +7,7 @@ export function startResourcePreload({ enabled = false, canDownload = () => true
   manual = false, concurrency = 1, onStatus = () => {}, onError = () => {} } = {}) {
   // Bulk downloads must be explicitly scheduled after capacity controls are in place.
   // Content requested by the game continues to be cached normally.
-  if (!enabled || !supported()) return () => {};
+  if (!enabled || !networkPreloadAllowed() || !supported()) return () => {};
   let stopped = false, timer, currentWarmId = null;
   const cancelWarm = () => {
     if (currentWarmId) void action('warm.stop', { warmId: currentWarmId }).catch(() => {});
@@ -17,6 +17,7 @@ export function startResourcePreload({ enabled = false, canDownload = () => true
   const later = delay => { if (!stopped) timer = schedule(tick, delay); };
   async function tick() {
     if (stopped) return;
+    if (!networkPreloadAllowed()) { stopped = true; cancelWarm(); return; }
     if (!canDownload() || globalThis.navigator?.onLine === false) { later(5000); return; }
     try {
       const extra = manual ? { manual: true } : {};

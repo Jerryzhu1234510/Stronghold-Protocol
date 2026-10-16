@@ -29,6 +29,15 @@ test('automatic bulk preloading is off by default even on a supported connected 
   assert.equal(scheduled, false);
 });
 
+test('8443 never schedules manual or automatic bulk downloads, including native clients',()=>{
+ const saved=globalThis.__SP_LOCAL_RESOURCES_REQUIRED;globalThis.__SP_LOCAL_RESOURCES_REQUIRED=true;
+ try {for(const manual of [true,false]){
+  let schedules=0,actions=0;
+  startResourcePreload({enabled:true,manual,supported:()=>true,schedule:()=>schedules++,action:async()=>{actions++}})();
+  assert.equal(schedules,0);assert.equal(actions,0);
+ }}finally{if(saved===undefined)delete globalThis.__SP_LOCAL_RESOURCES_REQUIRED;else globalThis.__SP_LOCAL_RESOURCES_REQUIRED=saved;}
+});
+
 test('manual preload starts immediately, reports real progress, and stops after completion', async () => {
   let queued, delay, calls = 0, schedules = 0;
   const seen = [];

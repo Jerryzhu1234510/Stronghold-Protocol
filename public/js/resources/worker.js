@@ -4,6 +4,8 @@ import { createResourceTransport } from './transport.js';
 
 const base = new URL('../../', self.location.href);
 const localOnly = new URL(self.location.href).searchParams.get('localOnly') === '1';
+const preloadAllowed = self.location.hostname !== 'weishuxieyiwangye.cn'
+  && new URL(self.location.href).searchParams.get('noPreload') !== '1';
 const missingNotices = new Set();
 let localMisses = 0;
 
@@ -120,6 +122,9 @@ async function summary() {
 }
 async function epoch() { return (await (await caches.open(META_NAME)).match(epochKey))?.text() ?? '0'; }
 async function stats() {
+  if (!preloadAllowed) return { enabled: storageAvailable() && await enabled(), localOnly, networkPreloadAllowed: false,
+    hits, localMisses, savedBytes, limit: cacheBudget,
+    preload: { state: 'disabled', reason: 'local-resources', completed: 0, total: 0, totalBytes: 0, completedBytes: 0, downloadedBytes: 0 } };
   const metadata = await loadIndex();
   if (!storageAvailable()) return { enabled: false, files: 0, bytes: 0, hits, savedBytes, limit: cacheBudget, cdn: transport.status(),
     preload: { state: 'disabled', completed: 0, total: metadata?.preload?.total ?? 0, totalBytes: metadata?.preload?.totalBytes ?? 0, completedBytes: 0, downloadedBytes: 0 } };
@@ -206,6 +211,7 @@ async function serve(request, item) {
   } catch { return localOnly ? localMissing(request) : fetch(request); }
 }
 async function warmOne(concurrency = 1, warmId = null) {
+  if (!preloadAllowed) { warmState = 'disabled'; return; }
   if (localOnly) { warmState = 'paused'; return; }
   if (!storageAvailable() || !await enabled()) { warmState = 'disabled'; return; }
   const value = await loadManifest();
@@ -287,7 +293,7 @@ self.addEventListener('message', event => {
   const port = event.ports?.[0];
   // Startup readiness must not enumerate twenty thousand cache records or fetch the whole manifest.
   if (port && event.data?.action === 'local-ready') {
-    port.postMessage({ ok: true, localOnly, hits, localMisses });
+    port.postMessage({ ok: true, localOnly, hits, localMisses, networkPreloadAllowed: preloadAllowed });
     return;
   }
   if (!port || !['status', 'enable', 'clear', 'warm', 'warm.stop'].includes(event.data?.action)) return;
